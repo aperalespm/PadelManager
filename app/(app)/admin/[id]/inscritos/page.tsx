@@ -16,7 +16,7 @@ export default async function InscritosPage({ params }: { params: Promise<{ id: 
   const registrations = 'data' in result ? result.data ?? [] : []
 
   return (
-    <div className="p-6">
+    <div className="px-9 py-8">
       <RegistrationTable
         tournamentId={id}
         tournament={tournament as Record<string, unknown>}

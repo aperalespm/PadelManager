@@ -10,9 +10,9 @@ export const dynamic = 'force-dynamic'
 
 function StatCard({ value, label, className }: { value: number | string; label: string; className: string }) {
   return (
-    <div className="bg-card rounded-xl p-6 shadow-sm">
-      <p className={cn('text-5xl font-bold leading-none', className)}>{value}</p>
-      <p className="text-sm text-muted-foreground mt-2">{label}</p>
+    <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
+      <p className={cn('text-[28px] font-extrabold leading-none tracking-[-1px]', className)}>{value}</p>
+      <p className="text-xs text-muted-foreground mt-1.5 font-medium">{label}</p>
     </div>
   )
 }
@@ -46,12 +46,12 @@ export default async function AdminPanelPage({ params }: { params: Promise<{ id:
   }
 
   return (
-    <div className="p-8 flex flex-col gap-7 max-w-6xl">
+    <div className="px-9 py-8 flex flex-col gap-7 max-w-6xl">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Panel</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">Panel</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
             {t.name as string} · {startDate}{t.venue_name ? ` · ${t.venue_name as string}` : ''}{t.venue_address ? ` · ${t.venue_address as string}` : ''}
           </p>
         </div>
@@ -72,7 +72,7 @@ export default async function AdminPanelPage({ params }: { params: Promise<{ id:
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Tournament info */}
         <div className="flex flex-col gap-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">INFORMACIÓN DEL TORNEO</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.9px] text-light">INFORMACIÓN DEL TORNEO</p>
           <div className="bg-card rounded-xl shadow-sm overflow-hidden">
             {[
               { label: 'Formato', value: (t.format as string)?.replace('_', ' ') },
@@ -89,7 +89,7 @@ export default async function AdminPanelPage({ params }: { params: Promise<{ id:
           </div>
 
           {/* Quick actions */}
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">ACCIONES RÁPIDAS</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.9px] text-light">ACCIONES RÁPIDAS</p>
           <div className="grid grid-cols-2 gap-3">
             <Link href={`/admin/${id}/inscritos`}>
               <Button variant="outline" size="sm" className="w-full justify-start gap-2 h-10">⊞ Ver inscritos</Button>
@@ -108,7 +108,7 @@ export default async function AdminPanelPage({ params }: { params: Promise<{ id:
 
         {/* Active matches */}
         <div className="flex flex-col gap-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">PARTIDOS ACTIVOS AHORA</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.9px] text-light">PARTIDOS ACTIVOS AHORA</p>
           <div className="bg-card rounded-xl shadow-sm overflow-hidden flex flex-col">
             {activeMatches.length === 0 ? (
               <p className="px-5 py-8 text-sm text-muted-foreground text-center">No hay partidos activos</p>

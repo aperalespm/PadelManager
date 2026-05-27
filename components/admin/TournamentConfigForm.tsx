@@ -58,8 +58,8 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
     <div className="flex flex-col gap-4 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Configuración</h1>
-          <p className="text-sm text-muted-foreground">{t.name as string}</p>
+          <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">Configuración</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">{t.name as string}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.back()}>Cancelar</Button>
@@ -76,11 +76,11 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
       {error && <p className="text-sm text-[var(--error)]">{error}</p>}
 
       <Tabs defaultValue="datos">
-        <TabsList className="w-full grid grid-cols-4">
-          <TabsTrigger value="datos">Datos básicos</TabsTrigger>
-          <TabsTrigger value="instalacion">Instalación</TabsTrigger>
-          <TabsTrigger value="categorias">Categorías y formato</TabsTrigger>
-          <TabsTrigger value="puntuacion">Puntuación</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-4 bg-card border border-border rounded-[10px] p-1 h-auto gap-1">
+          <TabsTrigger value="datos" className="rounded-[7px] text-xs font-medium py-2 data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground">Datos básicos</TabsTrigger>
+          <TabsTrigger value="instalacion" className="rounded-[7px] text-xs font-medium py-2 data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground">Instalación</TabsTrigger>
+          <TabsTrigger value="categorias" className="rounded-[7px] text-xs font-medium py-2 data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground">Categorías y formato</TabsTrigger>
+          <TabsTrigger value="puntuacion" className="rounded-[7px] text-xs font-medium py-2 data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground">Puntuación</TabsTrigger>
         </TabsList>
 
         <TabsContent value="datos" className="mt-4">

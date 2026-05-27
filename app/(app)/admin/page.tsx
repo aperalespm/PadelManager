@@ -25,8 +25,8 @@ export default async function AdminPage() {
       <header className="border-b border-border bg-card px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">PadelManager</h1>
-            <p className="text-sm text-muted-foreground">Panel de organizador</p>
+            <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">PadelManager</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">Panel de organizador</p>
           </div>
           <Link href="/admin/nuevo">
             <Button className="bg-accent text-accent-foreground hover:bg-accent/90 gap-2">
@@ -38,7 +38,7 @@ export default async function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-6">
-        <h2 className="text-xl font-semibold text-foreground mb-4">Mis torneos</h2>
+        <h2 className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-4">MIS TORNEOS</h2>
         {tournaments.length === 0 ? (
           <Empty>
             <EmptyHeader>
@@ -57,14 +57,14 @@ export default async function AdminPage() {
         ) : (
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Categoría</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Inscritos</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+              <TableHeader className="bg-[var(--muted)]">
+                <TableRow className="border-b border-border">
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Nombre</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Fecha</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Categoría</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Estado</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Inscritos</TableHead>
+                  <TableHead className="text-right text-[11px] font-bold uppercase tracking-wide text-light">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -16,11 +16,11 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
   const matches = await getMatchesForTournament(id) as Record<string, unknown>[]
 
   return (
-    <div className="p-6 flex flex-col gap-4">
+    <div className="px-9 py-8 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Cuadro del torneo</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">Cuadro del torneo</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
             {t.name as string} · {(t.format as string)?.replace('_', ' ')}
           </p>
         </div>

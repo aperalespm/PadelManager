@@ -19,9 +19,9 @@ interface RegistrationTableProps {
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  pending: { label: 'Pendiente', className: 'bg-[var(--warning-surface)] text-[var(--warning)] border border-[var(--warning)]' },
-  confirmed: { label: 'Confirmado', className: 'bg-[var(--success-surface)] text-[var(--success)]' },
-  waitlist: { label: 'Lista espera', className: 'bg-[var(--waitlist-surface)] text-[var(--waitlist)]' },
+  pending: { label: 'Pendiente', className: 'bg-[var(--amber-surface)] text-[var(--amber)] border-0' },
+  confirmed: { label: 'Confirmado', className: 'bg-[var(--success-surface)] text-[var(--success)] border-0' },
+  waitlist: { label: 'Lista espera', className: 'bg-[var(--waitlist-surface)] text-[var(--waitlist)] border-0' },
 }
 
 export function RegistrationTable({ tournamentId, tournament: t, registrations: initialRegs }: RegistrationTableProps) {
@@ -80,8 +80,8 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Inscritos</h1>
-          <p className="text-sm text-muted-foreground">Gestión de inscripciones — {t.name as string}</p>
+          <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">Inscritos</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">Gestión de inscripciones — {t.name as string}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-2">
@@ -100,22 +100,22 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-3xl font-bold text-accent">{confirmed}</p>
-          <p className="text-sm text-muted-foreground">Confirmados</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
+          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-accent">{confirmed}</p>
+          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Confirmados</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-3xl font-bold text-[var(--warning)]">{pending}</p>
-          <p className="text-sm text-muted-foreground">Pendientes</p>
+        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
+          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-[var(--amber)]">{pending}</p>
+          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Pendientes</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-3xl font-bold text-[var(--waitlist)]">{waitlist}</p>
-          <p className="text-sm text-muted-foreground">Lista de espera</p>
+        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
+          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-[var(--waitlist)]">{waitlist}</p>
+          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Lista de espera</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-3xl font-bold text-accent">{confirmed}/{maxPlayers}</p>
-          <p className="text-sm text-muted-foreground">Ocupación</p>
+        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
+          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-accent">{confirmed}/{maxPlayers}</p>
+          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Ocupación</p>
         </div>
       </div>
 
@@ -126,9 +126,9 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
             key={tab.key}
             onClick={() => setFilter(tab.key)}
             className={cn(
-              'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
+              'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
               filter === tab.key
-                ? 'bg-accent text-accent-foreground border-accent'
+                ? 'bg-[var(--accent-surface)] text-accent border-accent font-semibold'
                 : 'bg-card text-muted-foreground border-border hover:border-accent/40'
             )}
           >
@@ -149,14 +149,14 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
       {/* Table */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Jugador / Pareja</TableHead>
-              <TableHead>Cat.</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+          <TableHeader className="bg-[var(--muted)]">
+            <TableRow className="border-b border-border">
+              <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Jugador / Pareja</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Cat.</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Tipo</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Fecha</TableHead>
+              <TableHead className="text-[11px] font-bold uppercase tracking-wide text-light">Estado</TableHead>
+              <TableHead className="text-right text-[11px] font-bold uppercase tracking-wide text-light">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -175,7 +175,11 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
               return (
                 <TableRow key={r.id as string}>
                   <TableCell className="font-medium text-foreground">{name}</TableCell>
-                  <TableCell className="text-muted-foreground">{r.player1_category as string ?? '—'}</TableCell>
+                  <TableCell>
+                    {r.player1_category ? (
+                      <span className="bg-[var(--accent-surface)] text-accent text-[11px] font-semibold px-[7px] py-0.5 rounded">{r.player1_category as string}</span>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell className="text-muted-foreground capitalize">
                     {r.player2_id || r.player2_name ? 'Pareja' : 'Individual'}
                   </TableCell>

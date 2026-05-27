@@ -4,72 +4,82 @@
 @custom-variant dark (&:is(.dark *));
 
 /* =============================================
-   DESIGN TOKENS
-   #F8F7F2  cream    → background light  / primary light
-   #1D252D  charcoal → background dark   / primary dark
-   #0075C8  blue     → accent / info
-   #5A8C1A  green    → success
-   #D4583B  terracota→ warning / error
+   DESIGN TOKENS — PadelManager Admin
+   Palette matches the design handoff (slate/blue):
+   #f1f5f9  slate-100  → background
+   #0f172a  slate-900  → foreground / text
+   #2563eb  blue-600   → brand accent
+   #0d1526  dark navy  → sidebar
+   #059669  emerald    → success
+   #ea580c  orange-600 → warning (live/active matches)
+   #d97706  amber-600  → pending/awaiting (registrations)
+   #dc2626  red-600    → error / disputes
+   #7c3aed  violet-700 → waitlist
    ============================================= */
 
 :root {
-  /* ── Backgrounds ─────────────────────────────────────── */
-  --background:     #F8F7F2;
-  --foreground:     #1D252D;
+  /* ── Core surfaces ───────────────────────────────────── */
+  --background:     #f1f5f9;
+  --foreground:     #0f172a;
 
-  --card:           #FFFFFF;
-  --card-foreground: #1D252D;
-  --card-secondary: #F0EFE9;
+  --card:           #ffffff;
+  --card-foreground: #0f172a;
+  --card-secondary: #f1f5f9;
 
-  /* Primary — cream/white (lightest neutral) */
-  --primary:            #F8F7F2;
-  --primary-foreground: #1D252D;
+  /* Primary — white/light */
+  --primary:            #f8fafc;
+  --primary-foreground: #0f172a;
 
-  /* Secondary — charcoal (darkest neutral) */
-  --secondary:            #1D252D;
-  --secondary-foreground: #F8F7F2;
+  /* Secondary — dark navy (sidebar) */
+  --secondary:            #0d1526;
+  --secondary-foreground: #f8fafc;
 
-  /* Accent — blue #0075C8 */
-  --accent:            #0075C8;
-  --accent-foreground: #F8F7F2;
+  /* Accent — brand blue */
+  --accent:            #2563eb;
+  --accent-foreground: #ffffff;
 
   /* Muted / neutral */
-  --muted:            #E8E7E1;
-  --muted-foreground: #6B7280;
+  --muted:            #f1f5f9;
+  --muted-foreground: #64748b;
 
   /* Semantic */
-  --success:            #5A8C1A;
-  --success-foreground: #F8F7F2;
+  --success:            #059669;
+  --success-foreground: #ffffff;
 
-  --warning:            #D4583B;
-  --warning-foreground: #F8F7F2;
+  --warning:            #ea580c;
+  --warning-foreground: #ffffff;
 
-  --error:            #D4583B;
-  --error-foreground: #F8F7F2;
+  --error:            #dc2626;
+  --error-foreground: #ffffff;
 
-  --info:            #0075C8;
-  --info-foreground: #F8F7F2;
+  --info:            #2563eb;
+  --info-foreground: #ffffff;
+
+  /* Amber — for pending/awaiting states (separate from warning orange) */
+  --amber:            #d97706;
+  --amber-foreground: #ffffff;
+  --amber-surface:    #fef3c7;
 
   /* UI chrome */
-  --border:  #D9D8D2;
-  --input:   #EEEEE9;
-  --ring:    #0075C8;
+  --border:  #e2e8f0;
+  --input:   #e2e8f0;
+  --ring:    #2563eb;
 
-  --popover:            #FFFFFF;
-  --popover-foreground: #1D252D;
+  --popover:            #ffffff;
+  --popover-foreground: #0f172a;
 
-  --destructive:            #C0392B;
-  --destructive-foreground: #F8F7F2;
-  --waitlist:             #7C3AED;
-  --waitlist-foreground:  #F8F7F2;
-  --waitlist-surface:     #F3EFFE;
+  --destructive:            #dc2626;
+  --destructive-foreground: #ffffff;
+  --waitlist:             #7c3aed;
+  --waitlist-foreground:  #ffffff;
+  --waitlist-surface:     #ede9fe;
 
   /* Charts */
-  --chart-1: #0075C8;
-  --chart-2: #5A8C1A;
-  --chart-3: #D4583B;
-  --chart-4: #1D252D;
-  --chart-5: #8BA5C2;
+  --chart-1: #2563eb;
+  --chart-2: #059669;
+  --chart-3: #ea580c;
+  --chart-4: #0f172a;
+  --chart-5: #94a3b8;
 
   /* Radius */
   --radius:    0.75rem;
@@ -79,46 +89,49 @@
   --radius-xl: 1rem;
 
   /* Sidebar */
-  --sidebar:                    #F0EFE9;
-  --sidebar-foreground:         #1D252D;
-  --sidebar-primary:            #1D252D;
-  --sidebar-primary-foreground: #F8F7F2;
-  --sidebar-accent:             #0075C8;
-  --sidebar-accent-foreground:  #F8F7F2;
-  --sidebar-border:             #D9D8D2;
-  --sidebar-ring:               #0075C8;
+  --sidebar:                    #f1f5f9;
+  --sidebar-foreground:         #0f172a;
+  --sidebar-primary:            #0d1526;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent:             #2563eb;
+  --sidebar-accent-foreground:  #ffffff;
+  --sidebar-border:             #e2e8f0;
+  --sidebar-ring:               #2563eb;
 
   /* ── Extended semantic tokens ────────────────────────── */
   /* Text shades */
-  --color-text-body:       #3A3A38;
-  --color-text-secondary:  #787870;
-  --color-text-tertiary:   #888880;
-  --color-text-disabled:   #BBBBB4;
+  --color-text-body:       #334155;
+  --color-text-secondary:  #64748b;
+  --color-text-tertiary:   #94a3b8;
+  --color-text-disabled:   #cbd5e1;
+
+  /* Light — subtle text (section labels, placeholders) */
+  --light: #94a3b8;
 
   /* Background shades */
-  --color-bg-subtle:   #F3F2ED;
+  --color-bg-subtle:   #f8fafc;
 
   /* Accent states */
-  --accent-hover:    #005FA3;
-  --accent-active:   #004D87;
-  --accent-surface:  #E5F2FB;
-  --accent-muted:    #B8D9F5;
+  --accent-hover:    #1d4ed8;
+  --accent-active:   #1e40af;
+  --accent-surface:  #eff6ff;
+  --accent-muted:    #bfdbfe;
 
   /* Success states */
-  --success-hover:   #4A7514;
-  --success-surface: #E6F4C4;
+  --success-hover:   #047857;
+  --success-surface: #d1fae5;
 
   /* Error states */
-  --error-hover:   #B84A2F;
-  --error-surface: #FAEEE9;
+  --error-hover:   #b91c1c;
+  --error-surface: #fee2e2;
 
   /* Warning states */
-  --warning-surface: #FEF3E2;
+  --warning-surface: #ffedd5;
 
   /* Focus rings */
-  --shadow-focus-accent:  0 0 0 3px #E5F2FB;
-  --shadow-focus-error:   0 0 0 3px #FAEEE9;
-  --shadow-focus-success: 0 0 0 3px #E6F4C4;
+  --shadow-focus-accent:  0 0 0 3px #eff6ff;
+  --shadow-focus-error:   0 0 0 3px #fee2e2;
+  --shadow-focus-success: 0 0 0 3px #d1fae5;
 }
 
 .dark {
@@ -248,6 +261,9 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-waitlist:       var(--waitlist);
   --color-waitlist-foreground: var(--waitlist-foreground);
+  --color-amber:          var(--amber);
+  --color-amber-foreground: var(--amber-foreground);
+  --color-light:          var(--light);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

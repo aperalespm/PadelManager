@@ -70,7 +70,7 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
               className={cn(
                 'flex items-center gap-2.5 mx-2 px-3 py-2 rounded-lg text-sm transition-colors',
                 isActive
-                  ? 'bg-accent text-white font-semibold'
+                  ? 'bg-[rgba(37,99,235,0.22)] text-white font-semibold'
                   : 'text-white/55 hover:text-white hover:bg-white/8'
               )}
             >

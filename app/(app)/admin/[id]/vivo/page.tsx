@@ -37,12 +37,12 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="px-9 py-8 flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">En vivo</h1>
-          <p className="text-sm text-muted-foreground">{t.name as string} · Fase de octavos</p>
+          <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">En vivo</h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">{t.name as string} · Fase de octavos</p>
         </div>
         <div className="flex items-center gap-2">
           <Badge className="bg-[var(--warning)] text-[var(--warning-foreground)]">● En curso</Badge>
@@ -52,25 +52,25 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-3xl font-bold text-[var(--warning)]">{active.length + disputed.length}</p>
-          <p className="text-sm text-muted-foreground">Partidos activos</p>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
+          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-[var(--warning)]">{active.length + disputed.length}</p>
+          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Partidos activos</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-3xl font-bold text-accent">{pending.length}</p>
-          <p className="text-sm text-muted-foreground">Pendientes</p>
+        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
+          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-accent">{pending.length}</p>
+          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Pendientes</p>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-3xl font-bold text-[var(--success)]">{finished.length}</p>
-          <p className="text-sm text-muted-foreground">Finalizados</p>
+        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
+          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-[var(--success)]">{finished.length}</p>
+          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Finalizados</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Active matches */}
         <div className="flex flex-col gap-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PARTIDOS ACTIVOS</h2>
+          <h2 className="text-[10px] font-bold uppercase tracking-[0.9px] text-light">PARTIDOS ACTIVOS</h2>
           {active.length === 0 && disputed.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay partidos activos</p>
           ) : (
@@ -104,7 +104,7 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
         {/* Recent results + upcoming */}
         <div className="flex flex-col gap-4">
           <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">ÚLTIMOS RESULTADOS</h2>
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-3">ÚLTIMOS RESULTADOS</h2>
             <div className="flex flex-col gap-2">
               {[...finished.slice(-5).reverse(), ...disputed.slice(-3)].map(m => {
                 const isDisputed = m.status === 'disputed'
@@ -143,7 +143,7 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
           </div>
 
           <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">PRÓXIMOS PARTIDOS</h2>
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-3">PRÓXIMOS PARTIDOS</h2>
             <div className="flex flex-col gap-1">
               {pending.slice(0, 5).map(m => (
                 <div key={m.id as string} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0 gap-2">
