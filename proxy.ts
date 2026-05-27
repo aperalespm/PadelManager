@@ -8,11 +8,10 @@ const PUBLIC_PATHS = [
   '/torneos',
   '/api/auth',
   '/api/webhooks',
-  '/_next',
   '/favicon.ico',
 ]
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
@@ -20,7 +19,9 @@ export function middleware(request: NextRequest) {
   }
 
   // NeonAuth sets cookies with the prefix "__Secure-neon-auth"
-  const hasSession = request.cookies.getAll().some(c => c.name.startsWith('__Secure-neon-auth') || c.name.startsWith('neon-auth'))
+  const hasSession = request.cookies.getAll().some(
+    c => c.name.startsWith('__Secure-neon-auth') || c.name.startsWith('neon-auth')
+  )
 
   if (!hasSession) {
     const loginUrl = new URL('/login', request.url)
