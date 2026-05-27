@@ -6,68 +6,66 @@ interface TournamentBracketProps {
   mode: 'player' | 'admin'
 }
 
-function getStatusConfig(status: string) {
-  switch (status) {
-    case 'finished': return { label: '✓ Finalizado', className: 'text-[var(--success)]' }
-    case 'active': return { label: '● En juego', className: 'text-[var(--warning)]' }
-    case 'disputed': return { label: '⚠️ Disputa', className: 'text-[var(--error)]' }
-    default: return { label: '◦ Pendiente', className: 'text-muted-foreground' }
-  }
+function teamDisplay(m: Record<string, unknown>, slot: 1 | 2) {
+  if (slot === 1) return m.t1p1_name ? `${m.t1p1_name}${m.t1p2_name_display ? ` / ${m.t1p2_name_display}` : ''}` : 'Pendiente'
+  return m.t2p1_name ? `${m.t2p1_name}${m.t2p2_name_display ? ` / ${m.t2p2_name_display}` : ''}` : 'Pendiente'
 }
 
 function MatchCard({ match: m, highlightRegId }: { match: Record<string, unknown>; highlightRegId?: string }) {
   const status = m.status as string
-  const { label, className } = getStatusConfig(status)
-  const isTeam1Highlight = highlightRegId && m.team1_reg_id === highlightRegId
-  const isTeam2Highlight = highlightRegId && m.team2_reg_id === highlightRegId
+  const isTeam1Highlight = !!highlightRegId && m.team1_reg_id === highlightRegId
+  const isTeam2Highlight = !!highlightRegId && m.team2_reg_id === highlightRegId
+  const team1IsWinner = m.winner_reg_id === m.team1_reg_id
+  const team2IsWinner = m.winner_reg_id === m.team2_reg_id
 
-  const team1 = m.t1p1_name
-    ? `${m.t1p1_name}${m.t1p2_name_display ? ` / ${m.t1p2_name_display}` : ''}`
-    : 'Pendiente'
-  const team2 = m.t2p1_name
-    ? `${m.t2p1_name}${m.t2p2_name_display ? ` / ${m.t2p2_name_display}` : ''}`
-    : 'Pendiente'
+  const team1 = teamDisplay(m, 1)
+  const team2 = teamDisplay(m, 2)
 
   const score = m.final_score as Array<{ vosotros: number; rival: number }> | null
-  const scoreStr = score ? score.map(s => `${s.vosotros}–${s.rival}`).join(', ') : m.status === 'active' ? '…' : '—'
+  const scoreStr = score ? score.map(s => `${s.vosotros}–${s.rival}`).join(', ') : status === 'active' ? '…' : '—'
+
+  const statusEl = status === 'finished'
+    ? <span className="text-xs text-[var(--success)]">✓ Finalizado</span>
+    : status === 'active'
+    ? <span className="text-xs text-[var(--warning)]">● En juego</span>
+    : status === 'disputed'
+    ? <span className="text-xs text-[var(--error)]">⚠️ Disputa</span>
+    : <span className="text-xs text-muted-foreground">◦ Pendiente</span>
 
   return (
     <div className={cn(
       'rounded-lg border border-border bg-card text-sm overflow-hidden',
       (isTeam1Highlight || isTeam2Highlight) && 'border-accent'
     )}>
+      {/* Team 1 */}
       <div className={cn(
-        'px-3 py-2 flex items-center justify-between',
-        isTeam1Highlight && 'bg-[var(--accent-surface)]',
-        m.winner_reg_id === m.team1_reg_id && 'font-semibold'
+        'px-3 py-2 flex items-center justify-between gap-2',
+        team1IsWinner && 'bg-accent text-accent-foreground',
+        !team1IsWinner && isTeam1Highlight && 'bg-[var(--accent-surface)]',
       )}>
-        <span className={cn(
-          'truncate max-w-[140px]',
-          isTeam1Highlight && 'text-accent font-medium'
-        )}>
-          {isTeam1Highlight && <span className="text-xs mr-1">Tú</span>}
+        <span className={cn('truncate max-w-[150px] flex items-center gap-1', !team1IsWinner && isTeam1Highlight && 'text-accent font-medium')}>
+          {isTeam1Highlight && <span className="text-[10px] font-semibold bg-accent text-accent-foreground px-1 py-0.5 rounded shrink-0">Tú</span>}
           {team1}
         </span>
-        {m.winner_reg_id === m.team1_reg_id && <span className="text-[var(--success)] text-xs ml-1">✓</span>}
+        {team1IsWinner && <span className="text-xs font-semibold shrink-0">✓ Ganador</span>}
       </div>
       <div className="h-px bg-border" />
+      {/* Team 2 */}
       <div className={cn(
-        'px-3 py-2 flex items-center justify-between',
-        isTeam2Highlight && 'bg-[var(--accent-surface)]',
-        m.winner_reg_id === m.team2_reg_id && 'font-semibold'
+        'px-3 py-2 flex items-center justify-between gap-2',
+        team2IsWinner && 'bg-accent text-accent-foreground',
+        !team2IsWinner && isTeam2Highlight && 'bg-[var(--accent-surface)]',
       )}>
-        <span className={cn(
-          'truncate max-w-[140px]',
-          isTeam2Highlight && 'text-accent font-medium'
-        )}>
-          {isTeam2Highlight && <span className="text-xs mr-1">Tú</span>}
+        <span className={cn('truncate max-w-[150px] flex items-center gap-1', !team2IsWinner && isTeam2Highlight && 'text-accent font-medium')}>
+          {isTeam2Highlight && <span className="text-[10px] font-semibold bg-accent text-accent-foreground px-1 py-0.5 rounded shrink-0">Tú</span>}
           {team2}
         </span>
-        {m.winner_reg_id === m.team2_reg_id && <span className="text-[var(--success)] text-xs ml-1">✓</span>}
+        {team2IsWinner && <span className="text-xs font-semibold shrink-0">✓ Ganador</span>}
       </div>
-      <div className="px-3 py-1.5 bg-muted/50 flex items-center justify-between">
+      {/* Footer */}
+      <div className="px-3 py-1.5 bg-muted/40 flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">{scoreStr}</span>
-        <span className={cn('text-xs', className)}>{label}</span>
+        {statusEl}
       </div>
     </div>
   )
@@ -88,10 +86,10 @@ export function TournamentBracket({ matches, highlightRegId, mode }: TournamentB
       <div className="flex flex-col gap-6 max-w-md mx-auto">
         {/* Legend */}
         <div className="flex items-center gap-4 text-xs flex-wrap">
-          <span className="flex items-center gap-1 text-[var(--success)]">● Finalizado</span>
-          <span className="flex items-center gap-1 text-[var(--warning)]">● En juego</span>
-          <span className="flex items-center gap-1 text-muted-foreground">◦ Pendiente</span>
-          {highlightRegId && <span className="flex items-center gap-1 text-accent">□ Tu pareja</span>}
+          <span className="text-[var(--success)]">● Finalizado</span>
+          <span className="text-[var(--warning)]">● En juego</span>
+          <span className="text-muted-foreground">◦ Pendiente</span>
+          {highlightRegId && <span className="text-accent">□ Tu pareja</span>}
         </div>
         {phases.map(phase => (
           <div key={phase} className="flex flex-col gap-2">
@@ -107,27 +105,27 @@ export function TournamentBracket({ matches, highlightRegId, mode }: TournamentB
 
   // Admin: horizontal columns
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="flex flex-col gap-4">
       {/* Legend */}
-      <div className="flex flex-col gap-8 w-full">
-        <div className="flex items-center gap-4 text-xs">
-          <span className="flex items-center gap-1 text-[var(--success)]">● Finalizado</span>
-          <span className="flex items-center gap-1 text-[var(--warning)]">● En juego</span>
-          <span className="flex items-center gap-1 text-muted-foreground">◦ Pendiente</span>
-        </div>
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {phases.map(phase => (
-            <div key={phase} className="flex flex-col gap-2 min-w-[200px]">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">{phase}</h3>
+      <div className="flex items-center gap-4 text-xs">
+        <span className="text-[var(--success)]">● Finalizado</span>
+        <span className="text-[var(--warning)]">● En juego</span>
+        <span className="text-muted-foreground">◦ Pendiente</span>
+      </div>
+      <div className="flex gap-6 overflow-x-auto pb-4">
+        {phases.map(phase => (
+          <div key={phase} className="flex flex-col gap-2 min-w-[220px]">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center pb-1 border-b border-border">{phase}</h3>
+            <div className="flex flex-col gap-2">
               {byPhase[phase].map(m => (
-                <MatchCard key={m.id as string} match={m} highlightRegId={highlightRegId} />
+                <MatchCard key={m.id as string} match={m} />
               ))}
             </div>
-          ))}
-          <div className="flex flex-col items-center justify-center min-w-[80px]">
-            <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">CAMPEÓN</p>
-            <span className="text-4xl">🏆</span>
           </div>
+        ))}
+        <div className="flex flex-col items-center justify-start pt-6 min-w-[80px]">
+          <p className="text-xs font-semibold uppercase text-muted-foreground mb-3">CAMPEÓN</p>
+          <span className="text-4xl">🏆</span>
         </div>
       </div>
     </div>

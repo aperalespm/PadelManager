@@ -24,8 +24,6 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   waitlist: { label: 'Lista espera', className: 'bg-[var(--waitlist-surface)] text-[var(--waitlist)]' },
 }
 
-const filterTabs = ['Todos', 'Pendientes', 'Confirmados', 'Lista espera']
-
 export function RegistrationTable({ tournamentId, tournament: t, registrations: initialRegs }: RegistrationTableProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -36,6 +34,13 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
   const pending = initialRegs.filter(r => r.status === 'pending').length
   const waitlist = initialRegs.filter(r => r.status === 'waitlist').length
   const maxPlayers = t.max_players as number
+
+  const filterTabs = [
+    { key: 'Todos', label: `Todos (${initialRegs.length})` },
+    { key: 'Pendientes', label: `Pendientes (${pending})` },
+    { key: 'Confirmados', label: `Confirmados (${confirmed})` },
+    { key: 'Lista espera', label: `Lista espera (${waitlist})` },
+  ]
 
   const filtered = initialRegs.filter(r => {
     const matchesFilter =
@@ -118,16 +123,16 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
       <div className="flex items-center gap-2 flex-wrap">
         {filterTabs.map(tab => (
           <button
-            key={tab}
-            onClick={() => setFilter(tab)}
+            key={tab.key}
+            onClick={() => setFilter(tab.key)}
             className={cn(
               'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
-              filter === tab
+              filter === tab.key
                 ? 'bg-accent text-accent-foreground border-accent'
                 : 'bg-card text-muted-foreground border-border hover:border-accent/40'
             )}
           >
-            {tab}
+            {tab.label}
           </button>
         ))}
         <div className="relative ml-auto">

@@ -25,13 +25,24 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
     return `${m.t2p1_name ?? 'Equipo 2'}${m.t2p2_name_display ? ` / ${m.t2p2_name_display}` : ''}`
   }
 
+  function scoreStr(m: Record<string, unknown>) {
+    const score = m.final_score as Array<{ vosotros: number; rival: number }> | null
+    if (!score) return '—'
+    return score.map(s => `${s.vosotros}–${s.rival}`).join(', ')
+  }
+
+  function matchTime(m: Record<string, unknown>) {
+    if (!m.scheduled_at) return null
+    return new Date(m.scheduled_at as string).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+  }
+
   return (
     <div className="p-6 flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold text-foreground">En vivo</h1>
-          <p className="text-sm text-muted-foreground">{t.name as string}</p>
+          <p className="text-sm text-muted-foreground">{t.name as string} · Fase de octavos</p>
         </div>
         <div className="flex items-center gap-2">
           <Badge className="bg-[var(--warning)] text-[var(--warning-foreground)]">● En curso</Badge>
@@ -43,7 +54,7 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-3xl font-bold text-[var(--warning)]">{active.length}</p>
+          <p className="text-3xl font-bold text-[var(--warning)]">{active.length + disputed.length}</p>
           <p className="text-sm text-muted-foreground">Partidos activos</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4">
@@ -59,7 +70,7 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Active matches */}
         <div className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold uppercase text-muted-foreground">PARTIDOS ACTIVOS</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PARTIDOS ACTIVOS</h2>
           {active.length === 0 && disputed.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay partidos activos</p>
           ) : (
@@ -67,19 +78,17 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
               <div key={m.id as string} className="bg-card border border-border rounded-xl overflow-hidden border-l-4 border-l-[var(--warning)]">
                 <div className="px-4 py-3">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-xs font-semibold text-[var(--warning)] uppercase">
-                        {m.court_name as string} · {m.phase_name as string}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-[var(--warning)] uppercase tracking-wide">
+                        {m.court_name as string ?? 'Pista'} · {m.phase_name as string ?? 'Fase'}
                       </p>
-                      <p className="font-semibold text-foreground mt-1">{teamName(m, 1)}</p>
-                      <p className="text-sm text-muted-foreground">{teamName(m, 2)}</p>
+                      <p className="font-semibold text-foreground mt-1 truncate">{teamName(m, 1)}</p>
+                      <p className="text-sm text-muted-foreground truncate">{teamName(m, 2)}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-lg text-foreground">—</p>
-                      {m.scheduled_at != null && (
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(m.scheduled_at as string).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
+                    <div className="text-right ml-3 shrink-0">
+                      <p className="font-bold text-lg text-foreground leading-none">{scoreStr(m)}</p>
+                      {matchTime(m) && (
+                        <p className="text-xs text-muted-foreground mt-1">⊙ {matchTime(m)}</p>
                       )}
                     </div>
                   </div>
@@ -95,24 +104,37 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
         {/* Recent results + upcoming */}
         <div className="flex flex-col gap-4">
           <div>
-            <h2 className="text-sm font-semibold uppercase text-muted-foreground mb-3">ÚLTIMOS RESULTADOS</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">ÚLTIMOS RESULTADOS</h2>
             <div className="flex flex-col gap-2">
-              {finished.slice(-5).reverse().map(m => {
+              {[...finished.slice(-5).reverse(), ...disputed.slice(-3)].map(m => {
                 const isDisputed = m.status === 'disputed'
+                const winnerSlot = m.winner_reg_id === m.team1_reg_id ? 1 : 2
+                const loserSlot = winnerSlot === 1 ? 2 : 1
+                const resultText = isDisputed
+                  ? `${teamName(m, 1)} — resultado en disputa`
+                  : `${teamName(m, winnerSlot)} def. ${teamName(m, loserSlot)}`
+
                 return (
                   <div key={m.id as string} className="bg-card border border-border rounded-xl px-4 py-3 border-l-4 border-l-accent">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">
-                          {teamName(m, m.winner_reg_id === m.team1_reg_id ? 1 : 2)} def. {teamName(m, m.winner_reg_id === m.team1_reg_id ? 2 : 1)}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{resultText}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {m.player1_category as string ?? 'Cat. —'} · {scoreStr(m)}
                         </p>
-                        <p className="text-xs text-muted-foreground">{m.phase_name as string}</p>
                       </div>
-                      {isDisputed ? (
-                        <Badge className="bg-[var(--error)] text-[var(--error-foreground)] text-xs">Disputa</Badge>
-                      ) : (
-                        <Badge className="bg-[var(--success-surface)] text-[var(--success)] text-xs">Validado</Badge>
-                      )}
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {isDisputed ? (
+                          <>
+                            <Badge className="bg-[var(--error)] text-[var(--error-foreground)] text-xs">Disputa</Badge>
+                            <Button variant="outline" size="sm" className="text-xs h-7 px-2 text-[var(--warning)] border-[var(--warning)]">
+                              Resolver disputa
+                            </Button>
+                          </>
+                        ) : (
+                          <Badge className="bg-[var(--success-surface)] text-[var(--success)] text-xs">Validado</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )
@@ -121,13 +143,14 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
           </div>
 
           <div>
-            <h2 className="text-sm font-semibold uppercase text-muted-foreground mb-3">PRÓXIMOS PARTIDOS</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">PRÓXIMOS PARTIDOS</h2>
             <div className="flex flex-col gap-1">
               {pending.slice(0, 5).map(m => (
-                <div key={m.id as string} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0">
-                  <span className="text-muted-foreground">{m.court_name as string ?? '—'}</span>
+                <div key={m.id as string} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0 gap-2">
+                  <span className="text-muted-foreground shrink-0">{m.court_name as string ?? 'Pista —'}</span>
+                  {matchTime(m) && <span className="text-muted-foreground shrink-0">{matchTime(m)}</span>}
                   <span className="text-foreground truncate flex-1 px-2">{teamName(m, 1)} vs {teamName(m, 2)}</span>
-                  <Badge variant="outline" className="text-xs text-accent border-accent/40">{m.phase_name as string}</Badge>
+                  <Badge variant="outline" className="text-xs text-accent border-accent/40 shrink-0">{m.phase_name as string ?? '—'}</Badge>
                 </div>
               ))}
             </div>
