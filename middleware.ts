@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Auth is handled per-page via auth.getSession() in each server component.
-// This proxy only exists to pass requests through cleanly.
-export function proxy(_request: NextRequest) {
+export function middleware(_request: NextRequest) {
   return NextResponse.next()
 }
 
