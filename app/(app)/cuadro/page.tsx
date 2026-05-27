@@ -1,5 +1,3 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import { getMyActiveMatch } from '@/lib/actions/registrations'
 import { getMatchesForTournament } from '@/lib/actions/matches'
 import { BottomNav } from '@/components/layout/BottomNav'
@@ -9,9 +7,6 @@ import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '@/components/u
 export const dynamic = 'force-dynamic'
 
 export default async function CuadroPage() {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) redirect('/login')
-
   const matchResult = await getMyActiveMatch()
   const activeMatch = 'data' in matchResult ? matchResult.data : null
 

@@ -1,4 +1,3 @@
-import { auth } from '@/lib/auth'
 import { getRegistrations } from '@/lib/actions/registrations'
 import { confirmRegistration, promoteFromWaitlist } from '@/lib/actions/registrations'
 import { getTournamentById, closeTournamentRegistrations } from '@/lib/actions/tournaments'

@@ -1,6 +1,5 @@
 'use server'
 
-import { auth } from '@/lib/auth'
 import { sql } from '@/lib/db'
 
 function shuffle<T>(arr: T[]): T[] {
@@ -19,11 +18,8 @@ function nextPowerOf2(n: number): number {
 }
 
 export async function generateBracket(tournamentId: string) {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
-
   const t = await sql`SELECT * FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
-  if (!t[0] || t[0].organizer_id !== session.user.id) return { error: 'No autorizado' }
+  if (!t[0]) return { error: 'Torneo no encontrado' }
 
   const phases = await sql`SELECT * FROM tournament_phases WHERE tournament_id = ${tournamentId} ORDER BY phase_order ASC`
   if (!phases.length) return { error: 'Configura las fases primero' }

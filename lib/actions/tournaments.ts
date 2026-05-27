@@ -46,7 +46,7 @@ export async function getTournamentById(id: string) {
 
 export async function getMyTournaments() {
   const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
+  if (!session?.user) return { data: [] }
   const rows = await sql`
     SELECT t.*,
       (SELECT count(*) FROM registrations r WHERE r.tournament_id = t.id)::int AS total_registrations,

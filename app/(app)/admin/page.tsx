@@ -1,5 +1,3 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import { getMyTournaments } from '@/lib/actions/tournaments'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,9 +17,6 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 }
 
 export default async function AdminPage() {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) redirect('/login')
-
   const result = await getMyTournaments()
   const tournaments = 'data' in result ? result.data ?? [] : []
 
