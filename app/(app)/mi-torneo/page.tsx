@@ -1,5 +1,3 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import { getMyActiveMatch } from '@/lib/actions/registrations'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
 import { BottomNav } from '@/components/layout/BottomNav'
@@ -9,9 +7,6 @@ import Link from 'next/link'
 export const dynamic = 'force-dynamic'
 
 export default async function MiTorneoPage() {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) redirect('/login')
-
   const result = await getMyActiveMatch()
   const match = 'data' in result ? result.data : null
 
@@ -36,7 +31,7 @@ export default async function MiTorneoPage() {
             </EmptyContent>
           </Empty>
         ) : (
-          <MyMatchCard match={match as Record<string, unknown>} userId={session.user.id} />
+          <MyMatchCard match={match as Record<string, unknown>} userId="" />
         )}
       </main>
 

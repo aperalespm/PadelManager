@@ -6,7 +6,7 @@ import { updateProfileSchema } from '@/lib/validations'
 
 export async function getMyProfile() {
   const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
+  if (!session?.user) return { data: null }
 
   const rows = await sql`SELECT * FROM user_profiles WHERE user_id = ${session.user.id} LIMIT 1`
   if (!rows[0]) {

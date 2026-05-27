@@ -5,10 +5,6 @@ import { sql } from '@/lib/db'
 import { registerSchema } from '@/lib/validations'
 
 export async function getRegistrations(tournamentId: string) {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
-  const t = await sql`SELECT organizer_id FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
-  if (!t[0] || t[0].organizer_id !== session.user.id) return { error: 'No autorizado' }
 
   const rows = await sql`
     SELECT r.*,
@@ -76,7 +72,7 @@ export async function promoteFromWaitlist(registrationId: string) {
 
 export async function getMyRegistrations() {
   const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
+  if (!session?.user) return { data: [] }
   const rows = await sql`
     SELECT r.*, t.name AS tournament_name, t.start_date, t.status AS tournament_status, t.share_slug
     FROM registrations r
@@ -89,7 +85,7 @@ export async function getMyRegistrations() {
 
 export async function getMyActiveMatch() {
   const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
+  if (!session?.user) return { data: null }
 
   const rows = await sql`
     SELECT m.*,
