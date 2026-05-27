@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth'
 
 export default async function DashboardPage() {
   const session = await auth.getSession()
-  const user = session?.user
+  const user = session?.data?.user
 
   return (
     <main className="min-h-screen bg-background">
