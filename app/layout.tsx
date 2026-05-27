@@ -5,8 +5,8 @@ import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'App Template',
-  description: 'Built with the standard stack',
+  title: 'Padel Manager',
+  description: 'Gestiona tus partidos de pádel',
 }
 
 export default function RootLayout({
