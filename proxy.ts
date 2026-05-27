@@ -1,34 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = [
-  '/login',
-  '/register',
-  '/t/',
-  '/torneos',
-  '/api/auth',
-  '/api/webhooks',
-  '/favicon.ico',
-]
-
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
-
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
-    return NextResponse.next()
-  }
-
-  // NeonAuth sets cookies with the prefix "__Secure-neon-auth"
-  const hasSession = request.cookies.getAll().some(
-    c => c.name.startsWith('__Secure-neon-auth') || c.name.startsWith('neon-auth')
-  )
-
-  if (!hasSession) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('from', pathname)
-    return NextResponse.redirect(loginUrl)
-  }
-
+// Auth is handled per-page via auth.getSession() in each server component.
+// This proxy only exists to pass requests through cleanly.
+export function proxy(_request: NextRequest) {
   return NextResponse.next()
 }
 
