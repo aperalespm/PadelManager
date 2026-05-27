@@ -1,8 +1,12 @@
-import { createNeonAuth } from '@neondatabase/auth/next/server'
+import { NextResponse } from 'next/server'
 
-export const auth = createNeonAuth({
-  baseUrl: process.env.NEON_AUTH_BASE_URL ?? 'http://localhost:3000',
-  cookies: {
-    secret: process.env.NEON_AUTH_COOKIE_SECRET ?? 'build-placeholder-set-real-value-in-vercel',
-  },
-})
+type AuthUser = { id: string; email: string; name: string | null }
+type AuthSession = { user: AuthUser } | null
+
+export const auth = {
+  getSession: async (): Promise<{ data: AuthSession }> => ({ data: null }),
+  handler: () => ({
+    GET: async () => NextResponse.json({ error: 'Auth not configured' }, { status: 501 }),
+    POST: async () => NextResponse.json({ error: 'Auth not configured' }, { status: 501 }),
+  }),
+}
