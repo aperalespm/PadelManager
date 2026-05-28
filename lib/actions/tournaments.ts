@@ -82,6 +82,7 @@ export async function updateTournament(id: string, input: unknown) {
       description = COALESCE(${d.description ?? null}, description),
       venue_name = COALESCE(${d.venue_name ?? null}, venue_name),
       venue_address = COALESCE(${d.venue_address ?? null}, venue_address),
+      venue_details = COALESCE(${d.venue_details ? JSON.stringify(d.venue_details) : null}::jsonb, venue_details),
       category = COALESCE(${d.category ?? null}, category),
       format = COALESCE(${d.format ?? null}, format),
       registration_type = COALESCE(${d.registration_type ?? null}, registration_type),
