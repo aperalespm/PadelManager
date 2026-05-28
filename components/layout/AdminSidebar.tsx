@@ -40,27 +40,27 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
   const initials = organizerName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
   return (
-    <aside className="w-56 min-h-screen bg-secondary text-secondary-foreground flex flex-col shrink-0">
+    <aside className="w-[220px] min-h-screen bg-secondary text-secondary-foreground flex flex-col shrink-0">
       {/* Logo */}
-      <div className="px-4 pt-5 pb-4 border-b border-white/10">
+      <div className="px-[18px] pt-[22px] pb-4 border-b border-white/7">
         <Link href="/admin" className="block">
-          <p className="font-bold text-base text-white leading-tight">PadelManager</p>
-          <p className="text-xs text-white/40 mt-0.5">Panel de organizador</p>
+          <p className="text-[16px] font-extrabold text-white tracking-[-0.4px] leading-tight">PadelManager</p>
+          <p className="text-[11px] text-[#4b6a99] mt-0.5 font-medium">Panel de organizador</p>
         </Link>
       </div>
 
       {/* Tournament info */}
-      <div className="px-4 py-4 border-b border-white/10">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-2">TORNEO</p>
-        <p className="font-bold text-sm text-white leading-tight truncate">{tournamentName}</p>
-        <p className={cn('text-xs font-medium mt-1 flex items-center gap-1', statusColor[tournamentStatus] ?? 'text-white/40')}>
-          {tournamentStatus === 'active' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning)]" />}
+      <div className="px-[18px] py-[14px] border-b border-white/7">
+        <p className="text-[10px] font-bold uppercase tracking-[0.7px] text-[#4b6a99] mb-1.5">TORNEO</p>
+        <p className="text-[13px] font-bold text-white leading-tight truncate">{tournamentName}</p>
+        <p className={cn('text-[11px] font-semibold mt-1.5 flex items-center gap-1.5', statusColor[tournamentStatus] ?? 'text-white/40')}>
+          {tournamentStatus === 'active' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning)] animate-pulse shrink-0" />}
           {statusLabel[tournamentStatus] ?? tournamentStatus}
         </p>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 flex flex-col gap-0.5">
+      <nav className="flex-1 py-3 flex flex-col gap-0.5 px-[10px]">
         {navItems.map(item => {
           const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
           return (
@@ -68,16 +68,16 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-2.5 mx-2 px-3 py-2 rounded-lg text-sm transition-colors',
+                'flex items-center gap-2.5 px-3 py-2 rounded-[7px] text-[13px] transition-colors',
                 isActive
                   ? 'bg-[rgba(37,99,235,0.22)] text-white font-semibold'
-                  : 'text-white/55 hover:text-white hover:bg-white/8'
+                  : 'text-[#94a3b8] hover:text-white hover:bg-white/8 font-medium'
               )}
             >
-              <span className="w-4 text-center text-base leading-none">{item.icon}</span>
+              <span className="w-[18px] text-center text-[14px] leading-none shrink-0" style={{ opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
               <span className="flex-1">{item.label}</span>
               {item.badge && (
-                <span className="w-2 h-2 rounded-full bg-[var(--warning)] shrink-0" />
+                <span className="w-[7px] h-[7px] rounded-full bg-[var(--warning)] shrink-0 animate-pulse" />
               )}
             </Link>
           )
@@ -85,13 +85,13 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-white/10 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-xs font-bold shrink-0">
+      <div className="px-4 py-[14px] border-t border-white/7 flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-[13px] font-bold shrink-0">
           {initials}
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-white truncate leading-tight">{organizerName}</p>
-          <p className="text-xs text-white/35 leading-tight">Organizador</p>
+          <p className="text-[13px] font-semibold text-white truncate leading-tight">{organizerName}</p>
+          <p className="text-[11px] text-[#4b6a99] leading-tight mt-0.5">Organizador</p>
         </div>
       </div>
     </aside>
