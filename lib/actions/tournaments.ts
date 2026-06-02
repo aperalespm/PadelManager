@@ -58,7 +58,7 @@ export async function getMyTournaments() {
 
 export async function getAllTournamentsForSidebar() {
   const rows = await sql`
-    SELECT id, name, status FROM tournaments ORDER BY created_at DESC
+    SELECT id, name, status FROM tournaments ORDER BY created_at ASC
   `
   return rows as { id: string; name: string; status: string }[]
 }

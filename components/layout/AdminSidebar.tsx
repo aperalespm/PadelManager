@@ -90,7 +90,7 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
               </option>
             ))}
           </select>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 text-[10px] pointer-events-none">▾</span>
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/70 text-[16px] pointer-events-none">▾</span>
         </div>
 
         <p className={cn('text-[11px] font-semibold mt-1.5 flex items-center gap-1.5 pl-[2px]', statusColor[tournamentStatus] ?? 'text-white/40')}>
