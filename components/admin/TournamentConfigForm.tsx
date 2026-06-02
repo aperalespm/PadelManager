@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateTournament, saveTournamentPhases } from '@/lib/actions/tournaments'
+import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
 
 interface TournamentConfigFormProps {
@@ -389,8 +389,11 @@ function FormatConfigPanel({ format, state, onChange }: {
 export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [isDeleting, startDelete] = useTransition()
+  const [isDuplicating, startDuplicate] = useTransition()
   const [tab, setTab] = useState('datos')
   const [error, setError] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // ── Datos básicos ─────────────────────────────────────────────
   const [name, setName]        = useState(t.name as string ?? '')
@@ -513,6 +516,23 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
     setPhaseIdx(0)
   }
 
+  // ── Delete / Duplicate ───────────────────────────────────────
+  function handleDelete() {
+    startDelete(async () => {
+      await deleteTournament(t.id as string)
+      router.push('/admin')
+      router.refresh()
+    })
+  }
+
+  function handleDuplicate() {
+    startDuplicate(async () => {
+      const result = await duplicateTournament(t.id as string)
+      if ('error' in result) return
+      router.push(`/admin/${result.data!.id}/config`)
+    })
+  }
+
   // ── Court count sync ─────────────────────────────────────────
   function handleCourtCountChange(v: string) {
     setCourts(v)
@@ -618,7 +638,40 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
           <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">Configuración</h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">{t.name as string}</p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Delete */}
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 px-3 py-[9px] bg-[var(--error-surface)] border border-[var(--error)]/30 rounded-[7px]">
+              <span className="text-[12px] font-semibold text-[var(--error)]">¿Eliminar torneo?</span>
+              <button onClick={handleDelete} disabled={isDeleting} className="px-2.5 py-1 bg-[var(--error)] text-white text-[12px] font-semibold rounded-[5px] hover:opacity-90 disabled:opacity-50 transition-opacity">
+                {isDeleting ? '...' : 'Sí, eliminar'}
+              </button>
+              <button onClick={() => setConfirmDelete(false)} className="px-2.5 py-1 bg-white border border-border text-[12px] font-semibold rounded-[5px] hover:bg-[#f8fafc] transition-colors">
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} title="Eliminar torneo"
+              className="w-[38px] h-[38px] flex items-center justify-center rounded-[7px] border border-[var(--error)]/40 text-[var(--error)] hover:bg-[var(--error-surface)] transition-colors">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <path d="M1.5 3.5h12M5 3.5V2h5v1.5M6 6.5v5M9 6.5v5M2.5 3.5l.8 9a1 1 0 001 .9h6.4a1 1 0 001-.9l.8-9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          )}
+
+          {/* Duplicate */}
+          <button onClick={handleDuplicate} disabled={isDuplicating} title="Duplicar torneo"
+            className="w-[38px] h-[38px] flex items-center justify-center rounded-[7px] border border-border text-foreground hover:bg-[#f8fafc] transition-colors disabled:opacity-50">
+            {isDuplicating ? (
+              <span className="text-[11px]">...</span>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <rect x="5.5" y="5.5" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M3 9.5V2h7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+
           <button onClick={() => router.back()} className="px-[17px] py-[9px] bg-white border border-border rounded-[7px] text-[13px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">
             Cancelar
           </button>

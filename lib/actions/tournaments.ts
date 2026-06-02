@@ -142,6 +142,34 @@ export async function closeTournamentRegistrations(id: string) {
   return { data: rows[0] }
 }
 
+export async function deleteTournament(id: string) {
+  await sql`DELETE FROM tournament_phases WHERE tournament_id = ${id}`
+  await sql`DELETE FROM registrations WHERE tournament_id = ${id}`
+  await sql`DELETE FROM tournaments WHERE id = ${id}`
+  return { data: true }
+}
+
+export async function duplicateTournament(id: string) {
+  const src = await sql`SELECT * FROM tournaments WHERE id = ${id} LIMIT 1`
+  if (!src[0]) return { error: 'Torneo no encontrado' }
+  const s = src[0] as Record<string, unknown>
+  const slug = generateSlug('copia')
+  const rows = await sql`
+    INSERT INTO tournaments (organizer_id, name, description, venue_name, venue_address, venue_details, category, format, registration_type, max_players, price_info, start_date, end_date, cancel_deadline, share_slug, status)
+    VALUES (${DEMO_ORGANIZER_ID}, ${'Copia de ' + (s.name as string)}, ${s.description ?? null}, ${s.venue_name}, ${s.venue_address}, ${s.venue_details ? JSON.stringify(s.venue_details) : '{}'}::jsonb, ${s.category}, ${s.format}, ${s.registration_type}, ${s.max_players}, ${s.price_info ?? null}, ${s.start_date}, ${s.end_date ?? null}, ${s.cancel_deadline ?? null}, ${slug}, 'draft')
+    RETURNING id
+  `
+  const newId = (rows[0] as { id: string }).id
+  const phases = await sql`SELECT * FROM tournament_phases WHERE tournament_id = ${id} ORDER BY phase_order ASC`
+  for (const p of phases as Record<string, unknown>[]) {
+    await sql`
+      INSERT INTO tournament_phases (tournament_id, phase_order, name, format, score_config)
+      VALUES (${newId}, ${p.phase_order}, ${p.name}, ${p.format}, ${p.score_config ? JSON.stringify(p.score_config) : '{}'}::jsonb)
+    `
+  }
+  return { data: { id: newId } }
+}
+
 export async function saveTournamentPhases(tournamentId: string, phases: Array<{ name: string; format: string; score_config: Record<string, unknown> }>) {
   await sql`DELETE FROM tournament_phases WHERE tournament_id = ${tournamentId}`
   for (let i = 0; i < phases.length; i++) {
