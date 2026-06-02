@@ -77,23 +77,23 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
       <div className="px-[18px] py-[14px] border-b border-white/7">
         <p className="text-[10px] font-bold uppercase tracking-[0.7px] text-[#4b6a99] mb-1.5">TORNEO</p>
 
-        <div className="relative">
+        <div className="relative mt-1">
           <select
             value={tournamentId}
             onChange={e => handleSwitch(e.target.value)}
-            className="w-full bg-transparent text-white text-[13px] font-bold appearance-none cursor-pointer outline-none pr-4 truncate"
+            className="w-full appearance-none cursor-pointer outline-none pr-7 py-[7px] px-[10px] rounded-[6px] bg-white/10 border border-white/15 text-white text-[13px] font-bold truncate hover:bg-white/15 transition-colors"
             style={{ color: 'white' }}
           >
             {tournaments.map(t => (
-              <option key={t.id} value={t.id} style={{ backgroundColor: '#0d1526', color: 'white' }}>
+              <option key={t.id} value={t.id} style={{ backgroundColor: '#1e293b', color: 'white' }}>
                 {t.name}
               </option>
             ))}
           </select>
-          <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[#4b6a99] text-[10px] pointer-events-none">▾</span>
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 text-[10px] pointer-events-none">▾</span>
         </div>
 
-        <p className={cn('text-[11px] font-semibold mt-1.5 flex items-center gap-1.5', statusColor[tournamentStatus] ?? 'text-white/40')}>
+        <p className={cn('text-[11px] font-semibold mt-1.5 flex items-center gap-1.5 pl-[2px]', statusColor[tournamentStatus] ?? 'text-white/40')}>
           {tournamentStatus === 'active' && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning)] animate-pulse shrink-0" />}
           {statusLabel[tournamentStatus] ?? tournamentStatus}
         </p>
@@ -101,7 +101,7 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
         <button
           onClick={handleCreate}
           disabled={isCreating}
-          className="mt-2.5 w-full flex items-center gap-1.5 px-2.5 py-[6px] rounded-[6px] bg-[rgba(37,99,235,0.15)] text-accent text-[11px] font-semibold hover:bg-[rgba(37,99,235,0.25)] transition-colors disabled:opacity-50"
+          className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-2.5 py-[7px] rounded-[6px] bg-accent text-white text-[11px] font-semibold hover:bg-[#1d4ed8] transition-colors disabled:opacity-50"
         >
           <span className="text-[14px] leading-none">+</span>
           {isCreating ? 'Creando...' : 'Crear torneo'}
