@@ -56,6 +56,24 @@ export async function getMyTournaments() {
   return { data: rows }
 }
 
+export async function getAllTournamentsForSidebar() {
+  const rows = await sql`
+    SELECT id, name, status FROM tournaments ORDER BY created_at DESC
+  `
+  return rows as { id: string; name: string; status: string }[]
+}
+
+export async function createDraftTournament() {
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  const slug = generateSlug('nuevo-torneo')
+  const rows = await sql`
+    INSERT INTO tournaments (organizer_id, name, venue_name, venue_address, venue_details, category, format, registration_type, max_players, start_date, share_slug, status)
+    VALUES (${DEMO_ORGANIZER_ID}, 'Nuevo torneo', 'Por confirmar', 'Por confirmar', '{}', 'Abierta', 'elimination', 'pair', 16, ${nextWeek.toISOString()}, ${slug}, 'draft')
+    RETURNING id
+  `
+  return { data: rows[0] as { id: string } }
+}
+
 export async function createTournament(input: unknown) {
   const parsed = createTournamentSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
@@ -76,6 +94,12 @@ export async function updateTournament(id: string, input: unknown) {
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
   const d = parsed.data
+
+  if (d.name) {
+    const dup = await sql`SELECT id FROM tournaments WHERE name = ${d.name} AND id != ${id} LIMIT 1`
+    if (dup[0]) return { error: 'Ya existe un torneo con ese nombre' }
+  }
+
   const rows = await sql`
     UPDATE tournaments SET
       name = COALESCE(${d.name ?? null}, name),

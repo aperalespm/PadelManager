@@ -1,4 +1,4 @@
-import { getTournamentById } from '@/lib/actions/tournaments'
+import { getTournamentById, getAllTournamentsForSidebar } from '@/lib/actions/tournaments'
 import { getMatchesForTournament } from '@/lib/actions/matches'
 import { notFound } from 'next/navigation'
 import { AdminSidebar } from '@/components/layout/AdminSidebar'
@@ -13,12 +13,15 @@ export default async function AdminTournamentLayout({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const tournament = await getTournamentById(id)
+  const [tournament, allTournaments, matches] = await Promise.all([
+    getTournamentById(id),
+    getAllTournamentsForSidebar(),
+    getMatchesForTournament(id),
+  ])
   if (!tournament) notFound()
 
   const t = tournament as Record<string, unknown>
-  const matches = await getMatchesForTournament(id) as Record<string, unknown>[]
-  const activeMatchCount = matches.filter(m => m.status === 'active' || m.status === 'disputed').length
+  const activeMatchCount = (matches as Record<string, unknown>[]).filter(m => m.status === 'active' || m.status === 'disputed').length
 
   return (
     <div className="flex min-h-screen">
@@ -28,6 +31,7 @@ export default async function AdminTournamentLayout({
         tournamentStatus={t.status as string}
         organizerName="Alejandro R."
         activeMatchCount={activeMatchCount}
+        tournaments={allTournaments}
       />
       <main className="flex-1 bg-background overflow-auto">
         {children}

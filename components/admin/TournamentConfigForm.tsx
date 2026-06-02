@@ -515,6 +515,10 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
 
   // ── Save ──────────────────────────────────────────────────────
   function handleSave() {
+    if (!name.trim() || name.trim() === 'Nuevo torneo') {
+      setError('Debes asignar un nombre al torneo antes de guardar')
+      return
+    }
     startTransition(async () => {
       setError('')
       const result = await updateTournament(t.id as string, {
@@ -626,7 +630,12 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
       {/* ── Tab: Datos básicos ────────────────────────────────── */}
       {tab === 'datos' && (
         <div className="bg-white border border-border rounded-[10px] p-[26px]">
-          <FieldRow label="Nombre del torneo" req><SI value={name} onChange={setName} /></FieldRow>
+          <FieldRow label="Nombre del torneo" req>
+            <SI value={name} onChange={setName} className={name === 'Nuevo torneo' ? 'border-[var(--amber)] focus:ring-[var(--amber)]' : ''} />
+            {name === 'Nuevo torneo' && (
+              <p className="text-[11px] text-[var(--amber)] mt-1.5">Cambia el nombre antes de guardar</p>
+            )}
+          </FieldRow>
           <div className="grid grid-cols-2 gap-4">
             <FieldRow label="Fecha de inicio" req><SI type="date" value={startDate} onChange={setStart} /></FieldRow>
             <FieldRow label="Fecha de fin" req><SI type="date" value={endDate} onChange={setEnd} /></FieldRow>
