@@ -513,6 +513,21 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
     setPhaseIdx(0)
   }
 
+  // ── Court count sync ─────────────────────────────────────────
+  function handleCourtCountChange(v: string) {
+    setCourts(v)
+    const n = parseInt(v) || 0
+    if (n > 0) {
+      setNamedCourts(prev => {
+        if (n > prev.length) {
+          const extras = Array.from({ length: n - prev.length }, (_, i) => ({ name: `Pista ${prev.length + i + 1}` }))
+          return [...prev, ...extras]
+        }
+        return prev.slice(0, n)
+      })
+    }
+  }
+
   // ── Save ──────────────────────────────────────────────────────
   function handleSave() {
     if (!name.trim() || name.trim() === 'Nuevo torneo') {
@@ -590,7 +605,7 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
     { id: 'datos',       label: 'Datos básicos' },
     { id: 'instalacion', label: 'Instalación' },
     { id: 'categorias',  label: 'Categorías' },
-    { id: 'horario',     label: 'Horario' },
+    { id: 'horario',     label: 'Pistas y horarios' },
     { id: 'puntuacion',  label: 'Puntuación' },
   ]
 
@@ -672,8 +687,8 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
         <div className="bg-white border border-border rounded-[10px] p-[26px]">
           <FieldRow label="Nombre de la instalación" req><SI value={venueName} onChange={setVName} placeholder="Padelton Leganés" /></FieldRow>
           <FieldRow label="Dirección" req><SI value={venueAddr} onChange={setVAddr} placeholder="Calle de las Pistas 12, Leganés" /></FieldRow>
-          <div className="grid grid-cols-2 gap-4">
-            <FieldRow label="Número de pistas" req><SI type="number" value={courtCount} onChange={setCourts} placeholder="6" /></FieldRow>
+          <div className="grid grid-cols-3 gap-4">
+            <FieldRow label="Número de pistas" req><SI type="number" value={courtCount} onChange={handleCourtCountChange} placeholder="6" /></FieldRow>
             <FieldRow label="Tipo de pista" req>
               <SS value={courtType} onChange={setCType}>
                 <option value="indoor">Indoor (cristal)</option>
@@ -681,13 +696,13 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
                 <option value="mixed">Mixta</option>
               </SS>
             </FieldRow>
+            <FieldRow label="Superficie">
+              <SS value={surface} onChange={setSurface}>
+                <option value="cesped">Césped artificial</option>
+                <option value="moqueta">Moqueta</option>
+              </SS>
+            </FieldRow>
           </div>
-          <FieldRow label="Superficie">
-            <SS value={surface} onChange={setSurface}>
-              <option value="cesped">Césped artificial</option>
-              <option value="moqueta">Moqueta</option>
-            </SS>
-          </FieldRow>
           <div>
             <p className="text-[12px] font-semibold text-foreground mb-2.5">Servicios disponibles</p>
             <div className="grid grid-cols-3 gap-2">
