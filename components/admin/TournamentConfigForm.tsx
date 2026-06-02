@@ -14,7 +14,7 @@ interface TournamentConfigFormProps {
 
 type Service  = { key: string; label: string; active: boolean }
 type Category = { name: string; minScore: string; maxScore: string }
-type Court    = { name: string }
+type Court    = { name: string; type: 'indoor' | 'outdoor' }
 type TimeBlock = { id: string; courtName: string; from: string; to: string; reason: string }
 
 interface MatchConfig {
@@ -78,10 +78,10 @@ const DEFAULT_MATCH_CONFIG: MatchConfig = {
 }
 
 const DEFAULT_COURTS: Court[] = [
-  { name: 'Pista 1' },
-  { name: 'Pista 2' },
-  { name: 'Pista 3' },
-  { name: 'Pista 4' },
+  { name: 'Pista 1', type: 'indoor' },
+  { name: 'Pista 2', type: 'indoor' },
+  { name: 'Pista 3', type: 'indoor' },
+  { name: 'Pista 4', type: 'indoor' },
 ]
 
 function getEliminationPhaseNames(bracketSize: number): string[] {
@@ -523,9 +523,10 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
   // ── Horario ───────────────────────────────────────────────────
   const savedCourts = vd.courts as Court[] | undefined
   const [namedCourts, setNamedCourts] = useState<Court[]>(
-    Array.isArray(savedCourts) && savedCourts.length > 0 ? savedCourts : DEFAULT_COURTS
+    Array.isArray(savedCourts) && savedCourts.length > 0
+      ? savedCourts.map(c => ({ name: c.name, type: c.type ?? 'indoor' }))
+      : DEFAULT_COURTS
   )
-  const [newCourtName, setNewCourtName] = useState('')
 
   const sched = (vd.schedule as Record<string, unknown>) ?? {}
   const savedLunch = sched.lunch_break as Record<string, unknown> | null | undefined
@@ -705,7 +706,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     if (n > 0) {
       setNamedCourts(prev => {
         if (n > prev.length) {
-          const extras = Array.from({ length: n - prev.length }, (_, i) => ({ name: `Pista ${prev.length + i + 1}` }))
+          const extras = Array.from({ length: n - prev.length }, (_, i) => ({ name: `Pista ${prev.length + i + 1}`, type: 'indoor' as const }))
           return [...prev, ...extras]
         }
         return prev.slice(0, n)
@@ -972,34 +973,39 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
           {/* Pistas */}
           <div>
-            <SectionLabel>Pistas disponibles para este torneo</SectionLabel>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {namedCourts.map((court, i) => (
-                <div key={i} className="flex items-center gap-1.5 border border-border rounded-[7px] px-3 py-[7px] bg-white">
-                  <input
-                    value={court.name}
-                    onChange={e => setNamedCourts(cs => cs.map((c, j) => j === i ? { name: e.target.value } : c))}
-                    className="text-[12px] font-medium text-foreground bg-transparent border-none outline-none w-[72px]"
-                  />
-                  <button onClick={() => setNamedCourts(cs => cs.filter((_, j) => j !== i))}
-                    className="text-light hover:text-[var(--error)] transition-colors text-[10px] leading-none">✕</button>
-                </div>
-              ))}
-              <div className="flex items-center gap-1.5">
-                <input
-                  value={newCourtName}
-                  onChange={e => setNewCourtName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && newCourtName.trim()) {
-                      setNamedCourts(cs => [...cs, { name: newCourtName.trim() }])
-                      setNewCourtName('')
-                    }
-                  }}
-                  placeholder="+ Añadir pista"
-                  className="px-3 py-[7px] border border-dashed border-accent/60 text-accent rounded-[7px] text-[12px] w-32 focus:outline-none focus:border-accent bg-[var(--accent-surface)] placeholder:text-accent/60"
-                />
-              </div>
+            <div className="flex items-center justify-between mb-3">
+              <SectionLabel>Pistas del torneo</SectionLabel>
+              <span className="text-[11px] text-muted-foreground">El número de pistas se define en la pestaña Instalación</span>
             </div>
+            {namedCourts.length === 0 ? (
+              <p className="text-[12px] text-muted-foreground">Configura el número de pistas en la pestaña Instalación.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {namedCourts.map((court, i) => (
+                  <div key={i} className="flex items-center gap-2 border border-border rounded-[8px] px-3 py-[9px] bg-white">
+                    <span className="text-[11px] font-bold text-muted-foreground w-5 shrink-0">{i + 1}</span>
+                    <input
+                      value={court.name}
+                      onChange={e => setNamedCourts(cs => cs.map((c, j) => j === i ? { ...c, name: e.target.value } : c))}
+                      onBlur={() => scheduleSave()}
+                      className="flex-1 text-[13px] font-medium text-foreground bg-transparent border-none outline-none min-w-0"
+                    />
+                    <div className="flex shrink-0 rounded-[5px] overflow-hidden border border-border text-[11px] font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => { setNamedCourts(cs => cs.map((c, j) => j === i ? { ...c, type: 'indoor' } : c)); scheduleSave() }}
+                        className={cn('px-2 py-[3px] transition-colors', court.type === 'indoor' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}
+                      >Indoor</button>
+                      <button
+                        type="button"
+                        onClick={() => { setNamedCourts(cs => cs.map((c, j) => j === i ? { ...c, type: 'outdoor' } : c)); scheduleSave() }}
+                        className={cn('px-2 py-[3px] transition-colors border-l border-border', court.type === 'outdoor' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}
+                      >Outdoor</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <Divider />
