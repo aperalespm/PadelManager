@@ -3,6 +3,7 @@
 import { auth } from '@/lib/auth'
 import { sql } from '@/lib/db'
 import { submitScoreSchema } from '@/lib/validations'
+import { validateMatchScore, MatchConfig } from '@/lib/scoring'
 
 export async function submitScore(input: unknown) {
   const { data: session } = await auth.getSession()
@@ -13,14 +14,32 @@ export async function submitScore(input: unknown) {
   const { match_id, score } = parsed.data
 
   const match = await sql`
-    SELECT m.*, r1.player1_id AS t1p1, r1.player2_id AS t1p2, r2.player1_id AS t2p1, r2.player2_id AS t2p2
+    SELECT m.*, r1.player1_id AS t1p1, r1.player2_id AS t1p2, r2.player1_id AS t2p1, r2.player2_id AS t2p2,
+           ph.score_config
     FROM matches m
     LEFT JOIN registrations r1 ON r1.id = m.team1_reg_id
     LEFT JOIN registrations r2 ON r2.id = m.team2_reg_id
+    LEFT JOIN tournament_phases ph ON ph.id = m.phase_id
     WHERE m.id = ${match_id} LIMIT 1
   `
   if (!match[0]) return { error: 'Partido no encontrado' }
   if (match[0].status === 'finished') return { error: 'El partido ya está finalizado' }
+
+  // Validate score against phase match_config if available
+  const scoreConfig = match[0].score_config as Record<string, unknown> | null
+  if (scoreConfig && scoreConfig.sets_format) {
+    const matchConfig: MatchConfig = {
+      sets_format: scoreConfig.sets_format as string,
+      games_to_win_set: (scoreConfig.games_to_win_set as number) ?? 6,
+      deuce_mode: (scoreConfig.deuce_mode as string) ?? 'GOLDEN_POINT',
+      deciding_set_format: scoreConfig.deciding_set_format as string | undefined,
+      tiebreak_points: scoreConfig.tiebreak_points as number | undefined,
+      super_tiebreak_points: scoreConfig.super_tiebreak_points as number | undefined,
+      time_limit_minutes: scoreConfig.time_limit_minutes as number | null | undefined,
+    }
+    const validation = validateMatchScore(score, matchConfig)
+    if (!validation.valid) return { error: validation.error ?? 'Marcador inválido' }
+  }
 
   const uid = session.user.id
   const isTeam1 = uid === match[0].t1p1 || uid === match[0].t1p2

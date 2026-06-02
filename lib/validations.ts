@@ -7,7 +7,7 @@ export const createTournamentSchema = z.object({
   venue_address: z.string().min(1),
   venue_details: z.record(z.string(), z.unknown()).optional(),
   category: z.string().min(1),
-  format: z.enum(['elimination', 'round_robin', 'groups_elimination']),
+  format: z.enum(['elimination', 'round_robin', 'groups_elimination', 'american']),
   registration_type: z.enum(['pair', 'individual']),
   max_players: z.number().int().min(2).max(256),
   price_info: z.string().optional(),

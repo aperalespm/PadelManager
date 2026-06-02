@@ -9,6 +9,28 @@ interface TournamentConfigFormProps {
   tournament: Record<string, unknown>
 }
 
+// ── Types ────────────────────────────────────────────────────────────────────
+
+type Service  = { key: string; label: string; active: boolean }
+type Category = { name: string; minScore: string; maxScore: string }
+
+interface MatchConfig {
+  sets_format: string
+  games_to_win_set: number
+  deuce_mode: string
+  deciding_set_format: string
+  tiebreak_points: number
+  super_tiebreak_points: number
+  time_limit_minutes: string
+}
+
+interface PhaseConfig {
+  name: string
+  match_config: MatchConfig
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
 const DEFAULT_SERVICES = [
   { key: 'bar',        label: 'Bar / Cafetería' },
   { key: 'vestuarios', label: 'Vestuarios' },
@@ -18,10 +40,190 @@ const DEFAULT_SERVICES = [
   { key: 'piscina',    label: 'Piscina' },
 ]
 
-const PHASE_NAMES = ['Octavos de final', 'Cuartos de final', 'Semifinal', 'Final']
+const TIEBREAK_CRITERIA_OPTIONS = [
+  { value: 'HEAD_TO_HEAD',      label: 'Enfrentamiento directo' },
+  { value: 'SET_DIFFERENCE',    label: 'Diferencia de sets' },
+  { value: 'GAME_DIFFERENCE',   label: 'Diferencia de juegos' },
+  { value: 'GAMES_WON',         label: 'Juegos ganados' },
+  { value: 'POINTS_DIFFERENCE', label: 'Diferencia de puntos' },
+  { value: 'RANDOM',            label: 'Desempate aleatorio' },
+]
 
-type Service  = { key: string; label: string; active: boolean }
-type Category = { name: string; minScore: string; maxScore: string }
+const DEFAULT_TIEBREAK_CRITERIA = ['HEAD_TO_HEAD', 'SET_DIFFERENCE', 'GAME_DIFFERENCE', 'RANDOM']
+
+const DEFAULT_MATCH_CONFIG: MatchConfig = {
+  sets_format: 'BEST_OF_3',
+  games_to_win_set: 6,
+  deuce_mode: 'STAR_POINT',
+  deciding_set_format: 'SUPER_TIEBREAK_10',
+  tiebreak_points: 7,
+  super_tiebreak_points: 10,
+  time_limit_minutes: '',
+}
+
+// Phase name lists by bracket size
+function getEliminationPhaseNames(bracketSize: number): string[] {
+  const all = [
+    { size: 64, name: 'Treintaidosavos de final' },
+    { size: 32, name: 'Dieciseisavos de final' },
+    { size: 16, name: 'Octavos de final' },
+    { size: 8,  name: 'Cuartos de final' },
+    { size: 4,  name: 'Semifinal' },
+    { size: 2,  name: 'Final' },
+  ]
+  return all.filter(e => e.size < bracketSize || e.size === 2).map(e => e.name)
+}
+
+function getGroupsEliminationPhaseNames(numGroups: number, teamsAdvance: number): string[] {
+  const totalKnockout = numGroups * teamsAdvance
+  const phases = ['Fase de grupos']
+  if (totalKnockout >= 16) phases.push('Octavos de final')
+  if (totalKnockout >= 8)  phases.push('Cuartos de final')
+  if (totalKnockout >= 4)  phases.push('Semifinal')
+  phases.push('Final')
+  return phases
+}
+
+// ── Presets ───────────────────────────────────────────────────────────────────
+
+interface PresetConfig {
+  format: string
+  bracket_size: string
+  seeding_method: string
+  has_third_place_match: boolean
+  num_groups: string
+  teams_per_group: string
+  teams_advance_per_group: string
+  group_scoring: string
+  tiebreak_criteria: string[]
+  time_limit_minutes: string
+  match_config: MatchConfig
+}
+
+const PRESETS: { label: string; config: PresetConfig }[] = [
+  {
+    label: 'Torneo FIP',
+    config: {
+      format: 'elimination',
+      bracket_size: '16',
+      seeding_method: 'RANKING',
+      has_third_place_match: false,
+      num_groups: '4',
+      teams_per_group: '4',
+      teams_advance_per_group: '2',
+      group_scoring: 'WIN_LOSS',
+      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA,
+      time_limit_minutes: '',
+      match_config: {
+        sets_format: 'BEST_OF_3',
+        games_to_win_set: 6,
+        deuce_mode: 'STAR_POINT',
+        deciding_set_format: 'SUPER_TIEBREAK_10',
+        tiebreak_points: 7,
+        super_tiebreak_points: 10,
+        time_limit_minutes: '',
+      },
+    },
+  },
+  {
+    label: 'Liga de club',
+    config: {
+      format: 'groups_elimination',
+      bracket_size: '16',
+      seeding_method: 'RANDOM',
+      has_third_place_match: false,
+      num_groups: '4',
+      teams_per_group: '4',
+      teams_advance_per_group: '2',
+      group_scoring: 'WIN_LOSS',
+      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA,
+      time_limit_minutes: '',
+      match_config: {
+        sets_format: 'BEST_OF_3',
+        games_to_win_set: 6,
+        deuce_mode: 'ADVANTAGE',
+        deciding_set_format: 'SUPER_TIEBREAK_10',
+        tiebreak_points: 7,
+        super_tiebreak_points: 10,
+        time_limit_minutes: '',
+      },
+    },
+  },
+  {
+    label: 'Americano rápido',
+    config: {
+      format: 'american',
+      bracket_size: '16',
+      seeding_method: 'RANDOM',
+      has_third_place_match: false,
+      num_groups: '4',
+      teams_per_group: '4',
+      teams_advance_per_group: '2',
+      group_scoring: 'WIN_LOSS',
+      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA,
+      time_limit_minutes: '',
+      match_config: {
+        sets_format: 'BEST_OF_1',
+        games_to_win_set: 4,
+        deuce_mode: 'GOLDEN_POINT',
+        deciding_set_format: 'SUPER_TIEBREAK_10',
+        tiebreak_points: 7,
+        super_tiebreak_points: 10,
+        time_limit_minutes: '',
+      },
+    },
+  },
+  {
+    label: 'JoyPadel',
+    config: {
+      format: 'groups_elimination',
+      bracket_size: '16',
+      seeding_method: 'RANDOM',
+      has_third_place_match: false,
+      num_groups: '4',
+      teams_per_group: '4',
+      teams_advance_per_group: '2',
+      group_scoring: 'WIN_LOSS',
+      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA,
+      time_limit_minutes: '',
+      match_config: {
+        sets_format: 'BEST_OF_1',
+        games_to_win_set: 9,
+        deuce_mode: 'STAR_POINT',
+        deciding_set_format: 'SUPER_TIEBREAK_10',
+        tiebreak_points: 7,
+        super_tiebreak_points: 10,
+        time_limit_minutes: '',
+      },
+    },
+  },
+  {
+    label: 'Mexicano social',
+    config: {
+      format: 'american',
+      bracket_size: '16',
+      seeding_method: 'RANDOM',
+      has_third_place_match: false,
+      num_groups: '4',
+      teams_per_group: '4',
+      teams_advance_per_group: '2',
+      group_scoring: 'WIN_LOSS',
+      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA,
+      time_limit_minutes: '',
+      match_config: {
+        sets_format: 'BEST_OF_1',
+        games_to_win_set: 6,
+        deuce_mode: 'GOLDEN_POINT',
+        deciding_set_format: 'SUPER_TIEBREAK_10',
+        tiebreak_points: 7,
+        super_tiebreak_points: 10,
+        time_limit_minutes: '',
+      },
+    },
+  },
+]
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function FieldRow({ label, req, note, children }: { label: string; req?: boolean; note?: string; children: React.ReactNode }) {
   return (
@@ -35,13 +237,15 @@ function FieldRow({ label, req, note, children }: { label: string; req?: boolean
   )
 }
 
-function SI({ value, onChange, type, placeholder, className }: { value: string; onChange: (v: string) => void; type?: string; placeholder?: string; className?: string }) {
+function SI({ value, onChange, type, placeholder, className, min, max }: { value: string; onChange: (v: string) => void; type?: string; placeholder?: string; className?: string; min?: string; max?: string }) {
   return (
     <input
       type={type ?? 'text'}
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
+      min={min}
+      max={max}
       className={cn('w-full px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent', className)}
     />
   )
@@ -59,140 +263,294 @@ function SS({ value, onChange, children }: { value: string; onChange: (v: string
   )
 }
 
-function FormatConfig({ format, maxPlayers }: { format: string; maxPlayers: number }) {
-  const [groups, setGroups] = useState('4')
-  const [perGroup, setPerGroup] = useState('4')
-  const [advance, setAdvance] = useState('2')
-  const [thirdPlace, setThirdPlace] = useState('no')
-  const [seeding, setSeeding] = useState('random')
-  const [matchDuration, setMatchDuration] = useState('30')
-  const [winPts, setWinPts] = useState('3')
-  const [drawPts, setDrawPts] = useState('1')
-  const [tiebreak, setTbCrit] = useState('game_diff')
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-3">{children}</p>
+  )
+}
 
-  const phases: string[] = []
-  if (format === 'elimination') {
-    let n = maxPlayers
-    const pnames = ['Final', 'Semifinal', 'Cuartos de final', 'Octavos de final', 'Dieciseisavos']
-    while (n > 1) { phases.unshift(pnames[Math.min(Math.floor(Math.log2(n)) - 1, pnames.length - 1)] || `Ronda de ${n}`); n = Math.ceil(n / 2) }
+// ── Tiebreak Criteria Reorderable List ───────────────────────────────────────
+
+function TiebreakCriteriaList({ criteria, onChange }: { criteria: string[]; onChange: (c: string[]) => void }) {
+  function move(i: number, dir: -1 | 1) {
+    const next = [...criteria]
+    const j = i + dir
+    if (j < 0 || j >= next.length) return
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onChange(next)
   }
 
-  return (
-    <div className="bg-[var(--muted)] border border-border rounded-lg p-4 mt-1">
-      <p className="text-[12px] font-semibold text-foreground mb-3">Configuración de fases</p>
+  const labelOf = (val: string) => TIEBREAK_CRITERIA_OPTIONS.find(o => o.value === val)?.label ?? val
 
-      {format === 'elimination' && (
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-4">
-            <FieldRow label="Emparejamiento">
-              <SS value={seeding} onChange={setSeeding}>
-                <option value="random">Aleatorio</option>
-                <option value="seeded">Por cabezas de serie</option>
-              </SS>
-            </FieldRow>
-            <FieldRow label="Partido 3er y 4to puesto">
-              <SS value={thirdPlace} onChange={setThirdPlace}>
-                <option value="no">No</option>
-                <option value="yes">Sí</option>
-              </SS>
-            </FieldRow>
+  return (
+    <div className="flex flex-col gap-1.5">
+      {criteria.map((c, i) => (
+        <div key={c} className="flex items-center gap-2 bg-white border border-border rounded-[7px] px-3 py-[7px]">
+          <span className="text-[11px] font-bold text-light w-4 text-center">{i + 1}</span>
+          <span className="flex-1 text-[12px] text-foreground font-medium">{labelOf(c)}</span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => move(i, -1)}
+              disabled={i === 0}
+              className="w-6 h-6 flex items-center justify-center rounded border border-border text-[11px] text-muted-foreground hover:border-accent hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => move(i, 1)}
+              disabled={i === criteria.length - 1}
+              className="w-6 h-6 flex items-center justify-center rounded border border-border text-[11px] text-muted-foreground hover:border-accent hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              ↓
+            </button>
           </div>
-          {phases.length > 0 && (
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5">Fases generadas con {maxPlayers} participantes:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {phases.map(ph => (
-                  <span key={ph} className="px-2.5 py-1 bg-white border border-border rounded-full text-[11px] text-foreground font-medium">{ph}</span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Match Config Panel ────────────────────────────────────────────────────────
+
+function MatchConfigPanel({ config, onChange }: { config: MatchConfig; onChange: (c: MatchConfig) => void }) {
+  function set<K extends keyof MatchConfig>(key: K, value: MatchConfig[K]) {
+    onChange({ ...config, [key]: value })
+  }
+
+  const isBestOf1 = config.sets_format === 'BEST_OF_1'
+
+  return (
+    <div className="flex flex-col gap-4">
+      <FieldRow label="Formato del partido" req>
+        <SS value={config.sets_format} onChange={v => set('sets_format', v)}>
+          <option value="BEST_OF_1">1 set</option>
+          <option value="BEST_OF_2_SUPERTB">2 sets (super TB si empate)</option>
+          <option value="BEST_OF_3">Mejor de 3 sets</option>
+        </SS>
+      </FieldRow>
+
+      <FieldRow label="Juegos para ganar set" req>
+        <SI
+          type="number"
+          value={String(config.games_to_win_set)}
+          onChange={v => set('games_to_win_set', parseInt(v) || 6)}
+          min="1"
+          max="9"
+          placeholder="6"
+        />
+      </FieldRow>
+
+      <FieldRow label="Deuce" req>
+        <SS value={config.deuce_mode} onChange={v => set('deuce_mode', v)}>
+          <option value="ADVANTAGE">Ventaja clásica</option>
+          <option value="GOLDEN_POINT">Golden Point</option>
+          <option value="STAR_POINT">Star Point (FIP 2026)</option>
+        </SS>
+      </FieldRow>
+
+      {!isBestOf1 && (
+        <FieldRow label="Set decisivo" req>
+          <SS value={config.deciding_set_format} onChange={v => set('deciding_set_format', v)}>
+            <option value="FULL_SET">Set completo</option>
+            <option value="TIEBREAK_7">Tie-break a 7</option>
+            <option value="SUPER_TIEBREAK_10">Super tie-break a 10</option>
+          </SS>
+        </FieldRow>
       )}
 
-      {format === 'groups_elimination' && (
+      {!isBestOf1 && config.deciding_set_format === 'TIEBREAK_7' && (
+        <FieldRow label="Puntos tie-break">
+          <SI
+            type="number"
+            value={String(config.tiebreak_points)}
+            onChange={v => set('tiebreak_points', parseInt(v) || 7)}
+            placeholder="7"
+          />
+        </FieldRow>
+      )}
+
+      {!isBestOf1 && config.deciding_set_format === 'SUPER_TIEBREAK_10' && (
+        <FieldRow label="Puntos super tie-break">
+          <SI
+            type="number"
+            value={String(config.super_tiebreak_points)}
+            onChange={v => set('super_tiebreak_points', parseInt(v) || 10)}
+            placeholder="10"
+          />
+        </FieldRow>
+      )}
+
+      <FieldRow label="Límite de tiempo (min)" note="Dejar vacío para sin límite">
+        <SI
+          type="number"
+          value={config.time_limit_minutes}
+          onChange={v => set('time_limit_minutes', v)}
+          placeholder="Sin límite"
+        />
+      </FieldRow>
+
+      <div className="bg-[var(--accent-surface)] text-accent rounded-[7px] px-4 py-3 text-[12px]">
+        ⚠ Star Point es el estándar FIP desde enero 2026. Ventaja clásica y Golden Point son los más habituales en amateur.
+      </div>
+    </div>
+  )
+}
+
+// ── Format Config ─────────────────────────────────────────────────────────────
+
+interface FormatState {
+  // elimination
+  bracket_size: string
+  seeding_method: string
+  has_third_place_match: boolean
+  // groups_elimination
+  num_groups: string
+  teams_per_group: string
+  teams_advance_per_group: string
+  group_scoring: string
+  // shared (american + groups_elimination)
+  tiebreak_criteria: string[]
+  // american
+  time_limit_minutes: string
+}
+
+function FormatConfigPanel({
+  format,
+  state,
+  onChange,
+}: {
+  format: string
+  state: FormatState
+  onChange: (s: FormatState) => void
+}) {
+  function set<K extends keyof FormatState>(key: K, value: FormatState[K]) {
+    onChange({ ...state, [key]: value })
+  }
+
+  if (format === 'elimination') {
+    const phases = getEliminationPhaseNames(parseInt(state.bracket_size) || 16)
+    return (
+      <div className="bg-[var(--muted)] border border-border rounded-[10px] p-[18px] mt-1 flex flex-col gap-4">
+        <SectionLabel>Configuración de eliminación directa</SectionLabel>
         <div className="grid grid-cols-2 gap-4">
-          <FieldRow label="Número de grupos">
-            <SS value={groups} onChange={setGroups}>
+          <FieldRow label="Tamaño del cuadro" req>
+            <SS value={state.bracket_size} onChange={v => set('bracket_size', v)}>
+              <option value="4">4 parejas</option>
+              <option value="8">8 parejas</option>
+              <option value="16">16 parejas</option>
+              <option value="32">32 parejas</option>
+              <option value="64">64 parejas</option>
+            </SS>
+          </FieldRow>
+          <FieldRow label="Método de siembra" req>
+            <SS value={state.seeding_method} onChange={v => set('seeding_method', v)}>
+              <option value="RANDOM">Aleatorio</option>
+              <option value="RANKING">Por ranking</option>
+              <option value="MANUAL">Manual</option>
+            </SS>
+          </FieldRow>
+        </div>
+        <FieldRow label="Partido 3er y 4to puesto">
+          <SS value={state.has_third_place_match ? 'yes' : 'no'} onChange={v => set('has_third_place_match', v === 'yes')}>
+            <option value="no">No</option>
+            <option value="yes">Sí</option>
+          </SS>
+        </FieldRow>
+        {phases.length > 0 && (
+          <div>
+            <p className="text-[11px] text-muted-foreground mb-2">Fases generadas:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {phases.map((ph, i) => (
+                <span key={i} className="px-2.5 py-1 bg-white border border-border rounded-full text-[11px] text-foreground font-medium">{ph}</span>
+              ))}
+              {state.has_third_place_match && (
+                <span className="px-2.5 py-1 bg-white border border-border rounded-full text-[11px] text-foreground font-medium">3er puesto</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (format === 'groups_elimination') {
+    return (
+      <div className="bg-[var(--muted)] border border-border rounded-[10px] p-[18px] mt-1 flex flex-col gap-4">
+        <SectionLabel>Configuración de grupos + eliminatoria</SectionLabel>
+        <div className="grid grid-cols-2 gap-4">
+          <FieldRow label="Número de grupos" req>
+            <SS value={state.num_groups} onChange={v => set('num_groups', v)}>
               <option value="2">2 grupos</option>
               <option value="4">4 grupos</option>
               <option value="8">8 grupos</option>
             </SS>
           </FieldRow>
-          <FieldRow label="Equipos por grupo">
-            <SS value={perGroup} onChange={setPerGroup}>
+          <FieldRow label="Equipos por grupo" req>
+            <SS value={state.teams_per_group} onChange={v => set('teams_per_group', v)}>
+              <option value="3">3 equipos</option>
               <option value="4">4 equipos</option>
+              <option value="5">5 equipos</option>
               <option value="6">6 equipos</option>
-              <option value="8">8 equipos</option>
             </SS>
           </FieldRow>
-          <FieldRow label="Equipos que pasan por grupo">
-            <SS value={advance} onChange={setAdvance}>
-              <option value="1">El 1º de cada grupo</option>
-              <option value="2">Los 2 primeros de cada grupo</option>
-              <option value="3">Los 3 primeros de cada grupo</option>
+          <FieldRow label="Equipos que pasan por grupo" req>
+            <SS value={state.teams_advance_per_group} onChange={v => set('teams_advance_per_group', v)}>
+              <option value="1">1 equipo</option>
+              <option value="2">2 equipos</option>
+              <option value="3">3 equipos</option>
             </SS>
           </FieldRow>
-          <FieldRow label="Fase eliminatoria desde">
-            <SS value={seeding} onChange={setSeeding}>
-              <option value="qf">Cuartos de final</option>
-              <option value="sf">Semifinal</option>
-              <option value="r16">Octavos de final</option>
+          <FieldRow label="Sistema de clasificación de grupo" req>
+            <SS value={state.group_scoring} onChange={v => set('group_scoring', v)}>
+              <option value="WIN_LOSS">Victoria/Derrota</option>
+              <option value="GAMES_WON">Juegos ganados</option>
+              <option value="SETS_WON">Sets ganados</option>
+              <option value="POINTS_SCORED">Puntos</option>
             </SS>
           </FieldRow>
         </div>
-      )}
+        <div>
+          <p className="text-[12px] font-semibold text-foreground mb-2">Criterios de desempate (en orden)</p>
+          <TiebreakCriteriaList criteria={state.tiebreak_criteria} onChange={v => set('tiebreak_criteria', v)} />
+        </div>
+      </div>
+    )
+  }
 
-      {format === 'american' && (
-        <div className="grid grid-cols-2 gap-4">
-          <FieldRow label="Duración por partido (min)">
-            <SI value={matchDuration} onChange={setMatchDuration} type="number" placeholder="30" />
-          </FieldRow>
-          <FieldRow label="Rotación de parejas">
-            <SS value={seeding} onChange={setSeeding}>
-              <option value="random">Aleatoria</option>
-              <option value="fixed">Fija por ronda</option>
-            </SS>
-          </FieldRow>
-          <FieldRow label="Puntos por victoria">
-            <SI value={winPts} onChange={setWinPts} type="number" placeholder="3" />
-          </FieldRow>
-          <FieldRow label="Puntos por derrota">
-            <SI value={drawPts} onChange={setDrawPts} type="number" placeholder="0" />
-          </FieldRow>
+  if (format === 'american') {
+    return (
+      <div className="bg-[var(--muted)] border border-border rounded-[10px] p-[18px] mt-1 flex flex-col gap-4">
+        <SectionLabel>Configuración Americano</SectionLabel>
+        <FieldRow label="Sistema de clasificación" req>
+          <SS value={state.group_scoring} onChange={v => set('group_scoring', v)}>
+            <option value="WIN_LOSS">Victoria/Derrota</option>
+            <option value="GAMES_WON">Juegos ganados</option>
+            <option value="SETS_WON">Sets ganados</option>
+            <option value="POINTS_SCORED">Puntos</option>
+          </SS>
+        </FieldRow>
+        <div>
+          <p className="text-[12px] font-semibold text-foreground mb-2">Criterios de desempate (en orden)</p>
+          <TiebreakCriteriaList criteria={state.tiebreak_criteria} onChange={v => set('tiebreak_criteria', v)} />
         </div>
-      )}
+        <FieldRow label="Límite de tiempo por partido (min)" note="Dejar vacío para sin límite">
+          <SI
+            type="number"
+            value={state.time_limit_minutes}
+            onChange={v => set('time_limit_minutes', v)}
+            placeholder="Sin límite"
+          />
+        </FieldRow>
+      </div>
+    )
+  }
 
-      {format === 'round_robin' && (
-        <div className="grid grid-cols-2 gap-4">
-          <FieldRow label="Puntos por victoria">
-            <SS value={winPts} onChange={setWinPts}>
-              <option value="3">3 puntos</option>
-              <option value="2">2 puntos</option>
-            </SS>
-          </FieldRow>
-          <FieldRow label="Puntos por empate">
-            <SS value={drawPts} onChange={setDrawPts}>
-              <option value="1">1 punto</option>
-              <option value="0">0 puntos</option>
-            </SS>
-          </FieldRow>
-          <FieldRow label="Puntos por derrota">
-            <SI value="0" onChange={() => {}} type="number" className="bg-[var(--muted)] text-muted-foreground cursor-not-allowed" />
-          </FieldRow>
-          <FieldRow label="Criterio de desempate">
-            <SS value={tiebreak} onChange={setTbCrit}>
-              <option value="game_diff">Diferencia de juegos</option>
-              <option value="head_to_head">Enfrentamiento directo</option>
-              <option value="sets_won">Sets ganados</option>
-              <option value="points_diff">Diferencia de puntos</option>
-            </SS>
-          </FieldRow>
-        </div>
-      )}
-    </div>
-  )
+  return null
 }
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProps) {
   const router = useRouter()
@@ -234,13 +592,85 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
   )
   const [format, setFormat]       = useState(t.format as string ?? 'elimination')
 
-  // ── Puntuación ────────────────────────────────────────────────
+  // Format-specific state
+  const [formatState, setFormatState] = useState<FormatState>({
+    bracket_size:            String(vd.bracket_size ?? '16'),
+    seeding_method:          (vd.seeding_method as string) ?? 'RANDOM',
+    has_third_place_match:   Boolean(vd.has_third_place_match ?? false),
+    num_groups:              String(vd.num_groups ?? '4'),
+    teams_per_group:         String(vd.teams_per_group ?? '4'),
+    teams_advance_per_group: String(vd.teams_advance_per_group ?? '2'),
+    group_scoring:           (vd.scoring_system as string) ?? 'WIN_LOSS',
+    tiebreak_criteria:       (vd.tiebreak_criteria as string[]) ?? DEFAULT_TIEBREAK_CRITERIA,
+    time_limit_minutes:      String(vd.time_limit_minutes ?? ''),
+  })
+
+  // ── Puntuación – per-phase configs ───────────────────────────
+  function buildPhasesForFormat(fmt: string, fs: FormatState): PhaseConfig[] {
+    let phaseNames: string[] = []
+    if (fmt === 'elimination') {
+      phaseNames = getEliminationPhaseNames(parseInt(fs.bracket_size) || 16)
+      if (fs.has_third_place_match) phaseNames = [...phaseNames, '3er puesto']
+    } else if (fmt === 'groups_elimination') {
+      phaseNames = getGroupsEliminationPhaseNames(parseInt(fs.num_groups) || 4, parseInt(fs.teams_advance_per_group) || 2)
+    } else if (fmt === 'american') {
+      phaseNames = ['Todos los partidos']
+    } else {
+      phaseNames = ['Fase única']
+    }
+    return phaseNames.map(n => ({ name: n, match_config: { ...DEFAULT_MATCH_CONFIG } }))
+  }
+
+  const [phases, setPhases] = useState<PhaseConfig[]>(() => {
+    const savedPhases = vd.phases as Array<{ name: string; match_config: MatchConfig }> | undefined
+    if (Array.isArray(savedPhases) && savedPhases.length > 0) {
+      return savedPhases.map(p => ({
+        name: p.name,
+        match_config: { ...DEFAULT_MATCH_CONFIG, ...p.match_config },
+      }))
+    }
+    return buildPhasesForFormat(t.format as string ?? 'elimination', {
+      bracket_size: String(vd.bracket_size ?? '16'),
+      seeding_method: (vd.seeding_method as string) ?? 'RANDOM',
+      has_third_place_match: Boolean(vd.has_third_place_match ?? false),
+      num_groups: String(vd.num_groups ?? '4'),
+      teams_per_group: String(vd.teams_per_group ?? '4'),
+      teams_advance_per_group: String(vd.teams_advance_per_group ?? '2'),
+      group_scoring: (vd.scoring_system as string) ?? 'WIN_LOSS',
+      tiebreak_criteria: (vd.tiebreak_criteria as string[]) ?? DEFAULT_TIEBREAK_CRITERIA,
+      time_limit_minutes: String(vd.time_limit_minutes ?? ''),
+    })
+  })
   const [activePhaseIdx, setPhaseIdx] = useState(0)
-  const [phases, setPhases] = useState(
-    PHASE_NAMES.map(n => ({ name: n, scoring: 'sets', sets: '3', tiebreak: 'tiebreak7', thirdSet: 'complete', scoreType: 'sets_games' }))
-  )
-  function updatePhase(idx: number, key: string, value: string) {
-    setPhases(ps => ps.map((p, i) => i === idx ? { ...p, [key]: value } : p))
+
+  function applyFormatChange(newFormat: string, newFormatState?: FormatState) {
+    const fs = newFormatState ?? formatState
+    setFormat(newFormat)
+    if (newFormatState) setFormatState(newFormatState)
+    const newPhases = buildPhasesForFormat(newFormat, fs)
+    setPhases(newPhases)
+    setPhaseIdx(0)
+  }
+
+  // ── Presets ───────────────────────────────────────────────────
+  function applyPreset(preset: typeof PRESETS[number]) {
+    const c = preset.config
+    const newFs: FormatState = {
+      bracket_size:            c.bracket_size,
+      seeding_method:          c.seeding_method,
+      has_third_place_match:   c.has_third_place_match,
+      num_groups:              c.num_groups,
+      teams_per_group:         c.teams_per_group,
+      teams_advance_per_group: c.teams_advance_per_group,
+      group_scoring:           c.group_scoring,
+      tiebreak_criteria:       c.tiebreak_criteria,
+      time_limit_minutes:      c.time_limit_minutes,
+    }
+    setFormatState(newFs)
+    setFormat(c.format)
+    const newPhases = buildPhasesForFormat(c.format, newFs)
+    setPhases(newPhases.map(p => ({ ...p, match_config: { ...c.match_config } })))
+    setPhaseIdx(0)
   }
 
   // ── Save ──────────────────────────────────────────────────────
@@ -253,35 +683,57 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
         max_players:       parseInt(maxPlayers),
         price_info:        priceInfo || undefined,
         registration_type: regType as 'pair' | 'individual',
-        format:            format as 'elimination' | 'round_robin' | 'groups_elimination',
+        format:            format as 'elimination' | 'round_robin' | 'groups_elimination' | 'american',
         venue_name:        venueName  || undefined,
         venue_address:     venueAddr  || undefined,
         venue_details: {
-          court_count: parseInt(courtCount) || null,
-          court_type:  courtType,
+          court_count:             parseInt(courtCount) || null,
+          court_type:              courtType,
           surface,
-          services:    serviceList,
+          services:                serviceList,
           categories,
+          // Format config
+          bracket_size:            parseInt(formatState.bracket_size) || null,
+          seeding_method:          formatState.seeding_method,
+          has_third_place_match:   formatState.has_third_place_match,
+          num_groups:              parseInt(formatState.num_groups) || null,
+          teams_per_group:         parseInt(formatState.teams_per_group) || null,
+          teams_advance_per_group: parseInt(formatState.teams_advance_per_group) || null,
+          scoring_system:          formatState.group_scoring,
+          tiebreak_criteria:       formatState.tiebreak_criteria,
+          time_limit_minutes:      formatState.time_limit_minutes ? parseInt(formatState.time_limit_minutes) : null,
+          // Phases snapshot
+          phases: phases.map(p => ({ name: p.name, match_config: p.match_config })),
         },
         start_date:     startDate  ? new Date(startDate).toISOString()  : undefined,
         end_date:       endDate    ? new Date(endDate).toISOString()    : undefined,
         cancel_deadline: cancelDl  ? new Date(cancelDl).toISOString()  : undefined,
       })
       if ('error' in result) { setError(result.error as string); return }
+
       await saveTournamentPhases(t.id as string, phases.map(p => ({
         name:         p.name,
-        format:       p.scoring,
-        score_config: { sets: parseInt(p.sets), tiebreak: p.tiebreak, third_set: p.thirdSet, score_type: p.scoreType },
+        format:       format,
+        score_config: {
+          sets_format:          p.match_config.sets_format,
+          games_to_win_set:     p.match_config.games_to_win_set,
+          deuce_mode:           p.match_config.deuce_mode,
+          deciding_set_format:  p.match_config.deciding_set_format,
+          tiebreak_points:      p.match_config.tiebreak_points,
+          super_tiebreak_points: p.match_config.super_tiebreak_points,
+          time_limit_minutes:   p.match_config.time_limit_minutes ? parseInt(p.match_config.time_limit_minutes) : null,
+        },
       })))
+
       router.refresh()
     })
   }
 
   const TABS = [
-    { id: 'datos',      label: 'Datos básicos' },
-    { id: 'instalacion',label: 'Instalación' },
-    { id: 'categorias', label: 'Categorías y formato' },
-    { id: 'puntuacion', label: 'Puntuación' },
+    { id: 'datos',       label: 'Datos básicos' },
+    { id: 'instalacion', label: 'Instalación' },
+    { id: 'categorias',  label: 'Categorías y formato' },
+    { id: 'puntuacion',  label: 'Puntuación' },
   ]
 
   return (
@@ -303,6 +755,20 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
       </div>
 
       {error && <p className="text-[13px] text-[var(--error)]">{error}</p>}
+
+      {/* Presets bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-semibold text-light shrink-0">Partir de:</span>
+        {PRESETS.map(p => (
+          <button
+            key={p.label}
+            onClick={() => applyPreset(p)}
+            className="px-3 py-[5px] bg-white border border-border rounded-full text-[11px] font-semibold text-foreground hover:border-accent hover:text-accent transition-colors"
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
       {/* Tab bar */}
       <div className="flex gap-1 bg-white border border-border rounded-[10px] p-[5px]">
@@ -432,14 +898,12 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
             <div className="flex flex-col gap-2">
               {categories.map((cat, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  {/* Name */}
                   <input
                     value={cat.name}
                     onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, name: e.target.value } : c))}
                     placeholder="Nombre de la categoría"
                     className="flex-1 px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                   />
-                  {/* Score range */}
                   <div className="flex items-center gap-1 shrink-0">
                     <input
                       value={cat.minScore}
@@ -455,10 +919,9 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
                       className="w-14 px-2 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground text-center focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                   </div>
-                  {/* Delete */}
                   <button
                     onClick={() => setCategories(cs => cs.filter((_, j) => j !== i))}
-                    className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:bg-[var(--error-hover)] transition-colors"
+                    className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity"
                   >
                     ✕
                   </button>
@@ -477,15 +940,20 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
           <div className="h-px bg-border my-5" />
 
           <FieldRow label="Formato del torneo" req>
-            <SS value={format} onChange={setFormat}>
+            <SS value={format} onChange={v => applyFormatChange(v)}>
               <option value="elimination">Eliminación directa</option>
               <option value="groups_elimination">Fase de grupos + Eliminatoria</option>
               <option value="american">Americano (todos contra todos)</option>
-              <option value="round_robin">Round Robin (liga)</option>
             </SS>
           </FieldRow>
 
-          <FormatConfig format={format} maxPlayers={parseInt(maxPlayers) || 16} />
+          <FormatConfigPanel
+            format={format}
+            state={formatState}
+            onChange={newState => {
+              applyFormatChange(format, newState)
+            }}
+          />
         </div>
       )}
 
@@ -497,57 +965,24 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
             {phases.map((ph, i) => (
               <button key={i} onClick={() => setPhaseIdx(i)}
                 className={cn('px-[14px] py-[7px] rounded-[7px] border text-[12px] cursor-pointer transition-colors',
-                  activePhaseIdx === i ? 'border-accent bg-[var(--accent-surface)] text-accent font-semibold' : 'border-border bg-white text-muted-foreground font-medium hover:border-accent/40'
+                  activePhaseIdx === i
+                    ? 'border-accent bg-[var(--accent-surface)] text-accent font-semibold'
+                    : 'border-border bg-white text-muted-foreground font-medium hover:border-accent/40'
                 )}>
                 {ph.name}
               </button>
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-4" key={activePhaseIdx}>
-            <FieldRow label="Tipo de puntuación">
-              <SS value={phases[activePhaseIdx].scoring} onChange={v => updatePhase(activePhaseIdx, 'scoring', v)}>
-                <option value="sets">Sets completos</option>
-                <option value="games">Games</option>
-                <option value="points">Puntos</option>
-                <option value="winner">Solo ganador</option>
-              </SS>
-            </FieldRow>
-            <FieldRow label="Al mejor de X sets">
-              <SS value={phases[activePhaseIdx].sets} onChange={v => updatePhase(activePhaseIdx, 'sets', v)}>
-                <option value="1">1 set</option>
-                <option value="3">Al mejor de 3</option>
-                <option value="5">Al mejor de 5</option>
-              </SS>
-            </FieldRow>
-            <FieldRow label="Games por set"><SI value="" onChange={() => {}} placeholder="ej. 6" /></FieldRow>
-            <FieldRow label="Games iguales (6-6)">
-              <SS value={phases[activePhaseIdx].tiebreak} onChange={v => updatePhase(activePhaseIdx, 'tiebreak', v)}>
-                <option value="tiebreak7">Tiebreak a 7 puntos</option>
-                <option value="supertb10">Super tiebreak a 10</option>
-                <option value="golden">Punto de oro</option>
-                <option value="none">Sin iguales</option>
-              </SS>
-            </FieldRow>
-            <FieldRow label="3er set (si al mejor de 3)">
-              <SS value={phases[activePhaseIdx].thirdSet} onChange={v => updatePhase(activePhaseIdx, 'thirdSet', v)}>
-                <option value="complete">Set completo</option>
-                <option value="supertb10">Super tiebreak a 10</option>
-                <option value="na">No aplica</option>
-              </SS>
-            </FieldRow>
-            <FieldRow label="Marcador a registrar">
-              <SS value={phases[activePhaseIdx].scoreType} onChange={v => updatePhase(activePhaseIdx, 'scoreType', v)}>
-                <option value="sets_games">Sets y games</option>
-                <option value="winner_only">Solo ganador</option>
-                <option value="full_points">Puntos completos</option>
-              </SS>
-            </FieldRow>
-          </div>
-
-          <div className="mt-2 px-[14px] py-3 bg-[var(--accent-surface)] rounded-[7px] text-[12px] text-accent">
-            💡 Puedes configurar una puntuación distinta para cada fase del torneo.
-          </div>
+          {phases[activePhaseIdx] && (
+            <MatchConfigPanel
+              key={activePhaseIdx}
+              config={phases[activePhaseIdx].match_config}
+              onChange={cfg =>
+                setPhases(ps => ps.map((p, i) => i === activePhaseIdx ? { ...p, match_config: cfg } : p))
+              }
+            />
+          )}
         </div>
       )}
     </div>
