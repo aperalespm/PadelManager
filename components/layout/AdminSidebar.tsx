@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useTransition } from 'react'
+import { useTransition, useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { createDraftTournament } from '@/lib/actions/tournaments'
 
@@ -39,6 +39,18 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
   const pathname = usePathname()
   const router = useRouter()
   const [isCreating, startCreate] = useTransition()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [])
 
   const navItems = [
     { href: `/admin/${tournamentId}`, label: 'Panel', icon: '◉', exact: true },
@@ -77,20 +89,33 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
       <div className="px-[18px] py-[14px] border-b border-white/7">
         <p className="text-[10px] font-bold uppercase tracking-[0.7px] text-[#4b6a99] mb-1.5">TORNEO</p>
 
-        <div className="relative mt-1">
-          <select
-            value={tournamentId}
-            onChange={e => handleSwitch(e.target.value)}
-            className="w-full appearance-none cursor-pointer outline-none pr-7 py-[7px] px-[10px] rounded-[6px] bg-white/10 border border-white/15 text-white text-[13px] font-bold truncate hover:bg-white/15 transition-colors"
-            style={{ color: 'white' }}
+        <div ref={dropdownRef} className="relative mt-1">
+          <button
+            onClick={() => setDropdownOpen(o => !o)}
+            className="w-full flex items-center justify-between py-[7px] px-[10px] rounded-[6px] bg-white/10 border border-white/15 text-white text-[13px] font-bold hover:bg-white/15 transition-colors"
           >
-            {tournaments.map(t => (
-              <option key={t.id} value={t.id} style={{ backgroundColor: '#1e293b', color: 'white' }}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/70 text-[16px] pointer-events-none">▾</span>
+            <span className="truncate text-left">{tournamentName}</span>
+            <span className={cn('text-white/70 text-[16px] shrink-0 ml-1 transition-transform duration-150', dropdownOpen && 'rotate-180')}>▾</span>
+          </button>
+
+          {dropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[#131f35] border border-white/15 rounded-[6px] z-50 shadow-xl overflow-hidden">
+              {tournaments.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { handleSwitch(t.id); setDropdownOpen(false) }}
+                  className={cn(
+                    'w-full text-left px-[10px] py-[8px] text-[13px] transition-colors',
+                    t.id === tournamentId
+                      ? 'bg-accent/25 text-white font-bold'
+                      : 'text-white/75 hover:bg-white/8 font-medium'
+                  )}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <p className={cn('text-[11px] font-semibold mt-1.5 flex items-center gap-1.5 pl-[2px]', statusColor[tournamentStatus] ?? 'text-white/40')}>
