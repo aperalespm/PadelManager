@@ -1,6 +1,6 @@
 import { getTournamentById, getAllTournamentsForSidebar } from '@/lib/actions/tournaments'
 import { getMatchesForTournament } from '@/lib/actions/matches'
-import { notFound } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/layout/AdminSidebar'
 
 export const dynamic = 'force-dynamic'
@@ -18,7 +18,7 @@ export default async function AdminTournamentLayout({
     getAllTournamentsForSidebar(),
     getMatchesForTournament(id),
   ])
-  if (!tournament) notFound()
+  if (!tournament) redirect('/admin')
 
   const t = tournament as Record<string, unknown>
   const activeMatchCount = (matches as Record<string, unknown>[]).filter(m => m.status === 'active' || m.status === 'disputed').length
