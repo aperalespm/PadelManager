@@ -385,6 +385,80 @@ function FormatConfigPanel({ format, state, onChange }: {
   return null
 }
 
+// ── Competition Schema Preview ────────────────────────────────────────────────
+
+function CompetitionSchemaPreview({
+  categories, format, formatState, maxPlayers,
+}: {
+  categories: Category[]
+  format: string
+  formatState: FormatState
+  maxPlayers: string
+}) {
+  const numGroups   = Math.max(1, parseInt(formatState.num_groups) || 1)
+  const teamsPerGrp = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+  const teamsAdv    = Math.max(1, parseInt(formatState.teams_advance_per_group) || 2)
+  const bracketSize = parseInt(formatState.bracket_size) || parseInt(maxPlayers) || 16
+
+  const stages =
+    format === 'groups_elimination' ? getGroupsEliminationPhaseNames(numGroups, teamsAdv)
+    : format === 'elimination'      ? getEliminationPhaseNames(bracketSize)
+    : ['Todos contra todos', 'Clasificación final']
+
+  const classified = numGroups * teamsAdv
+  const detail =
+    format === 'groups_elimination'
+      ? `${numGroups} grupo${numGroups !== 1 ? 's' : ''} · ${teamsPerGrp} eq/grupo · ${classified} clasifican`
+      : format === 'elimination'
+      ? `${bracketSize} parejas en el cuadro`
+      : null
+
+  const activeCats = categories.filter(c => c.name.trim())
+  if (!activeCats.length) return null
+
+  return (
+    <div className="mt-6 bg-[var(--accent-surface)] border border-accent/20 rounded-[10px] p-5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-4">Esquema de la competición</p>
+      <div className="flex flex-col gap-5">
+        {activeCats.map((cat, i) => (
+          <div key={i}>
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="text-[12px] font-bold text-foreground">{cat.name}</span>
+              {(cat.minScore || cat.maxScore) && (
+                <span className="text-[11px] text-muted-foreground bg-white border border-border px-1.5 py-0.5 rounded-[4px]">
+                  {cat.minScore || '?'}–{cat.maxScore || '?'}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {stages.map((stage, j) => (
+                <div key={j} className="flex items-center gap-1.5">
+                  <span className={cn(
+                    'px-2.5 py-[5px] rounded-[6px] text-[11px] font-semibold whitespace-nowrap',
+                    j === stages.length - 1
+                      ? 'bg-accent text-white'
+                      : j === 0 && format === 'groups_elimination'
+                      ? 'bg-white border border-accent/40 text-accent'
+                      : 'bg-white border border-border text-foreground'
+                  )}>
+                    {stage}
+                  </span>
+                  {j < stages.length - 1 && (
+                    <span className="text-[11px] text-muted-foreground select-none">→</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            {detail && i === 0 && (
+              <p className="text-[11px] text-muted-foreground mt-2">{detail}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function TournamentConfigForm({ tournament: t, otherTournaments }: TournamentConfigFormProps) {
@@ -643,7 +717,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
   const TABS = [
     { id: 'datos',       label: 'Datos básicos' },
     { id: 'instalacion', label: 'Instalación' },
-    { id: 'categorias',  label: 'Categorías' },
+    { id: 'categorias',  label: 'Formato' },
     { id: 'horario',     label: 'Pistas y horarios' },
     { id: 'puntuacion',  label: 'Puntuación' },
   ]
@@ -882,6 +956,13 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
             <FormatConfigPanel format={format} state={formatState} onChange={newState => applyFormatChange(format, newState)} />
           </div>
+
+          <CompetitionSchemaPreview
+            categories={categories}
+            format={format}
+            formatState={formatState}
+            maxPlayers={maxPlayers}
+          />
         </div>
       )}
 
