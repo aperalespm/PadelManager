@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 
 interface TournamentConfigFormProps {
   tournament: Record<string, unknown>
+  otherTournaments: { id: string }[]
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -386,7 +387,7 @@ function FormatConfigPanel({ format, state, onChange }: {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProps) {
+export function TournamentConfigForm({ tournament: t, otherTournaments }: TournamentConfigFormProps) {
   const router = useRouter()
   const [isDeleting, startDelete] = useTransition()
   const [isDuplicating, startDuplicate] = useTransition()
@@ -525,7 +526,8 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
   function handleDelete() {
     startDelete(async () => {
       await deleteTournament(t.id as string)
-      router.push('/admin')
+      const next = otherTournaments[0]
+      router.push(next ? `/admin/${next.id}` : '/admin')
       router.refresh()
     })
   }
