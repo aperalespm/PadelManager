@@ -528,7 +528,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
       await deleteTournament(t.id as string)
       const next = otherTournaments[0]
       router.push(next ? `/admin/${next.id}` : '/admin')
-      router.refresh()
     })
   }
 
@@ -550,7 +549,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
       await saveData()
       const result = await publishTournament(t.id as string)
       if ('error' in result) { setError(result.error as string); return }
-      router.refresh()
+      router.push(`/admin/${t.id as string}`)
     })
   }
 
