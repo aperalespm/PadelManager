@@ -105,82 +105,6 @@ function getGroupsEliminationPhaseNames(numGroups: number, teamsAdvance: number)
   return phases
 }
 
-// ── Presets ───────────────────────────────────────────────────────────────────
-
-interface PresetConfig {
-  format: string
-  bracket_size: string
-  seeding_method: string
-  has_third_place_match: boolean
-  num_groups: string
-  teams_per_group: string
-  teams_advance_per_group: string
-  group_scoring: string
-  tiebreak_criteria: string[]
-  time_limit_minutes: string
-  bracket_seeding: string
-  match_config: MatchConfig
-}
-
-const PRESETS: { label: string; config: PresetConfig }[] = [
-  {
-    label: 'Torneo FIP',
-    config: {
-      format: 'elimination', bracket_size: '16', seeding_method: 'RANKING',
-      has_third_place_match: false, num_groups: '4', teams_per_group: '4',
-      teams_advance_per_group: '2', group_scoring: 'WIN_LOSS',
-      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA, time_limit_minutes: '',
-      bracket_seeding: 'CRUZADO',
-      match_config: { sets_format: 'BEST_OF_3', games_to_win_set: 6, deuce_mode: 'STAR_POINT', deciding_set_format: 'SUPER_TIEBREAK_10', tiebreak_points: 7, super_tiebreak_points: 10, time_limit_minutes: '' },
-    },
-  },
-  {
-    label: 'Liga de club',
-    config: {
-      format: 'groups_elimination', bracket_size: '16', seeding_method: 'RANDOM',
-      has_third_place_match: false, num_groups: '4', teams_per_group: '4',
-      teams_advance_per_group: '2', group_scoring: 'WIN_LOSS',
-      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA, time_limit_minutes: '',
-      bracket_seeding: 'CRUZADO',
-      match_config: { sets_format: 'BEST_OF_3', games_to_win_set: 6, deuce_mode: 'ADVANTAGE', deciding_set_format: 'SUPER_TIEBREAK_10', tiebreak_points: 7, super_tiebreak_points: 10, time_limit_minutes: '' },
-    },
-  },
-  {
-    label: 'Americano rápido',
-    config: {
-      format: 'american', bracket_size: '16', seeding_method: 'RANDOM',
-      has_third_place_match: false, num_groups: '4', teams_per_group: '4',
-      teams_advance_per_group: '2', group_scoring: 'WIN_LOSS',
-      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA, time_limit_minutes: '60',
-      bracket_seeding: 'CRUZADO',
-      match_config: { sets_format: 'BEST_OF_1', games_to_win_set: 4, deuce_mode: 'GOLDEN_POINT', deciding_set_format: 'SUPER_TIEBREAK_10', tiebreak_points: 7, super_tiebreak_points: 10, time_limit_minutes: '60' },
-    },
-  },
-  {
-    label: 'JoyPadel',
-    config: {
-      format: 'groups_elimination', bracket_size: '16', seeding_method: 'RANDOM',
-      has_third_place_match: false, num_groups: '3', teams_per_group: '4',
-      teams_advance_per_group: '2', group_scoring: 'WIN_LOSS',
-      tiebreak_criteria: ['HEAD_TO_HEAD', 'GAME_DIFFERENCE', 'SET_DIFFERENCE', 'RANDOM'],
-      time_limit_minutes: '',
-      bracket_seeding: 'CRUZADO',
-      match_config: { sets_format: 'BEST_OF_1', games_to_win_set: 6, deuce_mode: 'GOLDEN_POINT', deciding_set_format: 'SUPER_TIEBREAK_10', tiebreak_points: 7, super_tiebreak_points: 10, time_limit_minutes: '' },
-    },
-  },
-  {
-    label: 'Mexicano social',
-    config: {
-      format: 'american', bracket_size: '16', seeding_method: 'RANDOM',
-      has_third_place_match: false, num_groups: '4', teams_per_group: '4',
-      teams_advance_per_group: '2', group_scoring: 'WIN_LOSS',
-      tiebreak_criteria: DEFAULT_TIEBREAK_CRITERIA, time_limit_minutes: '',
-      bracket_seeding: 'RANKING_GLOBAL',
-      match_config: { sets_format: 'BEST_OF_1', games_to_win_set: 6, deuce_mode: 'GOLDEN_POINT', deciding_set_format: 'SUPER_TIEBREAK_10', tiebreak_points: 7, super_tiebreak_points: 10, time_limit_minutes: '' },
-    },
-  },
-]
-
 // ── Small UI helpers ──────────────────────────────────────────────────────────
 
 function FieldRow({ label, req, note, children }: { label: string; req?: boolean; note?: string; children: React.ReactNode }) {
@@ -589,21 +513,6 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
     setPhaseIdx(0)
   }
 
-  function applyPreset(preset: typeof PRESETS[number]) {
-    const c = preset.config
-    const newFs: FormatState = {
-      bracket_size: c.bracket_size, seeding_method: c.seeding_method,
-      has_third_place_match: c.has_third_place_match, num_groups: c.num_groups,
-      teams_per_group: c.teams_per_group, teams_advance_per_group: c.teams_advance_per_group,
-      group_scoring: c.group_scoring, tiebreak_criteria: c.tiebreak_criteria,
-      time_limit_minutes: c.time_limit_minutes, bracket_seeding: c.bracket_seeding,
-    }
-    setFormatState(newFs)
-    setFormat(c.format)
-    setPhases(buildPhasesForFormat(c.format, newFs).map(p => ({ ...p, match_config: { ...c.match_config } })))
-    setPhaseIdx(0)
-  }
-
   // ── Save ──────────────────────────────────────────────────────
   function handleSave() {
     startTransition(async () => {
@@ -701,17 +610,6 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
       </div>
 
       {error && <p className="text-[13px] text-[var(--error)]">{error}</p>}
-
-      {/* Presets bar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] font-semibold text-light shrink-0">Partir de:</span>
-        {PRESETS.map(p => (
-          <button key={p.label} onClick={() => applyPreset(p)}
-            className="px-3 py-[5px] bg-white border border-border rounded-full text-[11px] font-semibold text-foreground hover:border-accent hover:text-accent transition-colors">
-            {p.label}
-          </button>
-        ))}
-      </div>
 
       {/* Tab bar */}
       <div className="flex gap-1 bg-white border border-border rounded-[10px] p-[5px]">
