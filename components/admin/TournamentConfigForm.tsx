@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament } from '@/lib/actions/tournaments'
+import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
 
 interface TournamentConfigFormProps {
@@ -388,12 +388,17 @@ function FormatConfigPanel({ format, state, onChange }: {
 
 export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProps) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
   const [isDeleting, startDelete] = useTransition()
   const [isDuplicating, startDuplicate] = useTransition()
+  const [isPublishing, startPublish] = useTransition()
   const [tab, setTab] = useState('datos')
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Datos básicos ─────────────────────────────────────────────
   const [name, setName]        = useState(t.name as string ?? '')
@@ -516,7 +521,7 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
     setPhaseIdx(0)
   }
 
-  // ── Delete / Duplicate ───────────────────────────────────────
+  // ── Delete / Duplicate / Publish ─────────────────────────────
   function handleDelete() {
     startDelete(async () => {
       await deleteTournament(t.id as string)
@@ -531,6 +536,91 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
       if ('error' in result) return
       router.push(`/admin/${result.data!.id}/config`)
     })
+  }
+
+  function handlePublish() {
+    if (!name.trim() || name.trim() === 'Nuevo torneo') {
+      setError('Debes asignar un nombre al torneo antes de publicar')
+      return
+    }
+    startPublish(async () => {
+      setError('')
+      await saveData()
+      const result = await publishTournament(t.id as string)
+      if ('error' in result) { setError(result.error as string); return }
+      router.refresh()
+    })
+  }
+
+  // ── Autosave ──────────────────────────────────────────────────
+  async function saveData() {
+    if (!name.trim() || name.trim() === 'Nuevo torneo') return
+    setIsSaving(true)
+    const result = await updateTournament(t.id as string, {
+      name, description: description || undefined,
+      max_players: parseInt(maxPlayers),
+      price_info: priceInfo || undefined,
+      registration_type: regType as 'pair' | 'individual',
+      format: format as 'elimination' | 'round_robin' | 'groups_elimination' | 'american',
+      venue_name: venueName || undefined,
+      venue_address: venueAddr || undefined,
+      venue_details: {
+        court_count: parseInt(courtCount) || null,
+        court_type: courtType, surface, services: serviceList,
+        categories,
+        bracket_size:            parseInt(formatState.bracket_size) || null,
+        seeding_method:          formatState.seeding_method,
+        has_third_place_match:   formatState.has_third_place_match,
+        num_groups:              parseInt(formatState.num_groups) || null,
+        teams_per_group:         parseInt(formatState.teams_per_group) || null,
+        teams_advance_per_group: parseInt(formatState.teams_advance_per_group) || null,
+        scoring_system:          formatState.group_scoring,
+        tiebreak_criteria:       formatState.tiebreak_criteria,
+        time_limit_minutes:      formatState.time_limit_minutes ? parseInt(formatState.time_limit_minutes) : null,
+        bracket_seeding:         formatState.bracket_seeding,
+        phases: phases.map(p => ({ name: p.name, match_config: p.match_config })),
+        courts: namedCourts,
+        schedule: {
+          start_time:  schedStart,
+          end_time:    schedEnd,
+          lunch_break: lunchEnabled ? { time: lunchTime, duration_minutes: parseInt(lunchDuration) || 60 } : null,
+          phase_durations: Object.fromEntries(phases.map(ph => [ph.name, parseInt(phaseDurations[ph.name] ?? '90') || 90])),
+          time_blocks:       timeBlocks,
+          court_assignments: courtAssignEnabled ? courtAssignments : null,
+        },
+      },
+      start_date:      startDate ? new Date(startDate).toISOString() : undefined,
+      end_date:        endDate   ? new Date(endDate).toISOString()   : undefined,
+      cancel_deadline: cancelDl  ? new Date(cancelDl).toISOString()  : undefined,
+    })
+    if ('error' in result) { setError(result.error as string); setIsSaving(false); return }
+    await saveTournamentPhases(t.id as string, phases.map(p => ({
+      name: p.name, format,
+      score_config: {
+        sets_format:           p.match_config.sets_format,
+        games_to_win_set:      p.match_config.games_to_win_set,
+        deuce_mode:            p.match_config.deuce_mode,
+        deciding_set_format:   p.match_config.deciding_set_format,
+        tiebreak_points:       p.match_config.tiebreak_points,
+        super_tiebreak_points: p.match_config.super_tiebreak_points,
+        time_limit_minutes:    p.match_config.time_limit_minutes ? parseInt(p.match_config.time_limit_minutes) : null,
+      },
+    })))
+    setIsSaving(false)
+    setSaveStatus('saved')
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    statusTimerRef.current = setTimeout(() => setSaveStatus('idle'), 3000)
+  }
+
+  function scheduleSave() {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(saveData, 1500)
+  }
+
+  async function switchTab(newTab: string) {
+    if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null }
+    await saveData()
+    setTab(newTab)
   }
 
   // ── Court count sync ─────────────────────────────────────────
@@ -548,78 +638,6 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
     }
   }
 
-  // ── Save ──────────────────────────────────────────────────────
-  function handleSave() {
-    if (!name.trim() || name.trim() === 'Nuevo torneo') {
-      setError('Debes asignar un nombre al torneo antes de guardar')
-      return
-    }
-    startTransition(async () => {
-      setError('')
-      const result = await updateTournament(t.id as string, {
-        name, description: description || undefined,
-        max_players: parseInt(maxPlayers),
-        price_info: priceInfo || undefined,
-        registration_type: regType as 'pair' | 'individual',
-        format: format as 'elimination' | 'round_robin' | 'groups_elimination' | 'american',
-        venue_name: venueName || undefined,
-        venue_address: venueAddr || undefined,
-        venue_details: {
-          // Instalación
-          court_count: parseInt(courtCount) || null,
-          court_type: courtType, surface, services: serviceList,
-          // Categorías
-          categories,
-          // Formato
-          bracket_size:            parseInt(formatState.bracket_size) || null,
-          seeding_method:          formatState.seeding_method,
-          has_third_place_match:   formatState.has_third_place_match,
-          num_groups:              parseInt(formatState.num_groups) || null,
-          teams_per_group:         parseInt(formatState.teams_per_group) || null,
-          teams_advance_per_group: parseInt(formatState.teams_advance_per_group) || null,
-          scoring_system:          formatState.group_scoring,
-          tiebreak_criteria:       formatState.tiebreak_criteria,
-          time_limit_minutes:      formatState.time_limit_minutes ? parseInt(formatState.time_limit_minutes) : null,
-          bracket_seeding:         formatState.bracket_seeding,
-          // Fases snapshot
-          phases: phases.map(p => ({ name: p.name, match_config: p.match_config })),
-          // Horario
-          courts: namedCourts,
-          schedule: {
-            start_time:  schedStart,
-            end_time:    schedEnd,
-            lunch_break: lunchEnabled
-              ? { time: lunchTime, duration_minutes: parseInt(lunchDuration) || 60 }
-              : null,
-            phase_durations: Object.fromEntries(
-              phases.map(ph => [ph.name, parseInt(phaseDurations[ph.name] ?? '90') || 90])
-            ),
-            time_blocks:       timeBlocks,
-            court_assignments: courtAssignEnabled ? courtAssignments : null,
-          },
-        },
-        start_date:     startDate ? new Date(startDate).toISOString() : undefined,
-        end_date:       endDate   ? new Date(endDate).toISOString()   : undefined,
-        cancel_deadline: cancelDl ? new Date(cancelDl).toISOString()  : undefined,
-      })
-      if ('error' in result) { setError(result.error as string); return }
-
-      await saveTournamentPhases(t.id as string, phases.map(p => ({
-        name: p.name, format,
-        score_config: {
-          sets_format:           p.match_config.sets_format,
-          games_to_win_set:      p.match_config.games_to_win_set,
-          deuce_mode:            p.match_config.deuce_mode,
-          deciding_set_format:   p.match_config.deciding_set_format,
-          tiebreak_points:       p.match_config.tiebreak_points,
-          super_tiebreak_points: p.match_config.super_tiebreak_points,
-          time_limit_minutes:    p.match_config.time_limit_minutes ? parseInt(p.match_config.time_limit_minutes) : null,
-        },
-      })))
-
-      router.refresh()
-    })
-  }
 
   const TABS = [
     { id: 'datos',       label: 'Datos básicos' },
@@ -639,9 +657,13 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
           <p className="text-[13px] text-muted-foreground mt-0.5">{t.name as string}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Save status */}
+          {isSaving && <span className="text-[12px] text-muted-foreground">Guardando...</span>}
+          {!isSaving && saveStatus === 'saved' && <span className="text-[12px] text-[var(--success)] font-medium">✓ Guardado</span>}
+
           {/* Delete */}
           {confirmDelete ? (
-            <div className="flex items-center gap-2 px-3 py-[9px] bg-[var(--error-surface)] border border-[var(--error)]/30 rounded-[7px]">
+            <div className="flex items-center gap-2 px-3 py-[7px] bg-[var(--error-surface)] border border-[var(--error)]/30 rounded-[7px]">
               <span className="text-[12px] font-semibold text-[var(--error)]">¿Eliminar torneo?</span>
               <button onClick={handleDelete} disabled={isDeleting} className="px-2.5 py-1 bg-[var(--error)] text-white text-[12px] font-semibold rounded-[5px] hover:opacity-90 disabled:opacity-50 transition-opacity">
                 {isDeleting ? '...' : 'Sí, eliminar'}
@@ -660,24 +682,33 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
           )}
 
           {/* Duplicate */}
-          <button onClick={handleDuplicate} disabled={isDuplicating} title="Duplicar torneo"
-            className="w-[38px] h-[38px] flex items-center justify-center rounded-[7px] border border-border text-foreground hover:bg-[#f8fafc] transition-colors disabled:opacity-50">
-            {isDuplicating ? (
-              <span className="text-[11px]">...</span>
-            ) : (
+          {confirmDuplicate ? (
+            <div className="flex items-center gap-2 px-3 py-[7px] bg-[#f8fafc] border border-border rounded-[7px]">
+              <span className="text-[12px] font-semibold text-foreground">¿Duplicar torneo?</span>
+              <button onClick={() => { setConfirmDuplicate(false); handleDuplicate() }} disabled={isDuplicating} className="px-2.5 py-1 bg-accent text-white text-[12px] font-semibold rounded-[5px] hover:opacity-90 disabled:opacity-50 transition-opacity">
+                {isDuplicating ? '...' : 'Sí, duplicar'}
+              </button>
+              <button onClick={() => setConfirmDuplicate(false)} className="px-2.5 py-1 bg-white border border-border text-[12px] font-semibold rounded-[5px] hover:bg-[#f8fafc] transition-colors">
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDuplicate(true)} title="Duplicar torneo"
+              className="w-[38px] h-[38px] flex items-center justify-center rounded-[7px] border border-border text-foreground hover:bg-[#f8fafc] transition-colors">
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
                 <rect x="5.5" y="5.5" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.4"/>
                 <path d="M3 9.5V2h7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            )}
-          </button>
+            </button>
+          )}
 
-          <button onClick={() => router.back()} className="px-[17px] py-[9px] bg-white border border-border rounded-[7px] text-[13px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">
-            Cancelar
-          </button>
-          <button onClick={handleSave} disabled={isPending} className="px-[17px] py-[9px] bg-accent rounded-[7px] text-[13px] font-semibold text-white hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50">
-            {isPending ? 'Guardando...' : 'Guardar cambios'}
-          </button>
+          {/* Publish — only for drafts */}
+          {(t.status as string) === 'draft' && (
+            <button onClick={handlePublish} disabled={isPublishing}
+              className="px-[17px] py-[9px] bg-accent rounded-[7px] text-[13px] font-semibold text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50">
+              {isPublishing ? 'Publicando...' : 'Publicar torneo'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -686,7 +717,7 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
       {/* Tab bar */}
       <div className="flex gap-1 bg-white border border-border rounded-[10px] p-[5px]">
         {TABS.map(tb => (
-          <button key={tb.id} onClick={() => setTab(tb.id)}
+          <button key={tb.id} onClick={() => switchTab(tb.id)}
             className={cn('flex-1 py-[9px] px-2 rounded-[7px] text-[11px] font-medium transition-all',
               tab === tb.id ? 'bg-accent text-white font-bold' : 'text-muted-foreground hover:text-foreground'
             )}>
@@ -699,7 +730,7 @@ export function TournamentConfigForm({ tournament: t }: TournamentConfigFormProp
       {tab === 'datos' && (
         <div className="bg-white border border-border rounded-[10px] p-[26px]">
           <FieldRow label="Nombre del torneo" req>
-            <SI value={name} onChange={setName} className={name === 'Nuevo torneo' ? 'border-[var(--amber)] focus:ring-[var(--amber)]' : ''} />
+            <SI value={name} onChange={v => { setName(v); scheduleSave() }} className={name === 'Nuevo torneo' ? 'border-[var(--amber)] focus:ring-[var(--amber)]' : ''} />
             {name === 'Nuevo torneo' && (
               <p className="text-[11px] text-[var(--amber)] mt-1.5">Cambia el nombre antes de guardar</p>
             )}
