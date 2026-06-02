@@ -387,6 +387,137 @@ function FormatConfigPanel({ format, state, onChange }: {
 
 // ── Competition Schema Preview ────────────────────────────────────────────────
 
+const BSLOT  = 24          // px — height of one team row in bracket
+const BMATCH = BSLOT * 2   // height of one match block (2 rows)
+const BCOL   = 106         // width of one bracket column
+const BGAP   = 22          // horizontal gap between bracket columns
+
+function schMatchTop(round: number, idx: number): number {
+  const pad = BSLOT * (Math.pow(2, round) - 1)
+  const gap = BMATCH * (Math.pow(2, round) - 1)
+  return pad + idx * (BMATCH + gap)
+}
+
+function schMatchCenterY(round: number, idx: number): number {
+  return schMatchTop(round, idx) + BSLOT
+}
+
+function BracketDiagram({ phases, matchCounts }: { phases: string[]; matchCounts: number[] }) {
+  if (!phases.length) return null
+
+  const totalH  = matchCounts[0] * BMATCH
+  const CHAMP_W = 52
+  const HDR_H   = 20
+
+  // Compute SVG connector lines
+  type Seg = { x1: number; y1: number; x2: number; y2: number }
+  const segs: Seg[] = []
+
+  for (let r = 0; r < phases.length - 1; r++) {
+    const cx   = r * (BCOL + BGAP)
+    const nx   = (r + 1) * (BCOL + BGAP)
+    const midX = cx + BCOL + BGAP / 2
+    for (let m = 0; m < matchCounts[r]; m += 2) {
+      const y1   = schMatchCenterY(r, m)
+      const y2   = schMatchCenterY(r, m + 1)
+      const yMid = (y1 + y2) / 2
+      segs.push({ x1: cx + BCOL, y1, x2: midX, y2: y1 })
+      segs.push({ x1: cx + BCOL, y1: y2, x2: midX, y2: y2 })
+      segs.push({ x1: midX, y1, x2: midX, y2 })
+      segs.push({ x1: midX, y1: yMid, x2: nx, y2: yMid })
+    }
+  }
+  const lr    = phases.length - 1
+  const lx    = lr * (BCOL + BGAP)
+  const champY = schMatchCenterY(lr, 0)
+  const champMidX = lx + BCOL + BGAP / 2
+  segs.push({ x1: lx + BCOL, y1: champY, x2: champMidX, y2: champY })
+
+  const totalW = phases.length * (BCOL + BGAP) + CHAMP_W
+
+  return (
+    <div className="relative shrink-0" style={{ width: totalW, height: totalH + HDR_H }}>
+      {/* Column headers */}
+      {phases.map((name, r) => (
+        <div
+          key={r}
+          className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground overflow-hidden whitespace-nowrap"
+          style={{ left: r * (BCOL + BGAP), top: 0, width: BCOL }}
+        >{name}</div>
+      ))}
+      <div
+        className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground"
+        style={{ left: lr * (BCOL + BGAP) + BCOL + BGAP / 2 - 8, top: 0, width: CHAMP_W }}
+      >Campeón</div>
+
+      {/* SVG connectors */}
+      <svg className="absolute pointer-events-none" style={{ left: 0, top: HDR_H }} width={totalW} height={totalH}>
+        {segs.map((s, i) => (
+          <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="#cbd5e1" strokeWidth={1.5} />
+        ))}
+      </svg>
+
+      {/* Match boxes */}
+      {phases.map((_, r) =>
+        Array.from({ length: matchCounts[r] }, (__, m) => (
+          <div
+            key={`${r}-${m}`}
+            className="absolute border border-border rounded-[5px] overflow-hidden bg-white"
+            style={{ left: r * (BCOL + BGAP), top: HDR_H + schMatchTop(r, m), width: BCOL, height: BMATCH }}
+          >
+            <div className="px-2 text-[11px] flex items-center border-b border-border" style={{ height: BSLOT }}>
+              {r === 0
+                ? <span className="text-muted-foreground/40">Pareja —</span>
+                : <span className="text-foreground font-medium">Ganador</span>}
+            </div>
+            <div className="px-2 text-[11px] flex items-center" style={{ height: BSLOT }}>
+              {r === 0
+                ? <span className="text-muted-foreground/40">Pareja —</span>
+                : <span className="text-foreground font-medium">Ganador</span>}
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* Trophy */}
+      <div
+        className="absolute flex items-center justify-center"
+        style={{ left: champMidX, top: HDR_H + schMatchTop(lr, 0) + BSLOT / 2 - 14, width: 28, height: 28 }}
+      >
+        <span className="text-[22px] leading-none">🏆</span>
+      </div>
+    </div>
+  )
+}
+
+function GroupCard({ num, teamCount, advanceCount }: { num: number; teamCount: number; advanceCount: number }) {
+  return (
+    <div className="border border-border rounded-[7px] overflow-hidden shrink-0 w-[90px]">
+      <div className="bg-[#1e3a5f] text-white text-[9px] font-bold uppercase tracking-wide py-[5px] text-center">
+        Grupo {num}
+      </div>
+      {Array.from({ length: teamCount }, (_, t) => (
+        <div
+          key={t}
+          className={cn(
+            'px-1.5 flex items-center gap-1 border-t border-border/40 text-[10px]',
+            t < advanceCount
+              ? 'bg-[var(--accent-surface)] text-accent font-semibold'
+              : 'bg-white text-muted-foreground/40'
+          )}
+          style={{ height: BSLOT }}
+        >
+          {t < advanceCount
+            ? <span className="text-[var(--success)] font-bold text-[9px]">✓</span>
+            : <span className="text-[9px]">○</span>
+          }
+          <span>{t + 1}ª</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function CompetitionSchemaPreview({
   categories, format, formatState, maxPlayers,
 }: {
@@ -395,65 +526,77 @@ function CompetitionSchemaPreview({
   formatState: FormatState
   maxPlayers: string
 }) {
-  const numGroups   = Math.max(1, parseInt(formatState.num_groups) || 1)
-  const teamsPerGrp = Math.max(2, parseInt(formatState.teams_per_group) || 4)
-  const teamsAdv    = Math.max(1, parseInt(formatState.teams_advance_per_group) || 2)
-  const bracketSize = parseInt(formatState.bracket_size) || parseInt(maxPlayers) || 16
-
-  const stages =
-    format === 'groups_elimination' ? getGroupsEliminationPhaseNames(numGroups, teamsAdv)
-    : format === 'elimination'      ? getEliminationPhaseNames(bracketSize)
-    : ['Todos contra todos', 'Clasificación final']
-
-  const classified = numGroups * teamsAdv
-  const detail =
-    format === 'groups_elimination'
-      ? `${numGroups} grupo${numGroups !== 1 ? 's' : ''} · ${teamsPerGrp} eq/grupo · ${classified} clasifican`
-      : format === 'elimination'
-      ? `${bracketSize} parejas en el cuadro`
-      : null
-
   const activeCats = categories.filter(c => c.name.trim())
   if (!activeCats.length) return null
 
   return (
-    <div className="mt-6 bg-[var(--accent-surface)] border border-accent/20 rounded-[10px] p-5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-4">Esquema de la competición</p>
-      <div className="flex flex-col gap-5">
-        {activeCats.map((cat, i) => (
-          <div key={i}>
-            <div className="flex items-center gap-2 mb-2.5">
-              <span className="text-[12px] font-bold text-foreground">{cat.name}</span>
-              {(cat.minScore || cat.maxScore) && (
-                <span className="text-[11px] text-muted-foreground bg-white border border-border px-1.5 py-0.5 rounded-[4px]">
-                  {cat.minScore || '?'}–{cat.maxScore || '?'}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {stages.map((stage, j) => (
-                <div key={j} className="flex items-center gap-1.5">
-                  <span className={cn(
-                    'px-2.5 py-[5px] rounded-[6px] text-[11px] font-semibold whitespace-nowrap',
-                    j === stages.length - 1
-                      ? 'bg-accent text-white'
-                      : j === 0 && format === 'groups_elimination'
-                      ? 'bg-white border border-accent/40 text-accent'
-                      : 'bg-white border border-border text-foreground'
-                  )}>
-                    {stage}
-                  </span>
-                  {j < stages.length - 1 && (
-                    <span className="text-[11px] text-muted-foreground select-none">→</span>
-                  )}
+    <div className="mt-6 border border-border rounded-[10px] bg-white p-5">
+      <SectionLabel>Esquema de la competición</SectionLabel>
+      <div className="flex flex-col gap-8 mt-3">
+        {activeCats.map((cat, ci) => {
+          const numGroups   = Math.max(1, parseInt(formatState.num_groups) || 1)
+          const teamsPerGrp = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+          const teamsAdv    = Math.max(1, Math.min(parseInt(formatState.teams_advance_per_group) || 2, teamsPerGrp - 1))
+          const bracketN    = parseInt(formatState.bracket_size) || parseInt(maxPlayers) || 16
+
+          if (format === 'groups_elimination') {
+            const classified = numGroups * teamsAdv
+            const elimPhases = getGroupsEliminationPhaseNames(numGroups, teamsAdv).slice(1)
+            const mc: number[] = []; let n = 1
+            for (let i = elimPhases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
+
+            return (
+              <div key={ci}>
+                <p className="text-[13px] font-bold text-foreground mb-3">{cat.name}</p>
+                <div className="flex items-start gap-5 overflow-x-auto pb-2">
+                  <div className="shrink-0">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Fase de grupos</p>
+                    <div className="flex gap-1.5">
+                      {Array.from({ length: numGroups }, (_, g) => (
+                        <GroupCard key={g} num={g + 1} teamCount={teamsPerGrp} advanceCount={teamsAdv} />
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1.5">
+                      Top {teamsAdv} por grupo · {classified} clasificados
+                    </p>
+                  </div>
+                  <div className="flex items-center self-center pt-4 shrink-0 text-muted-foreground text-lg">→</div>
+                  <div className="shrink-0">
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Eliminatoria</p>
+                    <BracketDiagram phases={elimPhases} matchCounts={mc} />
+                  </div>
                 </div>
-              ))}
+              </div>
+            )
+          }
+
+          if (format === 'elimination') {
+            const phases = getEliminationPhaseNames(bracketN)
+            const mc: number[] = []; let n = 1
+            for (let i = phases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
+            return (
+              <div key={ci}>
+                <p className="text-[13px] font-bold text-foreground mb-3">{cat.name}</p>
+                <div className="overflow-x-auto pb-2">
+                  <BracketDiagram phases={phases} matchCounts={mc} />
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div key={ci}>
+              <p className="text-[13px] font-bold text-foreground mb-3">{cat.name}</p>
+              <div className="flex items-center gap-3">
+                <div className="border border-border rounded-[7px] bg-[var(--muted)] px-4 py-2.5 text-[12px] font-medium text-foreground">
+                  Todos contra todos
+                </div>
+                <span className="text-muted-foreground">→</span>
+                <div className="bg-accent rounded-[7px] px-4 py-2.5 text-[12px] font-bold text-white">🏆 Clasificación final</div>
+              </div>
             </div>
-            {detail && i === 0 && (
-              <p className="text-[11px] text-muted-foreground mt-2">{detail}</p>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
