@@ -243,6 +243,28 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-3">{children}</p>
 }
 
+function CopyLinkRow({ label, path, disabled }: { label: string; path: string; disabled?: boolean }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(window.location.origin + path)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <div className={cn('flex items-center gap-3 px-3 py-2.5 border rounded-[7px]', disabled ? 'bg-[var(--muted)] border-border opacity-60' : 'bg-white border-border')}>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] text-muted-foreground font-medium mb-0.5">{label}</p>
+        <p className="text-[12px] text-accent font-mono truncate">{path}</p>
+      </div>
+      <button type="button" onClick={copy} disabled={disabled}
+        className={cn('shrink-0 px-3 py-1.5 rounded-[6px] text-[11px] font-semibold transition-colors',
+          copied ? 'bg-[var(--success)] text-white' : 'bg-[var(--muted)] border border-border text-foreground hover:bg-white disabled:cursor-not-allowed')}>
+        {copied ? '✓ Copiado' : 'Copiar'}
+      </button>
+    </div>
+  )
+}
+
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
     <button
@@ -1884,9 +1906,27 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
               </div>
             </div>
 
-            {/* Info note */}
-            <div className="mt-6 bg-[var(--accent-surface)] text-accent rounded-[7px] px-4 py-3 text-[12px]">
-              💡 Los jugadores se inscriben desde la ficha pública del torneo. El formulario se muestra en el idioma del navegador.
+            {/* Links */}
+            <div className="mt-6 flex flex-col gap-2">
+              <p className="text-[12px] font-semibold text-foreground">Enlace para jugadores</p>
+              {t.status === 'draft' && (
+                <p className="text-[11px] text-[var(--warning)] bg-[var(--warning-surface,#fff7ed)] border border-[var(--warning)]/30 rounded-[6px] px-3 py-2">
+                  ⚠️ El torneo está en borrador. Los enlaces estarán activos cuando lo publiques.
+                </p>
+              )}
+              <CopyLinkRow
+                label="Formulario de inscripción directo"
+                path={`/inscripcion/${t.id as string}`}
+                disabled={t.status === 'draft'}
+              />
+              <CopyLinkRow
+                label="Página pública del torneo"
+                path={`/t/${t.share_slug as string}`}
+                disabled={t.status === 'draft'}
+              />
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                💡 Comparte estos enlaces con los jugadores. El formulario se mostrará en el idioma del navegador.
+              </p>
             </div>
           </div>
 
