@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef } from 'react'
+import { useState, useTransition, useRef, useEffect, Children, isValidElement } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament, updateRegistrationConfig } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
@@ -195,11 +195,47 @@ function SI({ value, onChange, type, placeholder, className, min, max }: {
 }
 
 function SS({ value, onChange, children }: { value: string; onChange: (v: string) => void; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const options = Children.toArray(children)
+    .filter((c): c is React.ReactElement<{ value: string; children: React.ReactNode }> =>
+      isValidElement(c) && (c as React.ReactElement).type === 'option')
+    .map(c => ({ value: c.props.value, label: c.props.children }))
+
+  const selected = options.find(o => o.value === value)
+
   return (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      className="w-full px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
-      {children}
-    </select>
+    <div ref={ref} className="relative w-full">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
+        <span className="truncate text-left">{String(selected?.label ?? value)}</span>
+        <span className={cn('text-[14px] text-muted-foreground ml-2 shrink-0 transition-transform duration-150', open && 'rotate-180')}>▾</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-border rounded-[7px] z-50 shadow-lg overflow-hidden">
+          {options.map(opt => (
+            <button key={opt.value} type="button"
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={cn(
+                'w-full text-left px-3 py-[9px] text-[13px] transition-colors hover:bg-[var(--muted)]',
+                opt.value === value ? 'text-accent font-semibold bg-[var(--accent-surface)]' : 'text-foreground'
+              )}>
+              {String(opt.label)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -649,12 +685,13 @@ function CompetitionSchemaPreview({
       <SectionLabel>Esquema de la competición</SectionLabel>
 
       {activeCats.length > 1 && (
-        <select value={idx} onChange={e => setSelIdx(Number(e.target.value))}
-          className="mt-2 mb-4 px-3 py-[7px] border border-border rounded-[7px] text-[12px] font-medium bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
-          {activeCats.map((c, i) => (
-            <option key={i} value={i}>{c.name}</option>
-          ))}
-        </select>
+        <div className="mt-2 mb-4">
+          <SS value={String(idx)} onChange={v => setSelIdx(Number(v))}>
+            {activeCats.map((c, i) => (
+              <option key={i} value={String(i)}>{c.name}</option>
+            ))}
+          </SS>
+        </div>
       )}
 
       {(() => {
@@ -732,14 +769,14 @@ function CustomFieldEditor({ field, isFirst, isLast, bothTypesEnabled, onUpdate,
   return (
     <div className="border border-border rounded-[9px] p-3 bg-white flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <select value={field.type}
-          onChange={e => onUpdate({ type: e.target.value as FieldType, options: [] })}
-          className="w-28 shrink-0 px-2 py-[6px] border border-border rounded-[6px] text-[11px] bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
-          <option value="text">Texto</option>
-          <option value="number">Número</option>
-          <option value="select">Selección</option>
-          <option value="checkbox">Checkbox</option>
-        </select>
+        <div className="w-28 shrink-0">
+          <SS value={field.type} onChange={v => onUpdate({ type: v as FieldType, options: [] })}>
+            <option value="text">Texto</option>
+            <option value="number">Número</option>
+            <option value="select">Selección</option>
+            <option value="checkbox">Checkbox</option>
+          </SS>
+        </div>
         <input value={field.label} onChange={e => onUpdate({ label: e.target.value })}
           placeholder="Etiqueta del campo"
           className="flex-1 min-w-0 px-2 py-[6px] border border-border rounded-[6px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
@@ -1610,12 +1647,12 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             <div className="flex flex-col gap-2">
               {timeBlocks.map(block => (
                 <div key={block.id} className="flex items-center gap-2 flex-wrap">
-                  <select value={block.courtName}
-                    onChange={e => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, courtName: e.target.value } : bl))}
-                    className="px-2 py-[7px] border border-border rounded-[7px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
-                    {namedCourts.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                    {namedCourts.length === 0 && <option value="">Sin pistas</option>}
-                  </select>
+                  <div className="w-32 shrink-0">
+                    <SS value={block.courtName} onChange={v => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, courtName: v } : bl))}>
+                      {namedCourts.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                      {namedCourts.length === 0 && <option value="">Sin pistas</option>}
+                    </SS>
+                  </div>
                   <SI type="time" value={block.from} onChange={v => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, from: v } : bl))} className="w-28" />
                   <span className="text-[12px] text-muted-foreground">—</span>
                   <SI type="time" value={block.to} onChange={v => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, to: v } : bl))} className="w-28" />
