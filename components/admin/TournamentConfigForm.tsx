@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament } from '@/lib/actions/tournaments'
+import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament, updateRegistrationConfig } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
 
 interface TournamentConfigFormProps {
@@ -10,12 +10,26 @@ interface TournamentConfigFormProps {
   otherTournaments: { id: string }[]
 }
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-type Service  = { key: string; label: string; active: boolean }
-type Category = { name: string; minScore: string; maxScore: string }
-type Court    = { name: string; type: 'indoor' | 'outdoor' }
+type Service   = { key: string; label: string; active: boolean }
+type Gender    = 'masculino' | 'femenino' | 'mixto'
+type Category  = { name: string; minScore: string; maxScore: string; genders: Gender[] }
+type Court     = { name: string; type: 'indoor' | 'outdoor' }
 type TimeBlock = { id: string; courtName: string; from: string; to: string; reason: string }
+type FieldType = 'text' | 'number' | 'select' | 'checkbox'
+
+interface CustomField {
+  id: string
+  type: FieldType
+  label: string
+  required: boolean
+  options: string[]
+}
+
+interface RegistrationConfig {
+  custom_fields: CustomField[]
+}
 
 interface MatchConfig {
   sets_format: string
@@ -43,6 +57,11 @@ interface FormatState {
   tiebreak_criteria: string[]
   time_limit_minutes: string
   bracket_seeding: string
+  min_matches_per_team: string
+  turbo_mode: boolean
+  group_points_win: string
+  group_points_draw: string
+  group_points_loss: string
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -84,6 +103,10 @@ const DEFAULT_COURTS: Court[] = [
   { name: 'Pista 4', type: 'indoor' },
 ]
 
+const LOREM_CONDITIONS = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function getEliminationPhaseNames(bracketSize: number): string[] {
   const all = [
     { size: 64, name: 'Treintaidosavos de final' },
@@ -104,6 +127,22 @@ function getGroupsEliminationPhaseNames(numGroups: number, teamsAdvance: number)
   if (total > 2)  phases.push('Semifinal')
   phases.push('Final')
   return phases
+}
+
+function expandCategories(cats: Category[]): { name: string; minScore: string; maxScore: string }[] {
+  const result: { name: string; minScore: string; maxScore: string }[] = []
+  for (const cat of cats) {
+    if (!cat.name.trim()) continue
+    if (!cat.genders || cat.genders.length === 0) {
+      result.push({ name: cat.name, minScore: cat.minScore, maxScore: cat.maxScore })
+    } else {
+      for (const g of cat.genders) {
+        const suffix = g === 'masculino' ? ' Masculino' : g === 'femenino' ? ' Femenino' : ' Mixto'
+        result.push({ name: cat.name + suffix, minScore: cat.minScore, maxScore: cat.maxScore })
+      }
+    }
+  }
+  return result
 }
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────
@@ -154,6 +193,18 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
     >
       <div className={cn('absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform', on ? 'translate-x-4' : 'translate-x-0.5')} />
     </button>
+  )
+}
+
+function Stepper({ value, onChange, min = 0, max = 99 }: { value: number; onChange: (v: number) => void; min?: number; max?: number }) {
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}
+        className="w-7 h-7 flex items-center justify-center border border-border rounded-[5px] text-[15px] font-bold text-foreground hover:bg-[#f8fafc] disabled:opacity-30 transition-colors">−</button>
+      <span className="w-8 text-center text-[14px] font-semibold text-foreground tabular-nums">{value}</span>
+      <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}
+        className="w-7 h-7 flex items-center justify-center border border-border rounded-[5px] text-[15px] font-bold text-foreground hover:bg-[#f8fafc] disabled:opacity-30 transition-colors">+</button>
+    </div>
   )
 }
 
@@ -385,12 +436,99 @@ function FormatConfigPanel({ format, state, onChange }: {
   return null
 }
 
+// ── Advanced Format Config ────────────────────────────────────────────────────
+
+function AdvancedFormatConfig({ format, state, onChange }: {
+  format: string; state: FormatState; onChange: (s: FormatState) => void
+}) {
+  const GROUP_PRESETS = [
+    { label: '3-1-0', win: 3, draw: 1, loss: 0 },
+    { label: '2-1-0', win: 2, draw: 1, loss: 0 },
+    { label: '3-0-0', win: 3, draw: 0, loss: 0 },
+  ]
+
+  return (
+    <div className="mt-4 border border-border rounded-[10px] p-[18px] bg-[var(--muted)]">
+      <SectionLabel>Configuración avanzada</SectionLabel>
+      <div className="flex flex-col gap-4">
+
+        {/* Min matches per team */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-foreground">Partidos mínimos por equipo</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Garantiza que cada equipo dispute al menos N partidos</p>
+          </div>
+          <Stepper
+            value={parseInt(state.min_matches_per_team) || 1}
+            onChange={v => onChange({ ...state, min_matches_per_team: String(v) })}
+            min={1} max={10}
+          />
+        </div>
+
+        <div className="h-px bg-border" />
+
+        {/* Turbo mode */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-foreground">Modo Turbo</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Partidos rápidos: 1 set express hasta 6 juegos sin ventaja</p>
+          </div>
+          <Toggle on={state.turbo_mode} onToggle={() => onChange({ ...state, turbo_mode: !state.turbo_mode })} />
+        </div>
+
+        {/* Group points — only for groups+elimination */}
+        {format === 'groups_elimination' && (
+          <>
+            <div className="h-px bg-border" />
+            <div>
+              <p className="text-[12px] font-semibold text-foreground mb-3">Puntos de fase de grupos</p>
+              <div className="flex gap-2 mb-4">
+                {GROUP_PRESETS.map(preset => {
+                  const active = state.group_points_win === String(preset.win)
+                    && state.group_points_draw === String(preset.draw)
+                    && state.group_points_loss === String(preset.loss)
+                  return (
+                    <button key={preset.label} type="button"
+                      onClick={() => onChange({ ...state, group_points_win: String(preset.win), group_points_draw: String(preset.draw), group_points_loss: String(preset.loss) })}
+                      className={cn(
+                        'px-3 py-[7px] rounded-[7px] border text-[12px] font-semibold transition-colors',
+                        active ? 'bg-accent border-accent text-white' : 'bg-white border-border text-foreground hover:border-accent/40'
+                      )}>
+                      {preset.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex flex-col gap-3">
+                {([
+                  { label: 'Victoria', key: 'group_points_win' },
+                  { label: 'Empate',   key: 'group_points_draw' },
+                  { label: 'Derrota',  key: 'group_points_loss' },
+                ] as { label: string; key: keyof FormatState }[]).map(({ label, key }) => (
+                  <div key={String(key)} className="flex items-center justify-between">
+                    <span className="text-[12px] font-medium text-foreground">{label}</span>
+                    <Stepper
+                      value={parseInt(state[key] as string) || 0}
+                      onChange={v => onChange({ ...state, [key]: String(v) })}
+                      min={0} max={10}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Competition Schema Preview ────────────────────────────────────────────────
 
-const BSLOT  = 24          // px — height of one team row in bracket
-const BMATCH = BSLOT * 2   // height of one match block (2 rows)
-const BCOL   = 106         // width of one bracket column
-const BGAP   = 22          // horizontal gap between bracket columns
+const BSLOT  = 24
+const BMATCH = BSLOT * 2
+const BCOL   = 106
+const BGAP   = 22
 
 function schMatchTop(round: number, idx: number): number {
   const pad = BSLOT * (Math.pow(2, round) - 1)
@@ -409,7 +547,6 @@ function BracketDiagram({ phases, matchCounts }: { phases: string[]; matchCounts
   const CHAMP_W = 52
   const HDR_H   = 20
 
-  // Compute SVG connector lines
   type Seg = { x1: number; y1: number; x2: number; y2: number }
   const segs: Seg[] = []
 
@@ -437,53 +574,35 @@ function BracketDiagram({ phases, matchCounts }: { phases: string[]; matchCounts
 
   return (
     <div className="relative shrink-0" style={{ width: totalW, height: totalH + HDR_H }}>
-      {/* Column headers */}
       {phases.map((name, r) => (
-        <div
-          key={r}
-          className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground overflow-hidden whitespace-nowrap"
-          style={{ left: r * (BCOL + BGAP), top: 0, width: BCOL }}
-        >{name}</div>
+        <div key={r} className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground overflow-hidden whitespace-nowrap"
+          style={{ left: r * (BCOL + BGAP), top: 0, width: BCOL }}>{name}</div>
       ))}
-      <div
-        className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground"
-        style={{ left: lr * (BCOL + BGAP) + BCOL + BGAP / 2 - 8, top: 0, width: CHAMP_W }}
-      >Campeón</div>
+      <div className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground"
+        style={{ left: lr * (BCOL + BGAP) + BCOL + BGAP / 2 - 8, top: 0, width: CHAMP_W }}>Campeón</div>
 
-      {/* SVG connectors */}
       <svg className="absolute pointer-events-none" style={{ left: 0, top: HDR_H }} width={totalW} height={totalH}>
         {segs.map((s, i) => (
           <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="#cbd5e1" strokeWidth={1.5} />
         ))}
       </svg>
 
-      {/* Match boxes */}
       {phases.map((_, r) =>
         Array.from({ length: matchCounts[r] }, (__, m) => (
-          <div
-            key={`${r}-${m}`}
-            className="absolute border border-border rounded-[5px] overflow-hidden bg-white"
-            style={{ left: r * (BCOL + BGAP), top: HDR_H + schMatchTop(r, m), width: BCOL, height: BMATCH }}
-          >
+          <div key={`${r}-${m}`} className="absolute border border-border rounded-[5px] overflow-hidden bg-white"
+            style={{ left: r * (BCOL + BGAP), top: HDR_H + schMatchTop(r, m), width: BCOL, height: BMATCH }}>
             <div className="px-2 text-[11px] flex items-center border-b border-border" style={{ height: BSLOT }}>
-              {r === 0
-                ? <span className="text-muted-foreground/40">Pareja —</span>
-                : <span className="text-foreground font-medium">Ganador</span>}
+              {r === 0 ? <span className="text-muted-foreground/40">Pareja —</span> : <span className="text-foreground font-medium">Ganador</span>}
             </div>
             <div className="px-2 text-[11px] flex items-center" style={{ height: BSLOT }}>
-              {r === 0
-                ? <span className="text-muted-foreground/40">Pareja —</span>
-                : <span className="text-foreground font-medium">Ganador</span>}
+              {r === 0 ? <span className="text-muted-foreground/40">Pareja —</span> : <span className="text-foreground font-medium">Ganador</span>}
             </div>
           </div>
         ))
       )}
 
-      {/* Trophy */}
-      <div
-        className="absolute flex items-center justify-center"
-        style={{ left: champMidX, top: HDR_H + schMatchTop(lr, 0) + BSLOT / 2 - 14, width: 28, height: 28 }}
-      >
+      <div className="absolute flex items-center justify-center"
+        style={{ left: champMidX, top: HDR_H + schMatchTop(lr, 0) + BSLOT / 2 - 14, width: 28, height: 28 }}>
         <span className="text-[22px] leading-none">🏆</span>
       </div>
     </div>
@@ -497,20 +616,14 @@ function GroupCard({ num, teamCount, advanceCount }: { num: number; teamCount: n
         Grupo {num}
       </div>
       {Array.from({ length: teamCount }, (_, t) => (
-        <div
-          key={t}
-          className={cn(
-            'px-1.5 flex items-center gap-1 border-t border-border/40 text-[10px]',
-            t < advanceCount
-              ? 'bg-[var(--accent-surface)] text-accent font-semibold'
-              : 'bg-white text-muted-foreground/40'
+        <div key={t}
+          className={cn('px-1.5 flex items-center gap-1 border-t border-border/40 text-[10px]',
+            t < advanceCount ? 'bg-[var(--accent-surface)] text-accent font-semibold' : 'bg-white text-muted-foreground/40'
           )}
-          style={{ height: BSLOT }}
-        >
+          style={{ height: BSLOT }}>
           {t < advanceCount
             ? <span className="text-[var(--success)] font-bold text-[9px]">✓</span>
-            : <span className="text-[9px]">○</span>
-          }
+            : <span className="text-[9px]">○</span>}
           <span>{t + 1}ª</span>
         </div>
       ))}
@@ -521,7 +634,7 @@ function GroupCard({ num, teamCount, advanceCount }: { num: number; teamCount: n
 function CompetitionSchemaPreview({
   categories, format, formatState, maxPlayers,
 }: {
-  categories: Category[]
+  categories: { name: string }[]
   format: string
   formatState: FormatState
   maxPlayers: string
@@ -531,18 +644,14 @@ function CompetitionSchemaPreview({
   if (!activeCats.length) return null
 
   const idx = Math.min(selIdx, activeCats.length - 1)
-  const cat = activeCats[idx]
 
   return (
     <div className="mt-6 border border-border rounded-[10px] bg-white p-5">
       <SectionLabel>Esquema de la competición</SectionLabel>
 
       {activeCats.length > 1 && (
-        <select
-          value={idx}
-          onChange={e => setSelIdx(Number(e.target.value))}
-          className="mt-2 mb-4 px-3 py-[7px] border border-border rounded-[7px] text-[12px] font-medium bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
-        >
+        <select value={idx} onChange={e => setSelIdx(Number(e.target.value))}
+          className="mt-2 mb-4 px-3 py-[7px] border border-border rounded-[7px] text-[12px] font-medium bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
           {activeCats.map((c, i) => (
             <option key={i} value={i}>{c.name}</option>
           ))}
@@ -608,6 +717,144 @@ function CompetitionSchemaPreview({
   )
 }
 
+// ── Registration Tab Components ───────────────────────────────────────────────
+
+function CustomFieldEditor({ field, isFirst, isLast, onUpdate, onRemove, onMove }: {
+  field: CustomField
+  isFirst: boolean
+  isLast: boolean
+  onUpdate: (updates: Partial<CustomField>) => void
+  onRemove: () => void
+  onMove: (dir: -1 | 1) => void
+}) {
+  const [newOpt, setNewOpt] = useState('')
+
+  return (
+    <div className="border border-border rounded-[9px] p-3 bg-white flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <select value={field.type}
+          onChange={e => onUpdate({ type: e.target.value as FieldType, options: [] })}
+          className="w-28 shrink-0 px-2 py-[6px] border border-border rounded-[6px] text-[11px] bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
+          <option value="text">Texto</option>
+          <option value="number">Número</option>
+          <option value="select">Selección</option>
+          <option value="checkbox">Checkbox</option>
+        </select>
+        <input value={field.label} onChange={e => onUpdate({ label: e.target.value })}
+          placeholder="Etiqueta del campo"
+          className="flex-1 min-w-0 px-2 py-[6px] border border-border rounded-[6px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
+        <label className="flex items-center gap-1 cursor-pointer shrink-0">
+          <Toggle on={field.required} onToggle={() => onUpdate({ required: !field.required })} />
+          <span className="text-[11px] text-muted-foreground">Oblig.</span>
+        </label>
+        <div className="flex gap-0.5 shrink-0">
+          <button type="button" onClick={() => onMove(-1)} disabled={isFirst}
+            className="w-6 h-6 flex items-center justify-center border border-border rounded text-[10px] text-muted-foreground hover:border-accent hover:text-accent disabled:opacity-30 transition-colors">↑</button>
+          <button type="button" onClick={() => onMove(1)} disabled={isLast}
+            className="w-6 h-6 flex items-center justify-center border border-border rounded text-[10px] text-muted-foreground hover:border-accent hover:text-accent disabled:opacity-30 transition-colors">↓</button>
+        </div>
+        <button type="button" onClick={onRemove}
+          className="w-6 h-6 flex items-center justify-center bg-[var(--error)] text-white rounded text-[10px] font-bold shrink-0 hover:opacity-80 transition-opacity">✕</button>
+      </div>
+      {field.type === 'select' && (
+        <div className="ml-3 pl-3 border-l-2 border-border">
+          <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Opciones</p>
+          <div className="flex flex-col gap-1 mb-1.5">
+            {field.options.length === 0 && (
+              <p className="text-[11px] text-light italic">Sin opciones todavía</p>
+            )}
+            {field.options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="flex-1 text-[11px] text-foreground bg-[var(--muted)] px-2 py-[4px] rounded">{opt}</span>
+                <button type="button"
+                  onClick={() => onUpdate({ options: field.options.filter((_, j) => j !== i) })}
+                  className="text-[10px] text-[var(--error)] hover:opacity-80 font-bold leading-none">✕</button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-1">
+            <input value={newOpt} onChange={e => setNewOpt(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newOpt.trim()) {
+                  onUpdate({ options: [...field.options, newOpt.trim()] })
+                  setNewOpt('')
+                }
+              }}
+              placeholder="Nueva opción…"
+              className="flex-1 min-w-0 px-2 py-[5px] border border-border rounded text-[11px] bg-white focus:outline-none focus:ring-1 focus:ring-accent" />
+            <button type="button"
+              onClick={() => { if (!newOpt.trim()) return; onUpdate({ options: [...field.options, newOpt.trim()] }); setNewOpt('') }}
+              className="px-2 py-[5px] border border-border rounded text-[11px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">+</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RegistrationPreview({ config }: { config: RegistrationConfig }) {
+  return (
+    <div className="bg-[var(--muted)] border border-border rounded-[10px] p-5 self-start sticky top-6">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-4">Vista previa del jugador</p>
+      <div className="bg-white rounded-[10px] border border-border p-4 flex flex-col gap-3 max-h-[640px] overflow-y-auto w-[320px]">
+        {/* Fixed fields */}
+        {[
+          { label: 'Nombre completo' },
+          { label: 'Email' },
+          { label: 'Teléfono' },
+        ].map(f => (
+          <div key={f.label}>
+            <label className="block text-[11px] font-semibold text-foreground mb-1">
+              {f.label} <span className="text-[var(--error)]">*</span>
+            </label>
+            <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)]" />
+          </div>
+        ))}
+
+        {/* Custom fields */}
+        {config.custom_fields.map(field => (
+          <div key={field.id}>
+            <label className="block text-[11px] font-semibold text-foreground mb-1">
+              {field.label || <span className="italic text-light">Campo sin nombre</span>}
+              {field.required && <span className="text-[var(--error)] ml-0.5">*</span>}
+            </label>
+            {field.type === 'text' && <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)]" />}
+            {field.type === 'number' && <div className="w-24 h-8 border border-border rounded-[6px] bg-[var(--muted)]" />}
+            {field.type === 'select' && (
+              <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)] flex items-center justify-between px-3">
+                <span className="text-[11px] text-muted-foreground/60">{field.options[0] ?? 'Selecciona…'}</span>
+                <span className="text-[10px] text-muted-foreground">▾</span>
+              </div>
+            )}
+            {field.type === 'checkbox' && (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-border rounded bg-white shrink-0" />
+                <span className="text-[11px] text-foreground">{field.label || 'Campo sin nombre'}</span>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Conditions */}
+        <div className="pt-2 border-t border-border">
+          <p className="text-[10px] text-muted-foreground mb-2 leading-relaxed">{LOREM_CONDITIONS}</p>
+          <div className="flex items-start gap-2">
+            <div className="w-4 h-4 border-2 border-border rounded bg-white shrink-0 mt-0.5" />
+            <span className="text-[11px] font-medium text-foreground">
+              Acepto los términos y condiciones <span className="text-[var(--error)]">*</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Submit */}
+        <button disabled className="w-full py-2.5 bg-accent rounded-[7px] text-[13px] font-semibold text-white opacity-80 mt-1 cursor-default">
+          Inscribirse →
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function TournamentConfigForm({ tournament: t, otherTournaments }: TournamentConfigFormProps) {
@@ -648,11 +895,16 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
   const [newSvcName, setNewSvc] = useState('')
 
   // ── Categorías y formato ──────────────────────────────────────
-  const savedCats = vd.categories as Category[] | undefined
+  const savedCats = vd.categories as Array<Record<string, unknown>> | undefined
   const [categories, setCategories] = useState<Category[]>(
     Array.isArray(savedCats) && savedCats.length > 0 && typeof savedCats[0] === 'object'
-      ? savedCats
-      : ['PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA'].map(n => ({ name: n, minScore: '', maxScore: '' }))
+      ? savedCats.map(c => ({
+          name: (c.name as string) || '',
+          minScore: (c.minScore as string) || '',
+          maxScore: (c.maxScore as string) || '',
+          genders: Array.isArray(c.genders) ? (c.genders as Gender[]) : [],
+        }))
+      : ['PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA'].map(n => ({ name: n, minScore: '', maxScore: '', genders: [] as Gender[] }))
   )
   const [format, setFormat] = useState(t.format as string ?? 'groups_elimination')
 
@@ -667,6 +919,11 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     tiebreak_criteria:       (vd.tiebreak_criteria as string[]) ?? DEFAULT_TIEBREAK_CRITERIA,
     time_limit_minutes:      String(vd.time_limit_minutes ?? ''),
     bracket_seeding:         (vd.bracket_seeding as string) ?? 'CRUZADO',
+    min_matches_per_team:    String(vd.min_matches_per_team ?? '1'),
+    turbo_mode:              Boolean(vd.turbo_mode ?? false),
+    group_points_win:        String(vd.group_points_win ?? '3'),
+    group_points_draw:       String(vd.group_points_draw ?? '1'),
+    group_points_loss:       String(vd.group_points_loss ?? '0'),
   })
 
   // ── Horario ───────────────────────────────────────────────────
@@ -724,16 +981,21 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
       return savedPhases.map(p => ({ name: p.name, match_config: { ...DEFAULT_MATCH_CONFIG, ...p.match_config } }))
     }
     return buildPhasesForFormat(t.format as string ?? 'groups_elimination', {
-      bracket_size: String(vd.bracket_size ?? '16'),
-      seeding_method: (vd.seeding_method as string) ?? 'RANDOM',
-      has_third_place_match: Boolean(vd.has_third_place_match ?? false),
-      num_groups: String(vd.num_groups ?? '3'),
-      teams_per_group: String(vd.teams_per_group ?? '4'),
+      bracket_size:            String(vd.bracket_size ?? '16'),
+      seeding_method:          (vd.seeding_method as string) ?? 'RANDOM',
+      has_third_place_match:   Boolean(vd.has_third_place_match ?? false),
+      num_groups:              String(vd.num_groups ?? '3'),
+      teams_per_group:         String(vd.teams_per_group ?? '4'),
       teams_advance_per_group: String(vd.teams_advance_per_group ?? '2'),
-      group_scoring: (vd.scoring_system as string) ?? 'WIN_LOSS',
-      tiebreak_criteria: (vd.tiebreak_criteria as string[]) ?? DEFAULT_TIEBREAK_CRITERIA,
-      time_limit_minutes: String(vd.time_limit_minutes ?? ''),
-      bracket_seeding: (vd.bracket_seeding as string) ?? 'CRUZADO',
+      group_scoring:           (vd.scoring_system as string) ?? 'WIN_LOSS',
+      tiebreak_criteria:       (vd.tiebreak_criteria as string[]) ?? DEFAULT_TIEBREAK_CRITERIA,
+      time_limit_minutes:      String(vd.time_limit_minutes ?? ''),
+      bracket_seeding:         (vd.bracket_seeding as string) ?? 'CRUZADO',
+      min_matches_per_team:    String(vd.min_matches_per_team ?? '1'),
+      turbo_mode:              Boolean(vd.turbo_mode ?? false),
+      group_points_win:        String(vd.group_points_win ?? '3'),
+      group_points_draw:       String(vd.group_points_draw ?? '1'),
+      group_points_loss:       String(vd.group_points_loss ?? '0'),
     })
   })
   const [activePhaseIdx, setPhaseIdx] = useState(0)
@@ -744,6 +1006,47 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     if (newFormatState) setFormatState(newFormatState)
     setPhases(buildPhasesForFormat(newFormat, fs))
     setPhaseIdx(0)
+  }
+
+  // ── Inscripción ───────────────────────────────────────────────
+  const savedRegConfig = t.registration_config as RegistrationConfig | null | undefined
+  const [registrationConfig, setRegistrationConfig] = useState<RegistrationConfig>(
+    savedRegConfig && typeof savedRegConfig === 'object' && Array.isArray(savedRegConfig.custom_fields)
+      ? { custom_fields: savedRegConfig.custom_fields }
+      : { custom_fields: [] }
+  )
+
+  function addCustomField() {
+    const newField: CustomField = {
+      id: Date.now().toString(),
+      type: 'text',
+      label: '',
+      required: false,
+      options: [],
+    }
+    setRegistrationConfig(rc => ({ ...rc, custom_fields: [...rc.custom_fields, newField] }))
+  }
+
+  function updateCustomField(id: string, updates: Partial<CustomField>) {
+    setRegistrationConfig(rc => ({
+      ...rc,
+      custom_fields: rc.custom_fields.map(f => f.id === id ? { ...f, ...updates } : f),
+    }))
+  }
+
+  function removeCustomField(id: string) {
+    setRegistrationConfig(rc => ({ ...rc, custom_fields: rc.custom_fields.filter(f => f.id !== id) }))
+  }
+
+  function moveCustomField(id: string, dir: -1 | 1) {
+    setRegistrationConfig(rc => {
+      const fields = [...rc.custom_fields]
+      const idx = fields.findIndex(f => f.id === id)
+      const newIdx = idx + dir
+      if (newIdx < 0 || newIdx >= fields.length) return rc
+      ;[fields[idx], fields[newIdx]] = [fields[newIdx], fields[idx]]
+      return { ...rc, custom_fields: fields }
+    })
   }
 
   // ── Delete / Duplicate / Publish ─────────────────────────────
@@ -803,6 +1106,11 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
         tiebreak_criteria:       formatState.tiebreak_criteria,
         time_limit_minutes:      formatState.time_limit_minutes ? parseInt(formatState.time_limit_minutes) : null,
         bracket_seeding:         formatState.bracket_seeding,
+        min_matches_per_team:    parseInt(formatState.min_matches_per_team) || 1,
+        turbo_mode:              formatState.turbo_mode,
+        group_points_win:        parseInt(formatState.group_points_win) || 3,
+        group_points_draw:       parseInt(formatState.group_points_draw) || 1,
+        group_points_loss:       parseInt(formatState.group_points_loss) || 0,
         phases: phases.map(p => ({ name: p.name, match_config: p.match_config })),
         courts: namedCourts,
         schedule: {
@@ -831,6 +1139,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
         time_limit_minutes:    p.match_config.time_limit_minutes ? parseInt(p.match_config.time_limit_minutes) : null,
       },
     })))
+    await updateRegistrationConfig(t.id as string, registrationConfig)
     setIsSaving(false)
     setSaveStatus('saved')
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
@@ -863,14 +1172,16 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     }
   }
 
-
   const TABS = [
     { id: 'datos',       label: 'Datos básicos' },
     { id: 'instalacion', label: 'Instalación' },
     { id: 'categorias',  label: 'Formato' },
     { id: 'horario',     label: 'Pistas y horarios' },
     { id: 'puntuacion',  label: 'Puntuación' },
+    { id: 'inscripcion', label: 'Inscripción' },
   ]
+
+  const expandedCategories = expandCategories(categories)
 
   return (
     <div className="flex flex-col gap-5">
@@ -882,7 +1193,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           <p className="text-[13px] text-muted-foreground mt-0.5">{t.name as string}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Save status */}
           {isSaving && <span className="text-[12px] text-muted-foreground">Guardando...</span>}
           {!isSaving && saveStatus === 'saved' && <span className="text-[12px] text-[var(--success)] font-medium">✓ Guardado</span>}
 
@@ -927,7 +1237,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             </button>
           )}
 
-          {/* Publish — only for drafts */}
           {(t.status as string) === 'draft' && (
             <button onClick={handlePublish} disabled={isPublishing}
               className="px-[17px] py-[9px] bg-accent rounded-[7px] text-[13px] font-semibold text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50">
@@ -1050,34 +1359,60 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
         </div>
       )}
 
-      {/* ── Tab: Categorías y formato ─────────────────────────── */}
+      {/* ── Tab: Formato ─────────────────────────────────────── */}
       {tab === 'categorias' && (
         <div className="bg-white border border-border rounded-[10px] p-[26px]">
+
+          {/* Categorías */}
           <div className="mb-5">
             <p className="text-[12px] font-semibold text-foreground mb-0.5">
               Categorías <span className="text-[var(--error)]">*</span>
             </p>
-            <p className="text-[11px] text-muted-foreground mb-3">Cada categoría tendrá su propio cuadro de grupos y eliminatoria</p>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              Selecciona los géneros para dividir cada categoría automáticamente
+              {expandedCategories.length > 0 && categories.length !== expandedCategories.length && (
+                <span className="ml-1 text-accent font-medium">· {expandedCategories.length} categorías activas</span>
+              )}
+            </p>
             <div className="flex flex-col gap-2">
               {categories.map((cat, i) => (
-                <div key={i} className="flex items-center gap-2">
+                <div key={i} className="flex items-center gap-2 flex-wrap">
                   <input value={cat.name}
                     onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, name: e.target.value } : c))}
-                    placeholder="Nombre de la categoría"
-                    className="flex-1 px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    placeholder="Nombre"
+                    className="w-[120px] px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                   />
-                  <div className="flex items-center gap-1 shrink-0">
-                    <input value={cat.minScore}
-                      onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, minScore: e.target.value } : c))}
-                      placeholder="3.5"
-                      className="w-14 px-2 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground text-center focus:outline-none focus:ring-1 focus:ring-accent"
-                    />
-                    <span className="text-[12px] text-muted-foreground">—</span>
-                    <input value={cat.maxScore}
-                      onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, maxScore: e.target.value } : c))}
-                      placeholder="4.25"
-                      className="w-14 px-2 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground text-center focus:outline-none focus:ring-1 focus:ring-accent"
-                    />
+                  <input value={cat.minScore}
+                    onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, minScore: e.target.value } : c))}
+                    placeholder="3.5"
+                    className="w-14 px-2 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground text-center focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <span className="text-[12px] text-muted-foreground">—</span>
+                  <input value={cat.maxScore}
+                    onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, maxScore: e.target.value } : c))}
+                    placeholder="4.25"
+                    className="w-14 px-2 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground text-center focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  {/* Gender toggles */}
+                  <div className="flex gap-1 shrink-0">
+                    {(['masculino', 'femenino', 'mixto'] as const).map(g => {
+                      const gLabel = g === 'masculino' ? 'M' : g === 'femenino' ? 'F' : 'X'
+                      const gTitle = g === 'masculino' ? 'Masculino' : g === 'femenino' ? 'Femenino' : 'Mixto'
+                      const active = cat.genders.includes(g)
+                      return (
+                        <button key={g} type="button" title={gTitle}
+                          onClick={() => setCategories(cs => cs.map((c, j) => j === i ? {
+                            ...c,
+                            genders: active ? c.genders.filter(x => x !== g) : [...c.genders, g],
+                          } : c))}
+                          className={cn(
+                            'w-7 h-7 rounded-[5px] border text-[11px] font-bold transition-colors',
+                            active ? 'bg-accent border-accent text-white' : 'bg-white border-border text-muted-foreground hover:border-accent/40'
+                          )}>
+                          {gLabel}
+                        </button>
+                      )
+                    })}
                   </div>
                   <button onClick={() => setCategories(cs => cs.filter((_, j) => j !== i))}
                     className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
@@ -1085,16 +1420,19 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                   </button>
                 </div>
               ))}
-              <button onClick={() => setCategories(cs => [...cs, { name: `${cs.length + 1}ª categoría`, minScore: '', maxScore: '' }])}
+              <button onClick={() => setCategories(cs => [...cs, { name: `${cs.length + 1}ª`, minScore: '', maxScore: '', genders: [] }])}
                 className="self-start px-3 py-[5px] border border-border rounded-[7px] bg-white text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">
                 + Añadir categoría
               </button>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-2">Intervalo de puntuación opcional (ej. 3.5 — 4.25)</p>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              M = Masculino · F = Femenino · X = Mixto · Intervalo de puntuación opcional
+            </p>
           </div>
 
           <Divider />
 
+          {/* Formato */}
           <div className="mt-5">
             <FieldRow label="Formato del torneo" req>
               <SS value={format} onChange={v => applyFormatChange(v)}>
@@ -1105,10 +1443,12 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             </FieldRow>
 
             <FormatConfigPanel format={format} state={formatState} onChange={newState => applyFormatChange(format, newState)} />
+
+            <AdvancedFormatConfig format={format} state={formatState} onChange={setFormatState} />
           </div>
 
           <CompetitionSchemaPreview
-            categories={categories}
+            categories={expandedCategories}
             format={format}
             formatState={formatState}
             maxPlayers={maxPlayers}
@@ -1140,13 +1480,11 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                       className="flex-1 text-[13px] font-medium text-foreground bg-transparent border-none outline-none min-w-0"
                     />
                     <div className="flex shrink-0 rounded-[5px] overflow-hidden border border-border text-[11px] font-semibold">
-                      <button
-                        type="button"
+                      <button type="button"
                         onClick={() => { setNamedCourts(cs => cs.map((c, j) => j === i ? { ...c, type: 'indoor' } : c)); scheduleSave() }}
                         className={cn('px-2 py-[3px] transition-colors', court.type === 'indoor' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}
                       >Indoor</button>
-                      <button
-                        type="button"
+                      <button type="button"
                         onClick={() => { setNamedCourts(cs => cs.map((c, j) => j === i ? { ...c, type: 'outdoor' } : c)); scheduleSave() }}
                         className={cn('px-2 py-[3px] transition-colors border-l border-border', court.type === 'outdoor' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}
                       >Outdoor</button>
@@ -1163,12 +1501,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           <div>
             <SectionLabel>Horario general</SectionLabel>
             <div className="grid grid-cols-2 gap-4">
-              <FieldRow label="Hora de inicio">
-                <SI type="time" value={schedStart} onChange={setSchedStart} />
-              </FieldRow>
-              <FieldRow label="Hora de fin">
-                <SI type="time" value={schedEnd} onChange={setSchedEnd} />
-              </FieldRow>
+              <FieldRow label="Hora de inicio"><SI type="time" value={schedStart} onChange={setSchedStart} /></FieldRow>
+              <FieldRow label="Hora de fin"><SI type="time" value={schedEnd} onChange={setSchedEnd} /></FieldRow>
             </div>
           </div>
 
@@ -1182,12 +1516,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             </div>
             {lunchEnabled && (
               <div className="grid grid-cols-2 gap-4">
-                <FieldRow label="Hora de inicio">
-                  <SI type="time" value={lunchTime} onChange={setLunchTime} />
-                </FieldRow>
-                <FieldRow label="Duración (minutos)">
-                  <SI type="number" value={lunchDuration} onChange={setLunchDuration} placeholder="60" min="15" />
-                </FieldRow>
+                <FieldRow label="Hora de inicio"><SI type="time" value={lunchTime} onChange={setLunchTime} /></FieldRow>
+                <FieldRow label="Duración (minutos)"><SI type="number" value={lunchDuration} onChange={setLunchDuration} placeholder="60" min="15" /></FieldRow>
               </div>
             )}
           </div>
@@ -1201,14 +1531,9 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
               {phases.map(ph => (
                 <div key={ph.name} className="flex items-center gap-3">
                   <span className="text-[12px] font-medium text-foreground flex-1 min-w-0 truncate">{ph.name}</span>
-                  <SI
-                    type="number"
-                    value={phaseDurations[ph.name] ?? '90'}
+                  <SI type="number" value={phaseDurations[ph.name] ?? '90'}
                     onChange={v => setPhaseDurations(d => ({ ...d, [ph.name]: v }))}
-                    placeholder="90"
-                    className="w-24"
-                    min="10"
-                  />
+                    placeholder="90" className="w-24" min="10" />
                   <span className="text-[12px] text-light shrink-0">min</span>
                 </div>
               ))}
@@ -1222,43 +1547,30 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             <div className="flex items-center justify-between mb-4">
               <SectionLabel>Franjas bloqueadas</SectionLabel>
               <button
-                onClick={() => setTimeBlocks(b => [...b, {
-                  id: Date.now().toString(),
-                  courtName: namedCourts[0]?.name ?? '',
-                  from: '09:00', to: '10:00', reason: '',
-                }])}
-                className="px-3 py-[5px] bg-white border border-border rounded-[7px] text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors"
-              >
+                onClick={() => setTimeBlocks(b => [...b, { id: Date.now().toString(), courtName: namedCourts[0]?.name ?? '', from: '09:00', to: '10:00', reason: '' }])}
+                className="px-3 py-[5px] bg-white border border-border rounded-[7px] text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">
                 + Añadir bloque
               </button>
             </div>
-            {timeBlocks.length === 0 && (
-              <p className="text-[12px] text-light">Sin franjas bloqueadas</p>
-            )}
+            {timeBlocks.length === 0 && <p className="text-[12px] text-light">Sin franjas bloqueadas</p>}
             <div className="flex flex-col gap-2">
               {timeBlocks.map(block => (
                 <div key={block.id} className="flex items-center gap-2 flex-wrap">
-                  <select
-                    value={block.courtName}
+                  <select value={block.courtName}
                     onChange={e => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, courtName: e.target.value } : bl))}
-                    className="px-2 py-[7px] border border-border rounded-[7px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                  >
+                    className="px-2 py-[7px] border border-border rounded-[7px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
                     {namedCourts.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                     {namedCourts.length === 0 && <option value="">Sin pistas</option>}
                   </select>
                   <SI type="time" value={block.from} onChange={v => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, from: v } : bl))} className="w-28" />
                   <span className="text-[12px] text-muted-foreground">—</span>
                   <SI type="time" value={block.to} onChange={v => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, to: v } : bl))} className="w-28" />
-                  <input
-                    value={block.reason}
+                  <input value={block.reason}
                     onChange={e => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, reason: e.target.value } : bl))}
                     placeholder="Motivo (opcional)"
-                    className="flex-1 min-w-0 px-3 py-[7px] border border-border rounded-[7px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                  <button
-                    onClick={() => setTimeBlocks(b => b.filter(bl => bl.id !== block.id))}
-                    className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity"
-                  >✕</button>
+                    className="flex-1 min-w-0 px-3 py-[7px] border border-border rounded-[7px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
+                  <button onClick={() => setTimeBlocks(b => b.filter(bl => bl.id !== block.id))}
+                    className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">✕</button>
                 </div>
               ))}
             </div>
@@ -1277,13 +1589,9 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             </div>
             {courtAssignEnabled && (
               <>
-                {namedCourts.length === 0 && (
-                  <p className="text-[12px] text-light">Añade pistas arriba para asignarlas.</p>
-                )}
-                {categories.length === 0 && namedCourts.length > 0 && (
-                  <p className="text-[12px] text-light">Añade categorías en la tab "Categorías" para asignarlas.</p>
-                )}
-                {namedCourts.length > 0 && categories.length > 0 && (
+                {namedCourts.length === 0 && <p className="text-[12px] text-light">Añade pistas arriba para asignarlas.</p>}
+                {expandedCategories.length === 0 && namedCourts.length > 0 && <p className="text-[12px] text-light">Añade categorías en la tab Formato para asignarlas.</p>}
+                {namedCourts.length > 0 && expandedCategories.length > 0 && (
                   <div className="overflow-x-auto">
                     <table className="text-[12px] w-full">
                       <thead>
@@ -1295,7 +1603,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                         </tr>
                       </thead>
                       <tbody>
-                        {categories.map(cat => (
+                        {expandedCategories.map(cat => (
                           <tr key={cat.name} className="border-t border-border">
                             <td className="py-2 pr-6 font-medium text-foreground">{cat.name || '—'}</td>
                             {namedCourts.map(c => {
@@ -1308,11 +1616,9 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                                       const next = cur.includes(c.name) ? cur.filter(n => n !== c.name) : [...cur, c.name]
                                       return { ...a, [cat.name]: next }
                                     })}
-                                    className={cn(
-                                      'w-5 h-5 rounded border flex items-center justify-center mx-auto text-[10px] transition-colors',
+                                    className={cn('w-5 h-5 rounded border flex items-center justify-center mx-auto text-[10px] transition-colors',
                                       assigned ? 'bg-accent border-accent text-white' : 'bg-white border-border text-transparent'
-                                    )}
-                                  >✓</button>
+                                    )}>✓</button>
                                 </td>
                               )
                             })}
@@ -1351,6 +1657,78 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
               onChange={cfg => setPhases(ps => ps.map((p, i) => i === activePhaseIdx ? { ...p, match_config: cfg } : p))}
             />
           )}
+        </div>
+      )}
+
+      {/* ── Tab: Inscripción ──────────────────────────────────── */}
+      {tab === 'inscripcion' && (
+        <div className="grid grid-cols-[1fr_340px] gap-5 items-start">
+
+          {/* Builder */}
+          <div className="bg-white border border-border rounded-[10px] p-[26px]">
+
+            {/* Fixed fields */}
+            <div className="mb-5">
+              <p className="text-[12px] font-semibold text-foreground mb-2">Campos obligatorios del sistema</p>
+              <div className="flex flex-col gap-1.5">
+                {[
+                  { label: 'Nombre completo', type: 'texto' },
+                  { label: 'Email', type: 'email' },
+                  { label: 'Teléfono', type: 'texto' },
+                  { label: 'Acepto los términos y condiciones', type: 'checkbox' },
+                ].map(f => (
+                  <div key={f.label} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--muted)] border border-border rounded-[7px]">
+                    <span className="text-[11px] text-light">🔒</span>
+                    <span className="flex-1 text-[12px] text-foreground font-medium">{f.label}</span>
+                    <span className="text-[10px] text-muted-foreground bg-white border border-border px-2 py-0.5 rounded-full">{f.type}</span>
+                    <span className="text-[10px] text-[var(--error)] font-semibold">Obligatorio</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Divider />
+
+            {/* Custom fields */}
+            <div className="mt-5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-[12px] font-semibold text-foreground">Campos personalizados</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Opcionales o requeridos · se añaden después de los campos del sistema</p>
+                </div>
+                <button onClick={addCustomField}
+                  className="px-3 py-[5px] border border-border rounded-[7px] bg-white text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors shrink-0">
+                  + Añadir campo
+                </button>
+              </div>
+
+              {registrationConfig.custom_fields.length === 0 && (
+                <p className="text-[12px] text-light py-2">Sin campos personalizados. Los jugadores solo verán los campos obligatorios.</p>
+              )}
+
+              <div className="flex flex-col gap-2">
+                {registrationConfig.custom_fields.map((field, i) => (
+                  <CustomFieldEditor
+                    key={field.id}
+                    field={field}
+                    isFirst={i === 0}
+                    isLast={i === registrationConfig.custom_fields.length - 1}
+                    onUpdate={updates => updateCustomField(field.id, updates)}
+                    onRemove={() => removeCustomField(field.id)}
+                    onMove={dir => moveCustomField(field.id, dir)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Info note */}
+            <div className="mt-6 bg-[var(--accent-surface)] text-accent rounded-[7px] px-4 py-3 text-[12px]">
+              💡 Los jugadores se inscriben desde la ficha pública del torneo. El formulario se muestra en el idioma del navegador.
+            </div>
+          </div>
+
+          {/* Preview */}
+          <RegistrationPreview config={registrationConfig} />
         </div>
       )}
     </div>

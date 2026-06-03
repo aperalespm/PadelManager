@@ -181,3 +181,15 @@ export async function saveTournamentPhases(tournamentId: string, phases: Array<{
   }
   return { data: true }
 }
+
+export async function updateRegistrationConfig(id: string, config: unknown) {
+  await sql`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS registration_config JSONB DEFAULT '{}'`
+  const rows = await sql`
+    UPDATE tournaments
+    SET registration_config = ${JSON.stringify(config)}::jsonb, updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING id
+  `
+  if (!rows[0]) return { error: 'Torneo no encontrado' }
+  return { data: true }
+}
