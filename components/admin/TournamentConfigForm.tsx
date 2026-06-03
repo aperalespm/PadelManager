@@ -440,7 +440,20 @@ function FormatConfigPanel({ format, state, onChange }: {
             </SS>
           </FieldRow>
         </div>
-
+        {state.group_scoring === 'POINTS_SCORED' && (
+          <div className="flex gap-6 px-1">
+            {([
+              { label: 'Victoria', key: 'group_points_win' },
+              { label: 'Empate',   key: 'group_points_draw' },
+              { label: 'Derrota',  key: 'group_points_loss' },
+            ] as { label: string; key: keyof FormatState }[]).map(({ label, key }) => (
+              <div key={String(key)} className="flex items-center gap-2">
+                <span className="text-[12px] text-muted-foreground w-14">{label}</span>
+                <Stepper value={parseInt(state[key] as string) || 0} onChange={v => set(key, String(v))} min={0} max={10} />
+              </div>
+            ))}
+          </div>
+        )}
         <FieldRow label="Siembra de eliminatorias" req>
           <SS value={state.bracket_seeding} onChange={v => set('bracket_seeding', v)}>
             <option value="CRUZADO">Cruzado — 1ºA vs 2ºB, 1ºB vs 2ºA…</option>
@@ -480,6 +493,20 @@ function FormatConfigPanel({ format, state, onChange }: {
             <option value="POINTS_SCORED">Puntos</option>
           </SS>
         </FieldRow>
+        {state.group_scoring === 'POINTS_SCORED' && (
+          <div className="flex gap-6 px-1">
+            {([
+              { label: 'Victoria', key: 'group_points_win' },
+              { label: 'Empate',   key: 'group_points_draw' },
+              { label: 'Derrota',  key: 'group_points_loss' },
+            ] as { label: string; key: keyof FormatState }[]).map(({ label, key }) => (
+              <div key={String(key)} className="flex items-center gap-2">
+                <span className="text-[12px] text-muted-foreground w-14">{label}</span>
+                <Stepper value={parseInt(state[key] as string) || 0} onChange={v => set(key, String(v))} min={0} max={10} />
+              </div>
+            ))}
+          </div>
+        )}
         <div>
           <p className="text-[12px] font-semibold text-foreground mb-2">Criterios de desempate (en orden)</p>
           <TiebreakCriteriaList criteria={state.tiebreak_criteria} onChange={v => set('tiebreak_criteria', v)} />
@@ -528,31 +555,6 @@ function AdvancedFormatConfig({ format, state, onChange }: {
           <Toggle on={state.turbo_mode} onToggle={() => onChange({ ...state, turbo_mode: !state.turbo_mode })} />
         </div>
 
-        {/* Group points — only for groups+elimination */}
-        {format === 'groups_elimination' && (
-          <>
-            <div className="h-px bg-border" />
-            <div>
-              <p className="text-[12px] font-semibold text-foreground mb-3">Puntos de fase de grupos</p>
-              <div className="flex flex-col gap-3">
-                {([
-                  { label: 'Victoria', key: 'group_points_win' },
-                  { label: 'Empate',   key: 'group_points_draw' },
-                  { label: 'Derrota',  key: 'group_points_loss' },
-                ] as { label: string; key: keyof FormatState }[]).map(({ label, key }) => (
-                  <div key={String(key)} className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium text-foreground">{label}</span>
-                    <Stepper
-                      value={parseInt(state[key] as string) || 0}
-                      onChange={v => onChange({ ...state, [key]: String(v) })}
-                      min={0} max={10}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
       </div>
     </div>
   )
