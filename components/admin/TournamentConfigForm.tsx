@@ -527,77 +527,91 @@ function CompetitionSchemaPreview({
   maxPlayers: string
 }) {
   const activeCats = categories.filter(c => c.name.trim())
+  const [selIdx, setSelIdx] = useState(0)
   if (!activeCats.length) return null
+
+  const idx = Math.min(selIdx, activeCats.length - 1)
+  const cat = activeCats[idx]
 
   return (
     <div className="mt-6 border border-border rounded-[10px] bg-white p-5">
-      <SectionLabel>Esquema de la competición</SectionLabel>
-      <div className="flex flex-col gap-8 mt-3">
-        {activeCats.map((cat, ci) => {
-          const numGroups   = Math.max(1, parseInt(formatState.num_groups) || 1)
-          const teamsPerGrp = Math.max(2, parseInt(formatState.teams_per_group) || 4)
-          const teamsAdv    = Math.max(1, Math.min(parseInt(formatState.teams_advance_per_group) || 2, teamsPerGrp - 1))
-          const bracketN    = parseInt(formatState.bracket_size) || parseInt(maxPlayers) || 16
+      <div className="flex items-center justify-between mb-4">
+        <SectionLabel>Esquema de la competición</SectionLabel>
+        {activeCats.length > 1 && (
+          <div className="flex gap-1 flex-wrap justify-end">
+            {activeCats.map((c, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setSelIdx(i)}
+                className={cn(
+                  'px-3 py-[5px] rounded-[6px] text-[11px] font-semibold transition-colors',
+                  i === idx
+                    ? 'bg-accent text-white'
+                    : 'bg-[var(--muted)] text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
-          if (format === 'groups_elimination') {
-            const classified = numGroups * teamsAdv
-            const elimPhases = getGroupsEliminationPhaseNames(numGroups, teamsAdv).slice(1)
-            const mc: number[] = []; let n = 1
-            for (let i = elimPhases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
+      {(() => {
+        const numGroups   = Math.max(1, parseInt(formatState.num_groups) || 1)
+        const teamsPerGrp = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+        const teamsAdv    = Math.max(1, Math.min(parseInt(formatState.teams_advance_per_group) || 2, teamsPerGrp - 1))
+        const bracketN    = parseInt(formatState.bracket_size) || parseInt(maxPlayers) || 16
 
-            return (
-              <div key={ci}>
-                <p className="text-[13px] font-bold text-foreground mb-3">{cat.name}</p>
-                <div className="flex items-start gap-5 overflow-x-auto pb-2">
-                  <div className="shrink-0">
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Fase de grupos</p>
-                    <div className="flex gap-1.5">
-                      {Array.from({ length: numGroups }, (_, g) => (
-                        <GroupCard key={g} num={g + 1} teamCount={teamsPerGrp} advanceCount={teamsAdv} />
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-1.5">
-                      Top {teamsAdv} por grupo · {classified} clasificados
-                    </p>
-                  </div>
-                  <div className="flex items-center self-center pt-4 shrink-0 text-muted-foreground text-lg">→</div>
-                  <div className="shrink-0">
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Eliminatoria</p>
-                    <BracketDiagram phases={elimPhases} matchCounts={mc} />
-                  </div>
-                </div>
-              </div>
-            )
-          }
-
-          if (format === 'elimination') {
-            const phases = getEliminationPhaseNames(bracketN)
-            const mc: number[] = []; let n = 1
-            for (let i = phases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
-            return (
-              <div key={ci}>
-                <p className="text-[13px] font-bold text-foreground mb-3">{cat.name}</p>
-                <div className="overflow-x-auto pb-2">
-                  <BracketDiagram phases={phases} matchCounts={mc} />
-                </div>
-              </div>
-            )
-          }
-
+        if (format === 'groups_elimination') {
+          const classified = numGroups * teamsAdv
+          const elimPhases = getGroupsEliminationPhaseNames(numGroups, teamsAdv).slice(1)
+          const mc: number[] = []; let n = 1
+          for (let i = elimPhases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
           return (
-            <div key={ci}>
-              <p className="text-[13px] font-bold text-foreground mb-3">{cat.name}</p>
-              <div className="flex items-center gap-3">
-                <div className="border border-border rounded-[7px] bg-[var(--muted)] px-4 py-2.5 text-[12px] font-medium text-foreground">
-                  Todos contra todos
+            <div className="flex items-start gap-5 overflow-x-auto pb-2">
+              <div className="shrink-0">
+                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Fase de grupos</p>
+                <div className="flex gap-1.5">
+                  {Array.from({ length: numGroups }, (_, g) => (
+                    <GroupCard key={g} num={g + 1} teamCount={teamsPerGrp} advanceCount={teamsAdv} />
+                  ))}
                 </div>
-                <span className="text-muted-foreground">→</span>
-                <div className="bg-accent rounded-[7px] px-4 py-2.5 text-[12px] font-bold text-white">🏆 Clasificación final</div>
+                <p className="text-[10px] text-muted-foreground mt-1.5">
+                  Top {teamsAdv} por grupo · {classified} clasificados
+                </p>
+              </div>
+              <div className="flex items-center self-center pt-4 shrink-0 text-muted-foreground text-lg">→</div>
+              <div className="shrink-0">
+                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Eliminatoria</p>
+                <BracketDiagram phases={elimPhases} matchCounts={mc} />
               </div>
             </div>
           )
-        })}
-      </div>
+        }
+
+        if (format === 'elimination') {
+          const phases = getEliminationPhaseNames(bracketN)
+          const mc: number[] = []; let n = 1
+          for (let i = phases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
+          return (
+            <div className="overflow-x-auto pb-2">
+              <BracketDiagram phases={phases} matchCounts={mc} />
+            </div>
+          )
+        }
+
+        return (
+          <div className="flex items-center gap-3">
+            <div className="border border-border rounded-[7px] bg-[var(--muted)] px-4 py-2.5 text-[12px] font-medium text-foreground">
+              Todos contra todos
+            </div>
+            <span className="text-muted-foreground">→</span>
+            <div className="bg-accent rounded-[7px] px-4 py-2.5 text-[12px] font-bold text-white">🏆 Clasificación final</div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
