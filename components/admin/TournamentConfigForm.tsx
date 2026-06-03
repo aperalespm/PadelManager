@@ -872,7 +872,8 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
             </div>
           </div>
         )}
-        {/* System fields — player */}
+        {/* Jugador 1 */}
+        <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground -mb-1">Jugador 1</p>
         {(
           [
             { key: 'name',  label: 'Nombre completo', kind: 'text' },
@@ -891,16 +892,16 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
             <div className={cn('h-8 border border-border rounded-[6px] bg-[var(--muted)]', kind === 'number' ? 'w-24' : 'w-full')} />
           </div>
         ))}
-        {/* Partner fields — only in pair mode */}
+        {/* Jugador 2 — only in pair mode */}
         {activePair && (
           <div className="flex flex-col gap-3 pt-2 border-t border-border">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-accent">Tu pareja</p>
+            <p className="text-[9px] font-bold uppercase tracking-wide text-accent -mb-1">Jugador 2</p>
             {(
               [
-                { key: 'partner_name',  label: 'Nombre completo (pareja)', kind: 'text' },
-                { key: 'partner_email', label: 'Email (pareja)',            kind: 'text' },
-                { key: 'partner_phone', label: 'Teléfono (pareja)',         kind: 'text' },
-                { key: 'partner_level', label: 'Nivel (pareja)',            kind: 'number' },
+                { key: 'partner_name',  label: 'Nombre completo', kind: 'text' },
+                { key: 'partner_email', label: 'Email',            kind: 'text' },
+                { key: 'partner_phone', label: 'Teléfono',         kind: 'text' },
+                { key: 'partner_level', label: 'Nivel',            kind: 'number' },
               ] as const
             ).map(({ key, label, kind }) => (
               <div key={key}>
@@ -1115,7 +1116,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
   // ── Inscripción ───────────────────────────────────────────────
   const savedRegConfig = t.registration_config as RegistrationConfig | null | undefined
   const [registrationConfig, setRegistrationConfig] = useState<RegistrationConfig>(() => {
-    const fallbackTypes = t.registration_type ? [t.registration_type as string] : ['pair']
+    const fallbackTypes = ['pair']
     if (savedRegConfig && typeof savedRegConfig === 'object' && Array.isArray(savedRegConfig.custom_fields)) {
       return {
         registration_types: Array.isArray(savedRegConfig.registration_types) ? savedRegConfig.registration_types : fallbackTypes,
@@ -1783,11 +1784,13 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
             <Divider />
 
-            {/* System fields */}
+            {/* Default fields */}
             <div className="mt-5 mb-5">
-              <p className="text-[12px] font-semibold text-foreground mb-0.5">Campos del sistema</p>
+              <p className="text-[12px] font-semibold text-foreground mb-0.5">Campos por defecto</p>
               <p className="text-[11px] text-muted-foreground mb-2">El toggle indica si el campo es obligatorio u opcional para el jugador</p>
               <div className="flex flex-col gap-1.5">
+                {/* Jugador 1 */}
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mt-1 mb-0.5 px-1">Jugador 1</p>
                 {([
                   { key: 'name',   label: 'Nombre completo', type: 'texto' },
                   { key: 'email',  label: 'Email',           type: 'email' },
@@ -1807,14 +1810,15 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                   </div>
                 ))}
 
+                {/* Jugador 2 — only when pair mode active */}
                 {registrationConfig.registration_types.includes('pair') && (
                   <>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-accent mt-2 mb-0.5 px-1">Campos de la pareja</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-accent mt-2 mb-0.5 px-1">Jugador 2</p>
                     {([
-                      { key: 'partner_name',  label: 'Nombre completo (pareja)', type: 'texto' },
-                      { key: 'partner_email', label: 'Email (pareja)',            type: 'email' },
-                      { key: 'partner_phone', label: 'Teléfono (pareja)',         type: 'texto' },
-                      { key: 'partner_level', label: 'Nivel (pareja)',            type: 'número' },
+                      { key: 'partner_name',  label: 'Nombre completo', type: 'texto' },
+                      { key: 'partner_email', label: 'Email',            type: 'email' },
+                      { key: 'partner_phone', label: 'Teléfono',         type: 'texto' },
+                      { key: 'partner_level', label: 'Nivel',            type: 'número' },
                     ] as { key: keyof SystemFieldRequirements; label: string; type: string }[]).map(f => (
                       <div key={f.key} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--accent-surface)] border border-accent/25 rounded-[7px]">
                         <span className="text-[11px] text-light">🔒</span>
@@ -1831,7 +1835,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                   </>
                 )}
 
-                {/* Conditions — always last */}
+                {/* Conditions — always last inside default fields */}
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mt-2 mb-0.5 px-1">Condiciones</p>
                 <div className="flex items-center gap-2 px-3 py-[9px] bg-[var(--muted)] border border-border rounded-[7px]">
                   <span className="text-[11px] text-light">🔒</span>
                   <span className="flex-1 text-[12px] text-foreground font-medium">Acepto los términos y condiciones</span>
