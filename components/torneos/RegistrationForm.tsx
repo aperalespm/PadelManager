@@ -3,45 +3,123 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { registerForTournament } from '@/lib/actions/registrations'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
-import { Users, User, AlertTriangle } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+// ── Types (mirrors admin config) ─────────────────────────────────────────────
+
+type FieldAppliesTo = 'all' | 'pair' | 'individual'
+type FieldType = 'text' | 'number' | 'select' | 'checkbox'
+
+interface SystemFields {
+  name: boolean; email: boolean; phone: boolean; level: boolean; conditions: boolean
+  partner_name: boolean; partner_email: boolean; partner_phone: boolean; partner_level: boolean
+}
+interface CustomField {
+  id: string; type: FieldType; label: string; required: boolean; options: string[]; applies_to: FieldAppliesTo
+}
+interface RegistrationConfig {
+  registration_types: string[]
+  system_fields: SystemFields
+  custom_fields: CustomField[]
+}
+
+const DEFAULT_CONFIG: RegistrationConfig = {
+  registration_types: ['pair'],
+  system_fields: { name: true, email: true, phone: true, level: false, conditions: true, partner_name: true, partner_email: true, partner_phone: false, partner_level: false },
+  custom_fields: [],
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function FieldLabel({ children, required, optional }: { children: React.ReactNode; required: boolean; optional?: boolean }) {
+  return (
+    <label className="block text-[13px] font-medium text-foreground mb-1.5">
+      {children}
+      {required ? <span className="text-[var(--error)] ml-0.5">*</span> : <span className="text-muted-foreground font-normal ml-1 text-[12px]">(opcional)</span>}
+    </label>
+  )
+}
+
+const inputCls = 'w-full px-3 py-2.5 border border-border rounded-[8px] text-[14px] bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors'
+const numberCls = 'w-24 px-3 py-2.5 border border-border rounded-[8px] text-[14px] bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors'
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 interface RegistrationFormProps {
   tournament: Record<string, unknown>
   userId: string
 }
 
-export function RegistrationForm({ tournament: t, userId }: RegistrationFormProps) {
+export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
   const router = useRouter()
-  const [type, setType] = useState('pair')
-  const [partner, setPartner] = useState('')
+
+  const rawConfig = t.registration_config as RegistrationConfig | null | undefined
+  const config: RegistrationConfig = (rawConfig && Array.isArray(rawConfig.custom_fields))
+    ? { ...DEFAULT_CONFIG, ...rawConfig, system_fields: { ...DEFAULT_CONFIG.system_fields, ...(rawConfig.system_fields ?? {}) } }
+    : DEFAULT_CONFIG
+
+  const hasPair       = config.registration_types.includes('pair')
+  const hasIndividual = config.registration_types.includes('individual')
+  const bothEnabled   = hasPair && hasIndividual
+
+  const [regType, setRegType] = useState<'pair' | 'individual'>(hasPair ? 'pair' : 'individual')
+  const isPair = regType === 'pair'
+
+  // Field values
+  const [fields, setFields]   = useState<Record<string, string>>({})
+  const [checks, setChecks]   = useState<Record<string, boolean>>({})
+  const [conditions, setConditions] = useState(false)
+
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
 
-  const confirmed = (t.confirmed_count as number) ?? 0
+  const sf = config.system_fields
+  const confirmed  = (t.confirmed_count as number) ?? 0
   const maxPlayers = (t.max_players as number) ?? 0
-  const isFull = confirmed >= maxPlayers
+  const isFull     = confirmed >= maxPlayers
+
+  const setField = (key: string, value: string) => setFields(f => ({ ...f, [key]: value }))
+
+  function validate(): string | null {
+    if (sf.name      && !fields.name?.trim())         return 'El nombre es obligatorio'
+    if (sf.email     && !fields.email?.trim())        return 'El email es obligatorio'
+    if (sf.phone     && !fields.phone?.trim())        return 'El teléfono es obligatorio'
+    if (sf.level     && !fields.level?.trim())        return 'El nivel es obligatorio'
+    if (isPair) {
+      if (sf.partner_name  && !fields.partner_name?.trim())  return 'El nombre de tu pareja es obligatorio'
+      if (sf.partner_email && !fields.partner_email?.trim()) return 'El email de tu pareja es obligatorio'
+      if (sf.partner_phone && !fields.partner_phone?.trim()) return 'El teléfono de tu pareja es obligatorio'
+      if (sf.partner_level && !fields.partner_level?.trim()) return 'El nivel de tu pareja es obligatorio'
+    }
+    for (const cf of config.custom_fields) {
+      const active = cf.applies_to === 'all' || (isPair && cf.applies_to === 'pair') || (!isPair && cf.applies_to === 'individual')
+      if (!active) continue
+      if (cf.required && cf.type !== 'checkbox' && !fields[cf.id]?.trim()) return `"${cf.label}" es obligatorio`
+      if (cf.required && cf.type === 'checkbox' && !checks[cf.id])          return `Debes marcar "${cf.label}"`
+    }
+    if (sf.conditions && !conditions) return 'Debes aceptar los términos y condiciones'
+    return null
+  }
 
   async function handleSubmit() {
+    const err = validate()
+    if (err) { setError(err); return }
     setLoading(true)
     setError('')
     try {
+      const form_data = {
+        registration_type: regType,
+        ...fields,
+        ...Object.fromEntries(Object.entries(checks).map(([k, v]) => [k, v ? 'true' : 'false'])),
+        conditions: conditions ? 'true' : 'false',
+      }
       const result = await registerForTournament({
         tournament_id: t.id as string,
-        player2_name: type === 'pair' ? partner : undefined,
+        player2_name: isPair ? (fields.partner_name ?? undefined) : undefined,
+        form_data,
       })
-      if ('error' in result) {
-        setError(result.error as string)
-        return
-      }
+      if ('error' in result) { setError(result.error as string); return }
       setSuccess(true)
       router.push('/mi-torneo')
     } catch {
@@ -53,8 +131,8 @@ export function RegistrationForm({ tournament: t, userId }: RegistrationFormProp
 
   if (success) {
     return (
-      <div className="flex flex-col items-center gap-4 py-8 text-center">
-        <div className="text-4xl">🎉</div>
+      <div className="flex flex-col items-center gap-4 py-12 text-center">
+        <div className="text-5xl">🎉</div>
         <h2 className="text-xl font-bold text-foreground">¡Inscripción enviada!</h2>
         <p className="text-muted-foreground text-sm">El organizador revisará tu inscripción pronto.</p>
       </div>
@@ -62,70 +140,130 @@ export function RegistrationForm({ tournament: t, userId }: RegistrationFormProp
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {isFull && (
-        <Alert className="bg-[var(--warning-surface)] border-[var(--warning)]">
-          <AlertTriangle className="h-4 w-4 text-[var(--warning)]" />
-          <AlertDescription className="text-[var(--warning)]">
-            Este torneo está completo. Puedes apuntarte a la lista de espera.
-          </AlertDescription>
-        </Alert>
+        <div className="bg-[var(--warning-surface,#fff7ed)] border border-[var(--warning)]/40 rounded-[8px] px-4 py-3 text-[13px] text-[var(--warning)]">
+          ⚠️ Este torneo está completo. Puedes apuntarte a la lista de espera.
+        </div>
       )}
 
-      {/* Tournament summary */}
-      <Card className="p-4 bg-[var(--accent-surface)] border-accent/30">
-        <h3 className="font-semibold text-foreground">{t.name as string}</h3>
-        <p className="text-sm text-muted-foreground mt-1">{t.venue_name as string}</p>
-        <div className="flex gap-2 mt-2">
-          <Badge variant="outline" className="text-xs">{t.category as string}</Badge>
-          <Badge variant="outline" className="text-xs">{confirmed}/{maxPlayers} plazas</Badge>
+      {/* Type selector */}
+      {bothEnabled && (
+        <div>
+          <FieldLabel required>¿Cómo te inscribes?</FieldLabel>
+          <div className="flex rounded-[8px] overflow-hidden border border-border text-[13px] font-semibold">
+            <button type="button" onClick={() => setRegType('pair')}
+              className={cn('flex-1 py-2.5 transition-colors', isPair ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}>
+              En pareja
+            </button>
+            <button type="button" onClick={() => setRegType('individual')}
+              className={cn('flex-1 py-2.5 border-l border-border transition-colors', !isPair ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}>
+              Individual
+            </button>
+          </div>
         </div>
-      </Card>
+      )}
 
-      {/* Type selection */}
-      {(t.registration_type as string) !== 'individual' && (
-        <div className="flex flex-col gap-2">
-          <Label className="text-sm font-medium">Tipo de inscripción</Label>
-          <RadioGroup value={type} onValueChange={setType} className="flex gap-4">
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="pair" id="pair" />
-              <Label htmlFor="pair" className="flex items-center gap-1.5 cursor-pointer">
-                <Users className="w-4 h-4" /> Pareja
-              </Label>
+      {/* ── Jugador 1 ─────────────────────────────────────────── */}
+      <section>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-3">Jugador 1 — tus datos</p>
+        <div className="flex flex-col gap-4">
+          <div>
+            <FieldLabel required={sf.name}>Nombre completo</FieldLabel>
+            <input className={inputCls} value={fields.name ?? ''} onChange={e => setField('name', e.target.value)} placeholder="Tu nombre y apellido" />
+          </div>
+          <div>
+            <FieldLabel required={sf.email}>Email</FieldLabel>
+            <input type="email" className={inputCls} value={fields.email ?? ''} onChange={e => setField('email', e.target.value)} placeholder="tu@email.com" />
+          </div>
+          <div>
+            <FieldLabel required={sf.phone}>Teléfono</FieldLabel>
+            <input type="tel" className={inputCls} value={fields.phone ?? ''} onChange={e => setField('phone', e.target.value)} placeholder="+34 600 000 000" />
+          </div>
+          <div>
+            <FieldLabel required={sf.level}>Nivel</FieldLabel>
+            <input type="number" className={numberCls} value={fields.level ?? ''} onChange={e => setField('level', e.target.value)} placeholder="1-10" min="1" max="10" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Jugador 2 ─────────────────────────────────────────── */}
+      {isPair && (
+        <section className="border-t border-border pt-5">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-accent mb-3">Jugador 2 — datos de tu pareja</p>
+          <div className="flex flex-col gap-4">
+            <div>
+              <FieldLabel required={sf.partner_name}>Nombre completo</FieldLabel>
+              <input className={cn(inputCls, 'border-accent/30 focus:border-accent')} value={fields.partner_name ?? ''} onChange={e => setField('partner_name', e.target.value)} placeholder="Nombre y apellido de tu pareja" />
             </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="individual" id="individual" />
-              <Label htmlFor="individual" className="flex items-center gap-1.5 cursor-pointer">
-                <User className="w-4 h-4" /> Individual
-              </Label>
+            <div>
+              <FieldLabel required={sf.partner_email}>Email</FieldLabel>
+              <input type="email" className={cn(inputCls, 'border-accent/30 focus:border-accent')} value={fields.partner_email ?? ''} onChange={e => setField('partner_email', e.target.value)} placeholder="email@pareja.com" />
             </div>
-          </RadioGroup>
-        </div>
+            <div>
+              <FieldLabel required={sf.partner_phone}>Teléfono</FieldLabel>
+              <input type="tel" className={cn(inputCls, 'border-accent/30 focus:border-accent')} value={fields.partner_phone ?? ''} onChange={e => setField('partner_phone', e.target.value)} placeholder="+34 600 000 000" />
+            </div>
+            <div>
+              <FieldLabel required={sf.partner_level}>Nivel</FieldLabel>
+              <input type="number" className={cn(numberCls, 'border-accent/30 focus:border-accent')} value={fields.partner_level ?? ''} onChange={e => setField('partner_level', e.target.value)} placeholder="1-10" min="1" max="10" />
+            </div>
+          </div>
+        </section>
       )}
 
-      {type === 'pair' && (
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="partner">Nombre de tu compañero/a</Label>
-          <Input
-            id="partner"
-            placeholder="Nombre del compañero/a"
-            value={partner}
-            onChange={e => setPartner(e.target.value)}
-          />
+      {/* ── Custom fields ─────────────────────────────────────── */}
+      {config.custom_fields.filter(cf =>
+        cf.applies_to === 'all' || (isPair && cf.applies_to === 'pair') || (!isPair && cf.applies_to === 'individual')
+      ).map(cf => (
+        <div key={cf.id}>
+          {cf.type !== 'checkbox' && <FieldLabel required={cf.required}>{cf.label}</FieldLabel>}
+          {cf.type === 'text' && (
+            <input className={inputCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)} />
+          )}
+          {cf.type === 'number' && (
+            <input type="number" className={numberCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)} />
+          )}
+          {cf.type === 'select' && (
+            <select className={inputCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)}>
+              <option value="">Selecciona…</option>
+              {cf.options.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          )}
+          {cf.type === 'checkbox' && (
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={checks[cf.id] ?? false} onChange={e => setChecks(c => ({ ...c, [cf.id]: e.target.checked }))}
+                className="mt-0.5 w-4 h-4 rounded border-border accent-accent shrink-0" />
+              <span className="text-[13px] text-foreground">
+                {cf.label}
+                {cf.required ? <span className="text-[var(--error)] ml-0.5">*</span> : <span className="text-muted-foreground ml-1 text-[12px]">(opcional)</span>}
+              </span>
+            </label>
+          )}
         </div>
-      )}
+      ))}
 
-      <Separator />
+      {/* ── Conditions ────────────────────────────────────────── */}
+      <div className="border-t border-border pt-4">
+        <p className="text-[12px] text-muted-foreground mb-3 leading-relaxed">
+          Al inscribirte confirmas que conoces las normas del torneo y aceptas las condiciones de participación establecidas por el organizador.
+        </p>
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" checked={conditions} onChange={e => setConditions(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded border-border accent-accent shrink-0" />
+          <span className="text-[13px] text-foreground">
+            Acepto los términos y condiciones
+            {sf.conditions ? <span className="text-[var(--error)] ml-0.5">*</span> : <span className="text-muted-foreground ml-1 text-[12px]">(opcional)</span>}
+          </span>
+        </label>
+      </div>
 
-      {error && <p className="text-sm text-[var(--error)]">{error}</p>}
+      {error && <p className="text-[13px] text-[var(--error)] bg-[var(--error)]/5 border border-[var(--error)]/20 rounded-[6px] px-3 py-2">{error}</p>}
 
-      <Button
-        onClick={handleSubmit}
-        disabled={loading || (type === 'pair' && !partner)}
-        className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
-      >
-        {loading ? 'Procesando...' : isFull ? 'Apuntarse a lista de espera' : 'Confirmar inscripción'}
-      </Button>
+      <button onClick={handleSubmit} disabled={loading}
+        className="w-full py-3 bg-accent text-white rounded-[8px] text-[14px] font-semibold hover:bg-accent/90 transition-colors disabled:opacity-60">
+        {loading ? 'Enviando…' : isFull ? 'Apuntarse a lista de espera' : 'Confirmar inscripción'}
+      </button>
     </div>
   )
 }
