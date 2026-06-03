@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { Download, Search } from 'lucide-react'
+import { AddParticipantModal } from '@/components/admin/AddParticipantModal'
 
 interface RegistrationTableProps {
   tournamentId: string
@@ -29,6 +30,19 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
   const [isPending, startTransition] = useTransition()
   const [filter, setFilter] = useState('Todos')
   const [search, setSearch] = useState('')
+  const [showAddModal, setShowAddModal] = useState(false)
+
+  const registrationTypes: string[] = (() => {
+    try {
+      const config = t.registration_config as { registration_types?: string[] } | null | undefined
+      if (config?.registration_types && Array.isArray(config.registration_types)) {
+        return config.registration_types
+      }
+    } catch {
+      // fallback below
+    }
+    return [(t.registration_type as string) ?? 'pair']
+  })()
 
   const confirmed = initialRegs.filter(r => r.status === 'confirmed').length
   const pending = initialRegs.filter(r => r.status === 'pending').length
@@ -88,13 +102,21 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
             <Download className="w-4 h-4" /> Exportar CSV
           </Button>
           {t.status === 'open' && (
-            <Button
-              onClick={handleCloseAndGenerate}
-              disabled={isPending}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-            >
-              Cerrar inscripciones
-            </Button>
+            <>
+              <Button
+                onClick={() => setShowAddModal(true)}
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                + Añadir participante
+              </Button>
+              <Button
+                onClick={handleCloseAndGenerate}
+                disabled={isPending}
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                Cerrar inscripciones
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -215,6 +237,15 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
           </TableBody>
         </Table>
       </div>
+
+      {showAddModal && (
+        <AddParticipantModal
+          tournamentId={tournamentId}
+          registrationTypes={registrationTypes}
+          onSuccess={() => { setShowAddModal(false); router.refresh() }}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   )
 }

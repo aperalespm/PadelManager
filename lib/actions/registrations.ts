@@ -3,12 +3,13 @@
 import { auth } from '@/lib/auth'
 import { sql } from '@/lib/db'
 import { registerSchema } from '@/lib/validations'
+import { z } from 'zod'
 
 export async function getRegistrations(tournamentId: string) {
 
   const rows = await sql`
     SELECT r.*,
-      p1.display_name AS player1_name, p1.category AS player1_category,
+      COALESCE(p1.display_name, r.player1_name) AS player1_name, p1.category AS player1_category,
       p2.display_name AS player2_display_name, p2.category AS player2_category
     FROM registrations r
     LEFT JOIN user_profiles p1 ON p1.user_id = r.player1_id
@@ -17,6 +18,53 @@ export async function getRegistrations(tournamentId: string) {
     ORDER BY r.created_at ASC
   `
   return { data: rows }
+}
+
+const addParticipantSchema = z.object({
+  tournament_id: z.string().uuid(),
+  name: z.string().min(1),
+  email: z.string().email().optional(),
+  partner_name: z.string().optional(),
+  partner_email: z.string().email().optional(),
+  registration_type: z.enum(['pair', 'individual']).optional(),
+  status: z.enum(['confirmed', 'pending']).optional(),
+})
+
+export async function addParticipantByAdmin(input: unknown) {
+  const { data: session } = await auth.getSession()
+  if (!session?.user) return { error: 'No autorizado' }
+
+  const parsed = addParticipantSchema.safeParse(input)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+
+  const { tournament_id, name, email, partner_name, partner_email, registration_type, status } = parsed.data
+
+  const t = await sql`SELECT organizer_id, max_players, status FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
+  if (!t[0]) return { error: 'Torneo no encontrado' }
+  if (t[0].organizer_id !== session.user.id) return { error: 'No autorizado' }
+
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
+
+  const desiredStatus = status ?? 'confirmed'
+  let finalStatus: string = desiredStatus
+  let waitlistPosition: number | null = null
+
+  if (desiredStatus === 'confirmed') {
+    const confirmed = await sql`SELECT count(*)::int AS n FROM registrations WHERE tournament_id = ${tournament_id} AND status = 'confirmed'`
+    const isFull = confirmed[0].n >= t[0].max_players
+    if (isFull) {
+      finalStatus = 'waitlist'
+      const wl = await sql`SELECT count(*)::int AS n FROM registrations WHERE tournament_id = ${tournament_id} AND status = 'waitlist'`
+      waitlistPosition = (wl[0].n ?? 0) + 1
+    }
+  }
+
+  const rows = await sql`
+    INSERT INTO registrations (tournament_id, player1_id, player1_name, player2_name, registration_type, form_data, status, waitlist_position)
+    VALUES (${tournament_id}, null, ${name}, ${partner_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify({ name, email, partner_name, partner_email })}, ${finalStatus}, ${waitlistPosition})
+    RETURNING *
+  `
+  return { data: rows[0] }
 }
 
 export async function registerForTournament(input: unknown) {
