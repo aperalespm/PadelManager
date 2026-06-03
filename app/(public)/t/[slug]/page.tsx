@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Calendar, MapPin, Users, Share2 } from 'lucide-react'
+import { Calendar, MapPin, Users, Share2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +40,11 @@ export default async function TorneoPage({ params }: { params: Promise<{ slug: s
           <div className="w-full h-full bg-gradient-to-br from-accent/20 to-muted" />
         )}
         <div className="absolute inset-0 bg-black/40" />
+        <Link href="/torneos"
+          className="absolute top-4 left-4 flex items-center justify-center w-9 h-9 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </Link>
+
         <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
           <div>
             <Badge className={cn('text-xs mb-2', cfg.className)}>{cfg.label}</Badge>
