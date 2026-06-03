@@ -1,39 +1,45 @@
 import { getMyActiveMatch } from '@/lib/actions/registrations'
-import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty'
+import { getTournamentById } from '@/lib/actions/tournaments'
+import { getMatchesForTournament } from '@/lib/actions/matches'
 import { BottomNav } from '@/components/layout/BottomNav'
-import { MyMatchCard } from '@/components/torneos/MyMatchCard'
-import Link from 'next/link'
+import { MiTorneoTabs } from '@/components/torneos/MiTorneoTabs'
 
 export const dynamic = 'force-dynamic'
 
 export default async function MiTorneoPage() {
-  const result = await getMyActiveMatch()
-  const match = 'data' in result ? result.data : null
+  const matchResult = await getMyActiveMatch()
+  const match = 'data' in matchResult ? matchResult.data as Record<string, unknown> | null : null
+
+  let tournament: Record<string, unknown> | null = null
+  let allMatches: Record<string, unknown>[] = []
+  let myRegId = ''
+
+  if (match) {
+    const tournamentId = match.tournament_id as string
+    const [t, m] = await Promise.all([
+      getTournamentById(tournamentId),
+      getMatchesForTournament(tournamentId),
+    ])
+    tournament = t as Record<string, unknown> | null
+    allMatches = m as Record<string, unknown>[]
+    myRegId = (match.team1_reg_id ?? match.team2_reg_id) as string ?? ''
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-40 bg-card border-b border-border px-4 py-3">
         <div className="max-w-md mx-auto">
-          {match ? <p className="text-xs text-muted-foreground">{(match as Record<string, unknown>).tournament_name as string}</p> : null}
-          <h1 className="text-lg font-bold text-foreground">Mi partido</h1>
+          {tournament && <p className="text-xs text-muted-foreground">{tournament.name as string}</p>}
+          <h1 className="text-lg font-bold text-foreground">Mi torneo</h1>
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 py-4">
-        {!match ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No estás en ningún torneo activo</EmptyTitle>
-              <EmptyDescription>Inscríbete en un torneo desde la sección Explorar.</EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Link href="/torneos" className="text-sm text-accent underline">Ver torneos</Link>
-            </EmptyContent>
-          </Empty>
-        ) : (
-          <MyMatchCard match={match as Record<string, unknown>} userId="" />
-        )}
-      </main>
+      <MiTorneoTabs
+        match={match}
+        tournament={tournament}
+        allMatches={allMatches}
+        myRegId={myRegId}
+      />
 
       <BottomNav />
     </div>
