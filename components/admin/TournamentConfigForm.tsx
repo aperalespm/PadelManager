@@ -441,12 +441,6 @@ function FormatConfigPanel({ format, state, onChange }: {
 function AdvancedFormatConfig({ format, state, onChange }: {
   format: string; state: FormatState; onChange: (s: FormatState) => void
 }) {
-  const GROUP_PRESETS = [
-    { label: '3-1-0', win: 3, draw: 1, loss: 0 },
-    { label: '2-1-0', win: 2, draw: 1, loss: 0 },
-    { label: '3-0-0', win: 3, draw: 0, loss: 0 },
-  ]
-
   return (
     <div className="mt-4 border border-border rounded-[10px] p-[18px] bg-[var(--muted)]">
       <SectionLabel>Configuración avanzada</SectionLabel>
@@ -482,23 +476,6 @@ function AdvancedFormatConfig({ format, state, onChange }: {
             <div className="h-px bg-border" />
             <div>
               <p className="text-[12px] font-semibold text-foreground mb-3">Puntos de fase de grupos</p>
-              <div className="flex gap-2 mb-4">
-                {GROUP_PRESETS.map(preset => {
-                  const active = state.group_points_win === String(preset.win)
-                    && state.group_points_draw === String(preset.draw)
-                    && state.group_points_loss === String(preset.loss)
-                  return (
-                    <button key={preset.label} type="button"
-                      onClick={() => onChange({ ...state, group_points_win: String(preset.win), group_points_draw: String(preset.draw), group_points_loss: String(preset.loss) })}
-                      className={cn(
-                        'px-3 py-[7px] rounded-[7px] border text-[12px] font-semibold transition-colors',
-                        active ? 'bg-accent border-accent text-white' : 'bg-white border-border text-foreground hover:border-accent/40'
-                      )}>
-                      {preset.label}
-                    </button>
-                  )
-                })}
-              </div>
               <div className="flex flex-col gap-3">
                 {([
                   { label: 'Victoria', key: 'group_points_win' },
