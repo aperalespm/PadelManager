@@ -25,7 +25,7 @@ export async function registerForTournament(input: unknown) {
 
   const parsed = registerSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const { tournament_id, player2_id, player2_name } = parsed.data
+  const { tournament_id, player2_id, player2_name, registration_type, form_data } = parsed.data
 
   const t = await sql`SELECT max_players, registration_type, status FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
@@ -44,9 +44,12 @@ export async function registerForTournament(input: unknown) {
     waitlistPosition = (wl[0].n ?? 0) + 1
   }
 
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS registration_type TEXT DEFAULT 'pair'`
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS form_data JSONB DEFAULT '{}'`
+
   const rows = await sql`
-    INSERT INTO registrations (tournament_id, player1_id, player2_id, player2_name, status, waitlist_position)
-    VALUES (${tournament_id}, ${session.user.id}, ${player2_id ?? null}, ${player2_name ?? null}, ${status}, ${waitlistPosition})
+    INSERT INTO registrations (tournament_id, player1_id, player2_id, player2_name, registration_type, form_data, status, waitlist_position)
+    VALUES (${tournament_id}, ${session.user.id}, ${player2_id ?? null}, ${player2_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(form_data ?? {})}, ${status}, ${waitlistPosition})
     RETURNING *
   `
   return { data: rows[0] }

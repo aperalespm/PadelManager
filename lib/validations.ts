@@ -22,6 +22,8 @@ export const registerSchema = z.object({
   tournament_id: z.string().uuid(),
   player2_id: z.string().optional(),
   player2_name: z.string().optional(),
+  registration_type: z.enum(['pair', 'individual']).optional(),
+  form_data: z.record(z.string(), z.string()).optional(),
 })
 
 export const submitScoreSchema = z.object({
