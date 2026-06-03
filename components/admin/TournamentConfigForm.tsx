@@ -862,9 +862,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
   const [venueName, setVName]  = useState(t.venue_name    as string ?? '')
   const [venueAddr, setVAddr]  = useState(t.venue_address as string ?? '')
-  const [courtCount, setCourts]= useState(String(vd.court_count ?? '6'))
-  const [courtType, setCType]  = useState(vd.court_type as string ?? 'indoor')
-  const [surface, setSurface]  = useState(vd.surface    as string ?? 'cesped')
   const savedServices          = vd.services as Service[] | undefined
   const [serviceList, setServices] = useState<Service[]>(
     Array.isArray(savedServices) ? savedServices : DEFAULT_SERVICES.map(s => ({ ...s, active: false }))
@@ -1070,8 +1067,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
       venue_name: venueName || undefined,
       venue_address: venueAddr || undefined,
       venue_details: {
-        court_count: parseInt(courtCount) || null,
-        court_type: courtType, surface, services: serviceList,
+        services: serviceList,
         categories,
         bracket_size:            parseInt(formatState.bracket_size) || null,
         seeding_method:          formatState.seeding_method,
@@ -1132,21 +1128,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null }
     await saveData()
     setTab(newTab)
-  }
-
-  // ── Court count sync ─────────────────────────────────────────
-  function handleCourtCountChange(v: string) {
-    setCourts(v)
-    const n = parseInt(v) || 0
-    if (n > 0) {
-      setNamedCourts(prev => {
-        if (n > prev.length) {
-          const extras = Array.from({ length: n - prev.length }, (_, i) => ({ name: `Pista ${prev.length + i + 1}`, type: 'indoor' as const }))
-          return [...prev, ...extras]
-        }
-        return prev.slice(0, n)
-      })
-    }
   }
 
   const TABS = [
@@ -1282,22 +1263,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
         <div className="bg-white border border-border rounded-[10px] p-[26px]">
           <FieldRow label="Nombre de la instalación" req><SI value={venueName} onChange={setVName} placeholder="Padelton Leganés" /></FieldRow>
           <FieldRow label="Dirección" req><SI value={venueAddr} onChange={setVAddr} placeholder="Calle de las Pistas 12, Leganés" /></FieldRow>
-          <div className="grid grid-cols-3 gap-4">
-            <FieldRow label="Número de pistas" req><SI type="number" value={courtCount} onChange={handleCourtCountChange} placeholder="6" /></FieldRow>
-            <FieldRow label="Tipo de pista" req>
-              <SS value={courtType} onChange={setCType}>
-                <option value="indoor">Indoor (cristal)</option>
-                <option value="outdoor">Outdoor</option>
-                <option value="mixed">Mixta</option>
-              </SS>
-            </FieldRow>
-            <FieldRow label="Superficie">
-              <SS value={surface} onChange={setSurface}>
-                <option value="cesped">Césped artificial</option>
-                <option value="moqueta">Moqueta</option>
-              </SS>
-            </FieldRow>
-          </div>
           <div>
             <p className="text-[12px] font-semibold text-foreground mb-2.5">Servicios disponibles</p>
             <div className="grid grid-cols-3 gap-2">
@@ -1441,10 +1406,16 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           <div>
             <div className="flex items-center justify-between mb-3">
               <SectionLabel>Pistas del torneo</SectionLabel>
-              <span className="text-[11px] text-muted-foreground">El número de pistas se define en la pestaña Instalación</span>
+              <button
+                type="button"
+                onClick={() => setNamedCourts(cs => [...cs, { name: `Pista ${cs.length + 1}`, type: 'indoor' }])}
+                className="px-3 py-[5px] bg-white border border-border rounded-[7px] text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors"
+              >
+                + Añadir pista
+              </button>
             </div>
             {namedCourts.length === 0 ? (
-              <p className="text-[12px] text-muted-foreground">Configura el número de pistas en la pestaña Instalación.</p>
+              <p className="text-[12px] text-light">Sin pistas configuradas. Añade al menos una pista para programar partidos.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {namedCourts.map((court, i) => (
@@ -1466,6 +1437,11 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                         className={cn('px-2 py-[3px] transition-colors border-l border-border', court.type === 'outdoor' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}
                       >Outdoor</button>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setNamedCourts(cs => cs.filter((_, j) => j !== i))}
+                      className="w-6 h-6 flex items-center justify-center bg-[var(--error)] text-white rounded text-[10px] font-bold shrink-0 hover:opacity-80 transition-opacity"
+                    >✕</button>
                   </div>
                 ))}
               </div>
