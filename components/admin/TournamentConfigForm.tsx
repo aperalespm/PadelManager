@@ -14,7 +14,7 @@ interface TournamentConfigFormProps {
 
 type Service   = { key: string; label: string; active: boolean }
 type Gender    = 'masculino' | 'femenino' | 'mixto'
-type Category  = { name: string; minScore: string; maxScore: string; genders: Gender[]; min_matches: number; teams_advancing: number }
+type Category  = { name: string; minScore: string; maxScore: string; genders: Gender[] }
 type Court     = { name: string; type: 'indoor' | 'outdoor' }
 type TimeBlock = { id: string; courtName: string; from: string; to: string; reason: string }
 type FieldType = 'text' | 'number' | 'select' | 'checkbox'
@@ -1032,10 +1032,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           minScore: (c.minScore as string) || '',
           maxScore: (c.maxScore as string) || '',
           genders: Array.isArray(c.genders) ? (c.genders as Gender[]) : [],
-          min_matches: typeof c.min_matches === 'number' ? c.min_matches : 3,
-          teams_advancing: typeof c.teams_advancing === 'number' ? c.teams_advancing : 2,
         }))
-      : ['PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA'].map(n => ({ name: n, minScore: '', maxScore: '', genders: [] as Gender[], min_matches: 3, teams_advancing: 2 }))
+      : ['PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA'].map(n => ({ name: n, minScore: '', maxScore: '', genders: [] as Gender[] }))
   )
   const [format, setFormat] = useState(t.format as string ?? 'groups_elimination')
 
@@ -1516,21 +1514,13 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                       )
                     })}
                   </div>
-                  <div className="flex items-center gap-1 ml-1 shrink-0">
-                    <span className="text-[10px] text-muted-foreground w-16">Mín. partidos</span>
-                    <Stepper value={cat.min_matches} onChange={v => setCategories(cs => cs.map((c, j) => j === i ? { ...c, min_matches: v } : c))} min={1} max={10} />
-                  </div>
-                  <div className="flex items-center gap-1 ml-1 shrink-0">
-                    <span className="text-[10px] text-muted-foreground w-20">Pasan x grupo</span>
-                    <Stepper value={cat.teams_advancing} onChange={v => setCategories(cs => cs.map((c, j) => j === i ? { ...c, teams_advancing: v } : c))} min={1} max={8} />
-                  </div>
                   <button onClick={() => setCategories(cs => cs.filter((_, j) => j !== i))}
                     className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
                     ✕
                   </button>
                 </div>
               ))}
-              <button onClick={() => setCategories(cs => [...cs, { name: `${cs.length + 1}ª`, minScore: '', maxScore: '', genders: [], min_matches: 3, teams_advancing: 2 }])}
+              <button onClick={() => setCategories(cs => [...cs, { name: `${cs.length + 1}ª`, minScore: '', maxScore: '', genders: [] }])}
                 className="self-start px-3 py-[5px] border border-border rounded-[7px] bg-white text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">
                 + Añadir categoría
               </button>
@@ -1793,11 +1783,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                 const slotDur = matchDur + transMin
                 const slotsPerCourt = Math.floor(totalMin / slotDur)
                 const totalSlots = courts * slotsPerCourt
-                // Use first active category's config for the estimate
-                const firstCat = categories.find(c => c.name.trim())
-                const minM = firstCat?.min_matches ?? 3
-                const adv = firstCat?.teams_advancing ?? 2
-                const gs = minM + 1 // group size
+                const gs = parseInt(formatState.teams_per_group) || 4
+                const adv = parseInt(formatState.teams_advance_per_group) || 2
                 const matchesPerGroup = gs * (gs - 1) / 2
                 const maxGroups = Math.max(1, Math.floor(totalSlots / (matchesPerGroup + adv)))
                 const estimated = maxGroups * gs
