@@ -5,16 +5,33 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const tabs = [
-  { href: '/mi-torneo', label: 'Mi torneo', icon: '🎾' },
-  { href: '/cuadro', label: 'Cuadro', icon: '🏆' },
-  { href: '/perfil', label: 'Perfil', icon: '👤' },
+  {
+    href: '/torneos',
+    label: 'Torneos',
+    icon: '🎾',
+    isActive: (pathname: string) =>
+      pathname.startsWith('/torneos') ||
+      pathname.startsWith('/t/') ||
+      pathname.startsWith('/inscripcion'),
+  },
+  {
+    href: '/mi-torneo',
+    label: 'Mi torneo',
+    icon: '🏆',
+    isActive: (pathname: string) => pathname.startsWith('/mi-torneo'),
+  },
+  {
+    href: '/perfil',
+    label: 'Perfil',
+    icon: '👤',
+    isActive: (pathname: string) => pathname.startsWith('/perfil'),
+  },
 ]
 
 export function BottomNav() {
   const pathname = usePathname()
   const isAdmin = pathname.startsWith('/admin')
   const isAuth = pathname.startsWith('/login') || pathname.startsWith('/register')
-  const isTorneos = pathname.startsWith('/torneos') || pathname.startsWith('/t/') || pathname.startsWith('/inscripcion')
 
   if (isAdmin || isAuth) return null
 
@@ -22,7 +39,7 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
       <div className="flex items-center justify-around h-16 max-w-md mx-auto px-4">
         {tabs.map(tab => {
-          const isActive = pathname.startsWith(tab.href)
+          const isActive = tab.isActive(pathname)
           return (
             <Link
               key={tab.href}
