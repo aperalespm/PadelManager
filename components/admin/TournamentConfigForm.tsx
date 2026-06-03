@@ -28,6 +28,7 @@ interface CustomField {
 }
 
 interface RegistrationConfig {
+  registration_types: string[]
   custom_fields: CustomField[]
 }
 
@@ -770,11 +771,12 @@ function CustomFieldEditor({ field, isFirst, isLast, onUpdate, onRemove, onMove 
 }
 
 function RegistrationPreview({ config }: { config: RegistrationConfig }) {
+  const isPair = config.registration_types.includes('pair')
   return (
     <div className="bg-[var(--muted)] border border-border rounded-[10px] p-5 self-start sticky top-6">
       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-4">Vista previa del jugador</p>
       <div className="bg-white rounded-[10px] border border-border p-4 flex flex-col gap-3 max-h-[640px] overflow-y-auto w-[320px]">
-        {/* Fixed fields */}
+        {/* Fixed fields — player */}
         {[
           { label: 'Nombre completo' },
           { label: 'Email' },
@@ -787,6 +789,20 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
             <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)]" />
           </div>
         ))}
+        {/* Partner fields — only when pair mode */}
+        {isPair && (
+          <div className="flex flex-col gap-3 pt-2 border-t border-border">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-accent">Tu pareja</p>
+            {[{ label: 'Nombre completo (pareja)' }, { label: 'Email (pareja)' }].map(f => (
+              <div key={f.label}>
+                <label className="block text-[11px] font-semibold text-foreground mb-1">
+                  {f.label} <span className="text-[var(--error)]">*</span>
+                </label>
+                <div className="w-full h-8 border border-accent/30 rounded-[6px] bg-[var(--accent-surface)]" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Custom fields */}
         {config.custom_fields.map(field => (
@@ -853,7 +869,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
   const [description, setDesc] = useState(t.description as string ?? '')
   const [maxPlayers, setMax]   = useState(String(t.max_players ?? 32))
   const [priceInfo, setPrice]  = useState(t.price_info as string ?? '')
-  const [regType, setRegType]  = useState(t.registration_type as string ?? 'pair')
   const [startDate, setStart]  = useState(t.start_date ? new Date(t.start_date as string).toISOString().split('T')[0] : '')
   const [endDate, setEnd]      = useState(t.end_date   ? new Date(t.end_date   as string).toISOString().split('T')[0] : '')
   const [cancelDl, setCancel]  = useState(t.cancel_deadline ? new Date(t.cancel_deadline as string).toISOString().split('T')[0] : '')
@@ -984,11 +999,16 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
   // ── Inscripción ───────────────────────────────────────────────
   const savedRegConfig = t.registration_config as RegistrationConfig | null | undefined
-  const [registrationConfig, setRegistrationConfig] = useState<RegistrationConfig>(
-    savedRegConfig && typeof savedRegConfig === 'object' && Array.isArray(savedRegConfig.custom_fields)
-      ? { custom_fields: savedRegConfig.custom_fields }
-      : { custom_fields: [] }
-  )
+  const [registrationConfig, setRegistrationConfig] = useState<RegistrationConfig>(() => {
+    const fallbackTypes = t.registration_type ? [t.registration_type as string] : ['pair']
+    if (savedRegConfig && typeof savedRegConfig === 'object' && Array.isArray(savedRegConfig.custom_fields)) {
+      return {
+        registration_types: Array.isArray(savedRegConfig.registration_types) ? savedRegConfig.registration_types : fallbackTypes,
+        custom_fields: savedRegConfig.custom_fields,
+      }
+    }
+    return { registration_types: fallbackTypes, custom_fields: [] }
+  })
 
   function addCustomField() {
     const newField: CustomField = {
@@ -1062,7 +1082,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
       name, description: description || undefined,
       max_players: parseInt(maxPlayers),
       price_info: priceInfo || undefined,
-      registration_type: regType as 'pair' | 'individual',
+      registration_type: (registrationConfig.registration_types.includes('pair') ? 'pair' : 'individual') as 'pair' | 'individual',
       format: format as 'elimination' | 'round_robin' | 'groups_elimination' | 'american',
       venue_name: venueName || undefined,
       venue_address: venueAddr || undefined,
@@ -1246,12 +1266,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             <FieldRow label="Plazas máximas" req><SI type="number" value={maxPlayers} onChange={setMax} /></FieldRow>
             <FieldRow label="Precio (informativo)"><SI value={priceInfo} onChange={setPrice} placeholder="15 €" /></FieldRow>
           </div>
-          <FieldRow label="Tipo de inscripción" req>
-            <SS value={regType} onChange={setRegType}>
-              <option value="pair">Pareja — inscripción conjunta</option>
-              <option value="individual">Individual — el sistema empareja</option>
-            </SS>
-          </FieldRow>
           <FieldRow label="Fecha límite de cancelación" note="Después de esta fecha solo el organizador puede cancelar">
             <SI type="date" value={cancelDl} onChange={setCancel} />
           </FieldRow>
@@ -1620,15 +1634,46 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           {/* Builder */}
           <div className="bg-white border border-border rounded-[10px] p-[26px]">
 
-            {/* Fixed fields */}
+            {/* Tipo de inscripción */}
             <div className="mb-5">
+              <p className="text-[12px] font-semibold text-foreground mb-1">Tipo de inscripción <span className="text-[var(--error)]">*</span></p>
+              <p className="text-[11px] text-muted-foreground mb-3">Selecciona uno o ambos modos para este torneo</p>
+              <div className="flex gap-2">
+                {[
+                  { value: 'pair',       label: 'Por pareja',  note: 'Los jugadores se inscriben en pareja' },
+                  { value: 'individual', label: 'Individual',  note: 'El sistema empareja automáticamente' },
+                ].map(opt => {
+                  const active = registrationConfig.registration_types.includes(opt.value)
+                  return (
+                    <button key={opt.value} type="button"
+                      onClick={() => setRegistrationConfig(rc => ({
+                        ...rc,
+                        registration_types: active
+                          ? rc.registration_types.filter(v => v !== opt.value)
+                          : [...rc.registration_types, opt.value],
+                      }))}
+                      className={cn(
+                        'flex-1 px-4 py-3 rounded-[9px] border text-left transition-colors',
+                        active ? 'border-accent bg-[var(--accent-surface)]' : 'border-border bg-white hover:border-accent/40'
+                      )}>
+                      <p className={cn('text-[13px] font-semibold', active ? 'text-accent' : 'text-foreground')}>{opt.label}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{opt.note}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <Divider />
+
+            {/* Fixed fields */}
+            <div className="mt-5 mb-5">
               <p className="text-[12px] font-semibold text-foreground mb-2">Campos obligatorios del sistema</p>
               <div className="flex flex-col gap-1.5">
                 {[
                   { label: 'Nombre completo', type: 'texto' },
                   { label: 'Email', type: 'email' },
                   { label: 'Teléfono', type: 'texto' },
-                  { label: 'Acepto los términos y condiciones', type: 'checkbox' },
                 ].map(f => (
                   <div key={f.label} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--muted)] border border-border rounded-[7px]">
                     <span className="text-[11px] text-light">🔒</span>
@@ -1637,6 +1682,28 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                     <span className="text-[10px] text-[var(--error)] font-semibold">Obligatorio</span>
                   </div>
                 ))}
+                {registrationConfig.registration_types.includes('pair') && (
+                  <>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-accent mt-1 mb-0.5 px-1">Campos de la pareja</p>
+                    {[
+                      { label: 'Nombre completo (pareja)', type: 'texto' },
+                      { label: 'Email (pareja)', type: 'email' },
+                    ].map(f => (
+                      <div key={f.label} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--accent-surface)] border border-accent/25 rounded-[7px]">
+                        <span className="text-[11px] text-light">🔒</span>
+                        <span className="flex-1 text-[12px] text-foreground font-medium">{f.label}</span>
+                        <span className="text-[10px] text-accent bg-white border border-accent/25 px-2 py-0.5 rounded-full">{f.type}</span>
+                        <span className="text-[10px] text-[var(--error)] font-semibold">Obligatorio</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+                <div className="flex items-center gap-2 px-3 py-[9px] bg-[var(--muted)] border border-border rounded-[7px]">
+                  <span className="text-[11px] text-light">🔒</span>
+                  <span className="flex-1 text-[12px] text-foreground font-medium">Acepto los términos y condiciones</span>
+                  <span className="text-[10px] text-muted-foreground bg-white border border-border px-2 py-0.5 rounded-full">checkbox</span>
+                  <span className="text-[10px] text-[var(--error)] font-semibold">Obligatorio</span>
+                </div>
               </div>
             </div>
 
