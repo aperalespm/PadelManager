@@ -535,20 +535,19 @@ function CompetitionSchemaPreview({
 
   return (
     <div className="mt-6 border border-border rounded-[10px] bg-white p-5">
-      <div className="flex items-center justify-between mb-4">
-        <SectionLabel>Esquema de la competición</SectionLabel>
-        {activeCats.length > 1 && (
-          <select
-            value={idx}
-            onChange={e => setSelIdx(Number(e.target.value))}
-            className="px-3 py-[7px] border border-border rounded-[7px] text-[12px] font-medium bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
-          >
-            {activeCats.map((c, i) => (
-              <option key={i} value={i}>{c.name}</option>
-            ))}
-          </select>
-        )}
-      </div>
+      <SectionLabel>Esquema de la competición</SectionLabel>
+
+      {activeCats.length > 1 && (
+        <select
+          value={idx}
+          onChange={e => setSelIdx(Number(e.target.value))}
+          className="mt-2 mb-4 px-3 py-[7px] border border-border rounded-[7px] text-[12px] font-medium bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+        >
+          {activeCats.map((c, i) => (
+            <option key={i} value={i}>{c.name}</option>
+          ))}
+        </select>
+      )}
 
       {(() => {
         const numGroups   = Math.max(1, parseInt(formatState.num_groups) || 1)
@@ -561,11 +560,12 @@ function CompetitionSchemaPreview({
           const elimPhases = getGroupsEliminationPhaseNames(numGroups, teamsAdv).slice(1)
           const mc: number[] = []; let n = 1
           for (let i = elimPhases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
+          const cols = Math.ceil(numGroups / 2)
           return (
             <div className="flex items-start gap-5 overflow-x-auto pb-2">
               <div className="shrink-0">
                 <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Fase de grupos</p>
-                <div className="flex gap-1.5">
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 90px)`, gap: '6px' }}>
                   {Array.from({ length: numGroups }, (_, g) => (
                     <GroupCard key={g} num={g + 1} teamCount={teamsPerGrp} advanceCount={teamsAdv} />
                   ))}
@@ -574,7 +574,7 @@ function CompetitionSchemaPreview({
                   Top {teamsAdv} por grupo · {classified} clasificados
                 </p>
               </div>
-              <div className="flex items-center self-center pt-4 shrink-0 text-muted-foreground text-lg">→</div>
+              <div className="flex items-center self-center shrink-0 text-muted-foreground text-lg">→</div>
               <div className="shrink-0">
                 <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Eliminatoria</p>
                 <BracketDiagram phases={elimPhases} matchCounts={mc} />
