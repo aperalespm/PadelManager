@@ -14,7 +14,7 @@ interface TournamentConfigFormProps {
 
 type Service   = { key: string; label: string; active: boolean }
 type Gender    = 'masculino' | 'femenino' | 'mixto'
-type Category  = { name: string; minScore: string; maxScore: string; genders: Gender[]; min_matches: number; teams_advancing: number }
+type Category  = { name: string; minScore: string; maxScore: string; genders: Gender[] }
 type Court     = { name: string; type: 'indoor' | 'outdoor' }
 type TimeBlock = { id: string; courtName: string; from: string; to: string; reason: string }
 type FieldType = 'text' | 'number' | 'select' | 'checkbox'
@@ -1032,10 +1032,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           minScore: (c.minScore as string) || '',
           maxScore: (c.maxScore as string) || '',
           genders: Array.isArray(c.genders) ? (c.genders as Gender[]) : [],
-          min_matches: typeof c.min_matches === 'number' ? c.min_matches : 3,
-          teams_advancing: typeof c.teams_advancing === 'number' ? c.teams_advancing : 2,
         }))
-      : ['PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA'].map(n => ({ name: n, minScore: '', maxScore: '', genders: [] as Gender[], min_matches: 3, teams_advancing: 2 }))
+      : ['PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA'].map(n => ({ name: n, minScore: '', maxScore: '', genders: [] as Gender[] }))
   )
   const [format, setFormat] = useState(t.format as string ?? 'groups_elimination')
 
@@ -1313,6 +1311,29 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
   const expandedCategories = expandCategories(categories)
 
+  // ── Capacity calculation (used in sticky bar + Inscripción tab) ──────────
+  const capacityEstimate = (() => {
+    const courts = namedCourts.length || 1
+    const [sh, sm] = schedStart.split(':').map(Number)
+    const [eh, em] = schedEnd.split(':').map(Number)
+    let totalMin = (eh * 60 + em) - (sh * 60 + sm)
+    if (lunchEnabled) totalMin -= (parseInt(lunchDuration) || 60)
+    const transMin = parseInt(transitionMinutes) || 10
+    const groupPhase = phases.find(p => p.name.toLowerCase().includes('grupo'))
+    const matchDur = parseInt(groupPhase?.match_config.time_limit_minutes ?? '') || 60
+    const slotDur = matchDur + transMin
+    const slotsPerCourt = Math.max(1, Math.floor(totalMin / slotDur))
+    const totalSlots = courts * slotsPerCourt
+    const gs = parseInt(formatState.teams_per_group) || 4
+    const adv = parseInt(formatState.teams_advance_per_group) || 2
+    const matchesPerGroup = gs * (gs - 1) / 2
+    const maxGroups = Math.max(1, Math.floor(totalSlots / (matchesPerGroup + adv)))
+    return maxGroups * gs
+  })()
+
+  const pricePerPair = parseFloat(priceInfo.replace(',', '.').replace(/[^0-9.]/g, '')) || 0
+  const estimatedRevenue = capacityEstimate * pricePerPair
+
   return (
     <div className="flex flex-col gap-5">
 
@@ -1388,6 +1409,26 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             {tb.label}
           </button>
         ))}
+      </div>
+
+      {/* ── Capacity & Revenue sticky bar ────────────────────────── */}
+      <div className="sticky top-4 z-20 flex items-center gap-0 bg-white border border-border rounded-[10px] overflow-hidden shadow-sm">
+        <div className="flex-1 px-5 py-3 border-r border-border">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Capacidad estimada</p>
+          <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-accent">{capacityEstimate} <span className="text-[13px] font-semibold text-muted-foreground">parejas</span></p>
+        </div>
+        <div className="flex-1 px-5 py-3 border-r border-border">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Precio por pareja</p>
+          <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-foreground">
+            {pricePerPair > 0 ? `${pricePerPair}€` : <span className="text-[13px] font-normal text-muted-foreground italic">Sin precio</span>}
+          </p>
+        </div>
+        <div className="flex-1 px-5 py-3 bg-[var(--success-surface)]">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--success)] mb-0.5">Facturación estimada</p>
+          <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-[var(--success)]">
+            {pricePerPair > 0 ? `${estimatedRevenue.toLocaleString('es-ES')}€` : <span className="text-[13px] font-normal italic">—</span>}
+          </p>
+        </div>
       </div>
 
       {/* ── Tab: Datos básicos + Localización ────────────────── */}
@@ -1516,21 +1557,13 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                       )
                     })}
                   </div>
-                  <div className="flex items-center gap-1 ml-1 shrink-0">
-                    <span className="text-[10px] text-muted-foreground w-16">Mín. partidos</span>
-                    <Stepper value={cat.min_matches} onChange={v => setCategories(cs => cs.map((c, j) => j === i ? { ...c, min_matches: v } : c))} min={1} max={10} />
-                  </div>
-                  <div className="flex items-center gap-1 ml-1 shrink-0">
-                    <span className="text-[10px] text-muted-foreground w-20">Pasan x grupo</span>
-                    <Stepper value={cat.teams_advancing} onChange={v => setCategories(cs => cs.map((c, j) => j === i ? { ...c, teams_advancing: v } : c))} min={1} max={8} />
-                  </div>
                   <button onClick={() => setCategories(cs => cs.filter((_, j) => j !== i))}
                     className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
                     ✕
                   </button>
                 </div>
               ))}
-              <button onClick={() => setCategories(cs => [...cs, { name: `${cs.length + 1}ª`, minScore: '', maxScore: '', genders: [], min_matches: 3, teams_advancing: 2 }])}
+              <button onClick={() => setCategories(cs => [...cs, { name: `${cs.length + 1}ª`, minScore: '', maxScore: '', genders: [] }])}
                 className="self-start px-3 py-[5px] border border-border rounded-[7px] bg-white text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">
                 + Añadir categoría
               </button>
@@ -1778,48 +1811,14 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
             {/* Capacidad calculada */}
             <div className="mb-5">
-              <p className="text-[12px] font-semibold text-foreground mb-0.5">Capacidad del torneo</p>
+              <p className="text-[12px] font-semibold text-foreground mb-0.5">Límite de inscripciones</p>
               <p className="text-[11px] text-muted-foreground mb-3">
-                Estimación basada en pistas · horario · duración de partidos. Puedes reducir el límite manualmente.
+                El sistema puede gestionar <strong>{capacityEstimate} parejas</strong> según la configuración actual. Puedes reducir el límite si quieres.
               </p>
-              {(() => {
-                const courts = namedCourts.length || 1
-                const [sh, sm] = schedStart.split(':').map(Number)
-                const [eh, em] = schedEnd.split(':').map(Number)
-                const totalMin = (eh * 60 + em) - (sh * 60 + sm)
-                const transMin = parseInt(transitionMinutes) || 10
-                const groupPhase = phases.find(p => p.name.toLowerCase().includes('grupo'))
-                const matchDur = parseInt(groupPhase?.match_config.time_limit_minutes ?? '') || 60
-                const slotDur = matchDur + transMin
-                const slotsPerCourt = Math.floor(totalMin / slotDur)
-                const totalSlots = courts * slotsPerCourt
-                // Use first active category's config for the estimate
-                const firstCat = categories.find(c => c.name.trim())
-                const minM = firstCat?.min_matches ?? 3
-                const adv = firstCat?.teams_advancing ?? 2
-                const gs = minM + 1 // group size
-                const matchesPerGroup = gs * (gs - 1) / 2
-                const maxGroups = Math.max(1, Math.floor(totalSlots / (matchesPerGroup + adv)))
-                const estimated = maxGroups * gs
-                return (
-                  <div className="flex items-start gap-4 p-4 bg-[var(--accent-surface)] border border-accent/20 rounded-[10px]">
-                    <div className="flex-1">
-                      <p className="text-[13px] font-bold text-accent">{estimated} parejas estimadas</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {courts} pistas · {Math.floor(totalMin / 60)}h disponibles · partidos de {matchDur} min · {transMin} min transición
-                      </p>
-                    </div>
-                    <div className="flex flex-col gap-1 shrink-0">
-                      <label className="text-[10px] font-semibold text-foreground">Límite personalizado</label>
-                      <div className="flex items-center gap-1.5">
-                        <SI type="number" value={maxPlayers} onChange={setMax} className="w-20" min="2" placeholder={String(estimated)} />
-                        <span className="text-[11px] text-muted-foreground">parejas</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">Deja vacío para usar el máximo</p>
-                    </div>
-                  </div>
-                )
-              })()}
+              <div className="flex items-center gap-3">
+                <SI type="number" value={maxPlayers} onChange={setMax} className="w-28" min="2" placeholder={String(capacityEstimate)} />
+                <span className="text-[12px] text-muted-foreground">parejas máximo (dejar vacío = usar capacidad calculada)</span>
+              </div>
             </div>
 
             <Divider />
