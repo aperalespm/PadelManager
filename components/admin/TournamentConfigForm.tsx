@@ -1349,8 +1349,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
   const TABS = [
     { id: 'datos',       label: 'Datos básicos' },
-    { id: 'categorias',  label: 'Categorías' },
     { id: 'horario',     label: 'Pistas y horarios' },
+    { id: 'categorias',  label: 'Categorías' },
     { id: 'puntuacion',  label: 'Fases' },
     { id: 'inscripcion', label: 'Inscripción' },
   ]
