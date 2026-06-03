@@ -538,23 +538,15 @@ function CompetitionSchemaPreview({
       <div className="flex items-center justify-between mb-4">
         <SectionLabel>Esquema de la competición</SectionLabel>
         {activeCats.length > 1 && (
-          <div className="flex gap-1 flex-wrap justify-end">
+          <select
+            value={idx}
+            onChange={e => setSelIdx(Number(e.target.value))}
+            className="px-3 py-[7px] border border-border rounded-[7px] text-[12px] font-medium bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+          >
             {activeCats.map((c, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setSelIdx(i)}
-                className={cn(
-                  'px-3 py-[5px] rounded-[6px] text-[11px] font-semibold transition-colors',
-                  i === idx
-                    ? 'bg-accent text-white'
-                    : 'bg-[var(--muted)] text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {c.name}
-              </button>
+              <option key={i} value={i}>{c.name}</option>
             ))}
-          </div>
+          </select>
         )}
       </div>
 
