@@ -1277,7 +1277,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
   const TABS = [
     { id: 'datos',       label: 'Datos básicos' },
-    { id: 'instalacion', label: 'Instalación' },
     { id: 'categorias',  label: 'Formato' },
     { id: 'horario',     label: 'Pistas y horarios' },
     { id: 'puntuacion',  label: 'Puntuación' },
@@ -1363,7 +1362,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
         ))}
       </div>
 
-      {/* ── Tab: Datos básicos ────────────────────────────────── */}
+      {/* ── Tab: Datos básicos + Localización ────────────────── */}
       {tab === 'datos' && (
         <div className="bg-white border border-border rounded-[10px] p-[26px]">
           <FieldRow label="Nombre del torneo" req>
@@ -1394,12 +1393,9 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           <FieldRow label="Fecha límite de cancelación" note="Después de esta fecha solo el organizador puede cancelar">
             <SI type="date" value={cancelDl} onChange={setCancel} />
           </FieldRow>
-        </div>
-      )}
 
-      {/* ── Tab: Instalación ──────────────────────────────────── */}
-      {tab === 'instalacion' && (
-        <div className="bg-white border border-border rounded-[10px] p-[26px]">
+          <Divider />
+
           <FieldRow label="Nombre de la instalación" req><SI value={venueName} onChange={setVName} placeholder="Padelton Leganés" /></FieldRow>
           <FieldRow label="Dirección" req><SI value={venueAddr} onChange={setVAddr} placeholder="Calle de las Pistas 12, Leganés" /></FieldRow>
           <div>
