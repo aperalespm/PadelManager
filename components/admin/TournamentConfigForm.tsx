@@ -1261,6 +1261,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
         schedule: {
           start_time:  schedStart,
           end_time:    schedEnd,
+          transition_minutes: parseInt(transitionMinutes) || 10,
           lunch_break: lunchEnabled ? { time: lunchTime, duration_minutes: parseInt(lunchDuration) || 60 } : null,
           phase_durations: Object.fromEntries(phases.map(ph => [ph.name, parseInt(phaseDurations[ph.name] ?? '90') || 90])),
           time_blocks:       timeBlocks,
