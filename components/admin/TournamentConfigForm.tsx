@@ -19,12 +19,15 @@ type Court     = { name: string; type: 'indoor' | 'outdoor' }
 type TimeBlock = { id: string; courtName: string; from: string; to: string; reason: string }
 type FieldType = 'text' | 'number' | 'select' | 'checkbox'
 
+type FieldAppliesTo = 'all' | 'pair' | 'individual'
+
 interface CustomField {
   id: string
   type: FieldType
   label: string
   required: boolean
   options: string[]
+  applies_to: FieldAppliesTo
 }
 
 interface RegistrationConfig {
@@ -697,10 +700,11 @@ function CompetitionSchemaPreview({
 
 // ── Registration Tab Components ───────────────────────────────────────────────
 
-function CustomFieldEditor({ field, isFirst, isLast, onUpdate, onRemove, onMove }: {
+function CustomFieldEditor({ field, isFirst, isLast, bothTypesEnabled, onUpdate, onRemove, onMove }: {
   field: CustomField
   isFirst: boolean
   isLast: boolean
+  bothTypesEnabled: boolean
   onUpdate: (updates: Partial<CustomField>) => void
   onRemove: () => void
   onMove: (dir: -1 | 1) => void
@@ -725,6 +729,16 @@ function CustomFieldEditor({ field, isFirst, isLast, onUpdate, onRemove, onMove 
           <Toggle on={field.required} onToggle={() => onUpdate({ required: !field.required })} />
           <span className="text-[11px] text-muted-foreground">Oblig.</span>
         </label>
+        {bothTypesEnabled && (
+          <div className="flex shrink-0 rounded-[5px] overflow-hidden border border-border text-[10px] font-semibold">
+            {([['all', 'Ambos'], ['pair', 'Pareja'], ['individual', 'Indiv.']] as [FieldAppliesTo, string][]).map(([v, lbl]) => (
+              <button key={v} type="button" onClick={() => onUpdate({ applies_to: v })}
+                className={cn('px-2 py-[3px] transition-colors border-l border-border first:border-l-0',
+                  field.applies_to === v ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground'
+                )}>{lbl}</button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-0.5 shrink-0">
           <button type="button" onClick={() => onMove(-1)} disabled={isFirst}
             className="w-6 h-6 flex items-center justify-center border border-border rounded text-[10px] text-muted-foreground hover:border-accent hover:text-accent disabled:opacity-30 transition-colors">↑</button>
@@ -771,11 +785,38 @@ function CustomFieldEditor({ field, isFirst, isLast, onUpdate, onRemove, onMove 
 }
 
 function RegistrationPreview({ config }: { config: RegistrationConfig }) {
-  const isPair = config.registration_types.includes('pair')
+  const hasPair       = config.registration_types.includes('pair')
+  const hasIndividual = config.registration_types.includes('individual')
+  const bothEnabled   = hasPair && hasIndividual
+  const [previewMode, setPreviewMode] = useState<'pair' | 'individual'>(hasPair ? 'pair' : 'individual')
+
+  const activePair = bothEnabled ? previewMode === 'pair' : hasPair
+  const visibleFields = config.custom_fields.filter(f =>
+    f.applies_to === 'all' ||
+    (activePair && f.applies_to === 'pair') ||
+    (!activePair && f.applies_to === 'individual')
+  )
+
   return (
     <div className="bg-[var(--muted)] border border-border rounded-[10px] p-5 self-start sticky top-6">
       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-4">Vista previa del jugador</p>
       <div className="bg-white rounded-[10px] border border-border p-4 flex flex-col gap-3 max-h-[640px] overflow-y-auto w-[320px]">
+        {/* Mode selector — only when both types enabled */}
+        {bothEnabled && (
+          <div>
+            <label className="block text-[11px] font-semibold text-foreground mb-1">¿Cómo te inscribes? <span className="text-[var(--error)]">*</span></label>
+            <div className="flex rounded-[6px] overflow-hidden border border-border text-[12px] font-semibold">
+              <button type="button" onClick={() => setPreviewMode('pair')}
+                className={cn('flex-1 py-[6px] transition-colors', previewMode === 'pair' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}>
+                En pareja
+              </button>
+              <button type="button" onClick={() => setPreviewMode('individual')}
+                className={cn('flex-1 py-[6px] transition-colors border-l border-border', previewMode === 'individual' ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}>
+                Individual
+              </button>
+            </div>
+          </div>
+        )}
         {/* Fixed fields — player */}
         {[
           { label: 'Nombre completo' },
@@ -789,8 +830,8 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
             <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)]" />
           </div>
         ))}
-        {/* Partner fields — only when pair mode */}
-        {isPair && (
+        {/* Partner fields — only in pair mode */}
+        {activePair && (
           <div className="flex flex-col gap-3 pt-2 border-t border-border">
             <p className="text-[10px] font-bold uppercase tracking-wide text-accent">Tu pareja</p>
             {[{ label: 'Nombre completo (pareja)' }, { label: 'Email (pareja)' }].map(f => (
@@ -804,8 +845,8 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
           </div>
         )}
 
-        {/* Custom fields */}
-        {config.custom_fields.map(field => (
+        {/* Custom fields — filtered by mode */}
+        {visibleFields.map(field => (
           <div key={field.id}>
             <label className="block text-[11px] font-semibold text-foreground mb-1">
               {field.label || <span className="italic text-light">Campo sin nombre</span>}
@@ -1004,7 +1045,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     if (savedRegConfig && typeof savedRegConfig === 'object' && Array.isArray(savedRegConfig.custom_fields)) {
       return {
         registration_types: Array.isArray(savedRegConfig.registration_types) ? savedRegConfig.registration_types : fallbackTypes,
-        custom_fields: savedRegConfig.custom_fields,
+        custom_fields: savedRegConfig.custom_fields.map(f => ({ ...f, applies_to: (f.applies_to ?? 'all') as FieldAppliesTo })),
       }
     }
     return { registration_types: fallbackTypes, custom_fields: [] }
@@ -1017,6 +1058,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
       label: '',
       required: false,
       options: [],
+      applies_to: 'all',
     }
     setRegistrationConfig(rc => ({ ...rc, custom_fields: [...rc.custom_fields, newField] }))
   }
@@ -1636,32 +1678,25 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
             {/* Tipo de inscripción */}
             <div className="mb-5">
-              <p className="text-[12px] font-semibold text-foreground mb-1">Tipo de inscripción <span className="text-[var(--error)]">*</span></p>
-              <p className="text-[11px] text-muted-foreground mb-3">Selecciona uno o ambos modos para este torneo</p>
-              <div className="flex gap-2">
-                {[
-                  { value: 'pair',       label: 'Por pareja',  note: 'Los jugadores se inscriben en pareja' },
-                  { value: 'individual', label: 'Individual',  note: 'El sistema empareja automáticamente' },
-                ].map(opt => {
-                  const active = registrationConfig.registration_types.includes(opt.value)
-                  return (
-                    <button key={opt.value} type="button"
-                      onClick={() => setRegistrationConfig(rc => ({
-                        ...rc,
-                        registration_types: active
-                          ? rc.registration_types.filter(v => v !== opt.value)
-                          : [...rc.registration_types, opt.value],
-                      }))}
-                      className={cn(
-                        'flex-1 px-4 py-3 rounded-[9px] border text-left transition-colors',
-                        active ? 'border-accent bg-[var(--accent-surface)]' : 'border-border bg-white hover:border-accent/40'
-                      )}>
-                      <p className={cn('text-[13px] font-semibold', active ? 'text-accent' : 'text-foreground')}>{opt.label}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{opt.note}</p>
-                    </button>
-                  )
-                })}
-              </div>
+              <FieldRow label="Tipo de inscripción" req>
+                <SS
+                  value={
+                    registrationConfig.registration_types.includes('pair') && registrationConfig.registration_types.includes('individual')
+                      ? 'both'
+                      : registrationConfig.registration_types.includes('pair')
+                      ? 'pair'
+                      : 'individual'
+                  }
+                  onChange={v => setRegistrationConfig(rc => ({
+                    ...rc,
+                    registration_types: v === 'both' ? ['pair', 'individual'] : [v],
+                  }))}
+                >
+                  <option value="pair">Por pareja — los jugadores se inscriben en pareja</option>
+                  <option value="individual">Individual — el sistema empareja automáticamente</option>
+                  <option value="both">Por pareja e individual — el jugador elige al inscribirse</option>
+                </SS>
+              </FieldRow>
             </div>
 
             <Divider />
@@ -1733,6 +1768,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                     field={field}
                     isFirst={i === 0}
                     isLast={i === registrationConfig.custom_fields.length - 1}
+                    bothTypesEnabled={registrationConfig.registration_types.includes('pair') && registrationConfig.registration_types.includes('individual')}
                     onUpdate={updates => updateCustomField(field.id, updates)}
                     onRemove={() => removeCustomField(field.id)}
                     onMove={dir => moveCustomField(field.id, dir)}
