@@ -292,6 +292,27 @@ function Divider() {
   return <div className="h-px bg-border my-1" />
 }
 
+function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[12px] border border-border p-6 max-w-sm w-full shadow-xl">
+        <p className="text-[14px] font-semibold text-foreground mb-1">¿Eliminar elemento?</p>
+        <p className="text-[13px] text-muted-foreground mb-5">{message}</p>
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onCancel}
+            className="px-4 py-2 border border-border rounded-[7px] text-[13px] font-medium text-foreground hover:bg-[var(--muted)] transition-colors">
+            Cancelar
+          </button>
+          <button type="button" onClick={onConfirm}
+            className="px-4 py-2 bg-[var(--error)] text-white rounded-[7px] text-[13px] font-semibold hover:opacity-90 transition-opacity">
+            Sí, eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Tiebreak Criteria List ────────────────────────────────────────────────────
 
 function TiebreakCriteriaList({ criteria, onChange }: { criteria: string[]; onChange: (c: string[]) => void }) {
@@ -789,6 +810,7 @@ function CustomFieldEditor({ field, isFirst, isLast, bothTypesEnabled, onUpdate,
   onMove: (dir: -1 | 1) => void
 }) {
   const [newOpt, setNewOpt] = useState('')
+  const [pendingOptDel, setPendingOptDel] = useState<number | null>(null)
 
   return (
     <div className="border border-border rounded-[9px] p-3 bg-white flex flex-col gap-2">
@@ -834,11 +856,18 @@ function CustomFieldEditor({ field, isFirst, isLast, bothTypesEnabled, onUpdate,
             {field.options.length === 0 && (
               <p className="text-[11px] text-light italic">Sin opciones todavía</p>
             )}
+            {pendingOptDel !== null && (
+              <ConfirmModal
+                message={`Se eliminará la opción "${field.options[pendingOptDel]}".`}
+                onConfirm={() => { onUpdate({ options: field.options.filter((_, j) => j !== pendingOptDel) }); setPendingOptDel(null) }}
+                onCancel={() => setPendingOptDel(null)}
+              />
+            )}
             {field.options.map((opt, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <span className="flex-1 text-[11px] text-foreground bg-[var(--muted)] px-2 py-[4px] rounded">{opt}</span>
                 <button type="button"
-                  onClick={() => onUpdate({ options: field.options.filter((_, j) => j !== i) })}
+                  onClick={() => setPendingOptDel(i)}
                   className="text-[10px] text-[var(--error)] hover:opacity-80 font-bold leading-none">✕</button>
               </div>
             ))}
@@ -1022,6 +1051,23 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     Array.isArray(savedServices) ? savedServices : DEFAULT_SERVICES.map(s => ({ ...s, active: false }))
   )
   const [newSvcName, setNewSvc] = useState('')
+
+  // ── Confirm delete ────────────────────────────────────────────
+  type PendingDelete =
+    | { kind: 'category'; idx: number; label: string }
+    | { kind: 'court'; idx: number; label: string }
+    | { kind: 'timeblock'; id: string; label: string }
+    | { kind: 'customfield'; fieldId: string; label: string }
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
+
+  function executePendingDelete() {
+    if (!pendingDelete) return
+    if (pendingDelete.kind === 'category')   setCategories(cs => cs.filter((_, j) => j !== pendingDelete.idx))
+    if (pendingDelete.kind === 'court')      setNamedCourts(cs => cs.filter((_, j) => j !== pendingDelete.idx))
+    if (pendingDelete.kind === 'timeblock')  setTimeBlocks(b => b.filter(bl => bl.id !== pendingDelete.id))
+    if (pendingDelete.kind === 'customfield') removeCustomField(pendingDelete.fieldId)
+    setPendingDelete(null)
+  }
 
   // ── Categorías y formato ──────────────────────────────────────
   const savedCats = vd.categories as Array<Record<string, unknown>> | undefined
@@ -1303,8 +1349,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
   const TABS = [
     { id: 'datos',       label: 'Datos básicos' },
-    { id: 'categorias',  label: 'Categorías' },
     { id: 'horario',     label: 'Pistas y horarios' },
+    { id: 'categorias',  label: 'Categorías' },
     { id: 'puntuacion',  label: 'Fases' },
     { id: 'inscripcion', label: 'Inscripción' },
   ]
@@ -1317,18 +1363,25 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     const [sh, sm] = schedStart.split(':').map(Number)
     const [eh, em] = schedEnd.split(':').map(Number)
     let totalMin = (eh * 60 + em) - (sh * 60 + sm)
+    if (isNaN(totalMin) || totalMin <= 0) totalMin = 600
     if (lunchEnabled) totalMin -= (parseInt(lunchDuration) || 60)
     const transMin = parseInt(transitionMinutes) || 10
+    // Use per-phase time limit if set, fall back to global format setting, then 60 min
     const groupPhase = phases.find(p => p.name.toLowerCase().includes('grupo'))
-    const matchDur = parseInt(groupPhase?.match_config.time_limit_minutes ?? '') || 60
+    const matchDur = parseInt(groupPhase?.match_config.time_limit_minutes ?? '')
+                   || parseInt(formatState.time_limit_minutes)
+                   || 60
     const slotDur = matchDur + transMin
     const slotsPerCourt = Math.max(1, Math.floor(totalMin / slotDur))
     const totalSlots = courts * slotsPerCourt
-    const gs = parseInt(formatState.teams_per_group) || 4
-    const adv = parseInt(formatState.teams_advance_per_group) || 2
+    const gs = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+    const adv = Math.max(1, parseInt(formatState.teams_advance_per_group) || 2)
     const matchesPerGroup = gs * (gs - 1) / 2
-    const maxGroups = Math.max(1, Math.floor(totalSlots / (matchesPerGroup + adv)))
-    return maxGroups * gs
+    const physicalMaxGroups = Math.max(1, Math.floor(totalSlots / (matchesPerGroup + adv)))
+    const physicalMax = physicalMaxGroups * gs
+    // Cap by target groups × group size when organizer has set a group count
+    const targetGroups = parseInt(formatState.num_groups) || 0
+    return targetGroups > 0 ? Math.min(physicalMax, targetGroups * gs) : physicalMax
   })()
 
   const pricePerPair = parseFloat(priceInfo.replace(',', '.').replace(/[^0-9.]/g, '')) || 0
@@ -1557,7 +1610,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                       )
                     })}
                   </div>
-                  <button onClick={() => setCategories(cs => cs.filter((_, j) => j !== i))}
+                  <button onClick={() => setPendingDelete({ kind: 'category', idx: i, label: cat.name || `Categoría ${i + 1}` })}
                     className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
                     ✕
                   </button>
@@ -1640,7 +1693,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                     </div>
                     <button
                       type="button"
-                      onClick={() => setNamedCourts(cs => cs.filter((_, j) => j !== i))}
+                      onClick={() => setPendingDelete({ kind: 'court', idx: i, label: court.name || `Pista ${i + 1}` })}
                       className="w-6 h-6 flex items-center justify-center bg-[var(--error)] text-white rounded text-[10px] font-bold shrink-0 hover:opacity-80 transition-opacity"
                     >✕</button>
                   </div>
@@ -1711,7 +1764,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                     onChange={e => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, reason: e.target.value } : bl))}
                     placeholder="Motivo (opcional)"
                     className="flex-1 min-w-0 px-3 py-[7px] border border-border rounded-[7px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
-                  <button onClick={() => setTimeBlocks(b => b.filter(bl => bl.id !== block.id))}
+                  <button onClick={() => setPendingDelete({ kind: 'timeblock', id: block.id, label: `${block.courtName} ${block.from}–${block.to}` })}
                     className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">✕</button>
                 </div>
               ))}
@@ -1943,7 +1996,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
                     isLast={i === registrationConfig.custom_fields.length - 1}
                     bothTypesEnabled={registrationConfig.registration_types.includes('pair') && registrationConfig.registration_types.includes('individual')}
                     onUpdate={updates => updateCustomField(field.id, updates)}
-                    onRemove={() => removeCustomField(field.id)}
+                    onRemove={() => setPendingDelete({ kind: 'customfield', fieldId: field.id, label: field.label || 'Campo sin nombre' })}
                     onMove={dir => moveCustomField(field.id, dir)}
                   />
                 ))}
@@ -1977,6 +2030,14 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           {/* Preview */}
           <RegistrationPreview config={registrationConfig} />
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmModal
+          message={`Se eliminará "${pendingDelete.label}" de forma permanente.`}
+          onConfirm={executePendingDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   )
