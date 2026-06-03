@@ -465,7 +465,7 @@ function AdvancedFormatConfig({ format, state, onChange }: {
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[12px] font-semibold text-foreground">Modo Turbo</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Partidos rápidos: 1 set express hasta 6 juegos sin ventaja</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Si un partido termina antes del tiempo reservado, el siguiente puede empezar en esa pista sin esperar</p>
           </div>
           <Toggle on={state.turbo_mode} onToggle={() => onChange({ ...state, turbo_mode: !state.turbo_mode })} />
         </div>
