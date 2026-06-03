@@ -1363,18 +1363,25 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     const [sh, sm] = schedStart.split(':').map(Number)
     const [eh, em] = schedEnd.split(':').map(Number)
     let totalMin = (eh * 60 + em) - (sh * 60 + sm)
+    if (isNaN(totalMin) || totalMin <= 0) totalMin = 600
     if (lunchEnabled) totalMin -= (parseInt(lunchDuration) || 60)
     const transMin = parseInt(transitionMinutes) || 10
+    // Use per-phase time limit if set, fall back to global format setting, then 60 min
     const groupPhase = phases.find(p => p.name.toLowerCase().includes('grupo'))
-    const matchDur = parseInt(groupPhase?.match_config.time_limit_minutes ?? '') || 60
+    const matchDur = parseInt(groupPhase?.match_config.time_limit_minutes ?? '')
+                   || parseInt(formatState.time_limit_minutes)
+                   || 60
     const slotDur = matchDur + transMin
     const slotsPerCourt = Math.max(1, Math.floor(totalMin / slotDur))
     const totalSlots = courts * slotsPerCourt
-    const gs = parseInt(formatState.teams_per_group) || 4
-    const adv = parseInt(formatState.teams_advance_per_group) || 2
+    const gs = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+    const adv = Math.max(1, parseInt(formatState.teams_advance_per_group) || 2)
     const matchesPerGroup = gs * (gs - 1) / 2
-    const maxGroups = Math.max(1, Math.floor(totalSlots / (matchesPerGroup + adv)))
-    return maxGroups * gs
+    const physicalMaxGroups = Math.max(1, Math.floor(totalSlots / (matchesPerGroup + adv)))
+    const physicalMax = physicalMaxGroups * gs
+    // Cap by target groups × group size when organizer has set a group count
+    const targetGroups = parseInt(formatState.num_groups) || 0
+    return targetGroups > 0 ? Math.min(physicalMax, targetGroups * gs) : physicalMax
   })()
 
   const pricePerPair = parseFloat(priceInfo.replace(',', '.').replace(/[^0-9.]/g, '')) || 0
