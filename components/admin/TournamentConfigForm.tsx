@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef } from 'react'
+import { useState, useTransition, useRef, useEffect, Children, isValidElement } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament, updateRegistrationConfig } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
@@ -30,9 +30,27 @@ interface CustomField {
   applies_to: FieldAppliesTo
 }
 
+interface SystemFieldRequirements {
+  name: boolean
+  email: boolean
+  phone: boolean
+  level: boolean
+  conditions: boolean
+  partner_name: boolean
+  partner_email: boolean
+  partner_phone: boolean
+  partner_level: boolean
+}
+
 interface RegistrationConfig {
   registration_types: string[]
+  system_fields: SystemFieldRequirements
   custom_fields: CustomField[]
+}
+
+const DEFAULT_SYSTEM_FIELDS: SystemFieldRequirements = {
+  name: true, email: true, phone: true, level: false, conditions: true,
+  partner_name: true, partner_email: true, partner_phone: false, partner_level: false,
 }
 
 interface MatchConfig {
@@ -177,11 +195,47 @@ function SI({ value, onChange, type, placeholder, className, min, max }: {
 }
 
 function SS({ value, onChange, children }: { value: string; onChange: (v: string) => void; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const options = Children.toArray(children)
+    .filter((c): c is React.ReactElement<{ value: string; children: React.ReactNode }> =>
+      isValidElement(c) && (c as React.ReactElement).type === 'option')
+    .map(c => ({ value: c.props.value, label: c.props.children }))
+
+  const selected = options.find(o => o.value === value)
+
   return (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      className="w-full px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
-      {children}
-    </select>
+    <div ref={ref} className="relative w-full">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
+        <span className="truncate text-left">{String(selected?.label ?? value)}</span>
+        <span className={cn('text-[14px] text-muted-foreground ml-2 shrink-0 transition-transform duration-150', open && 'rotate-180')}>▾</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-border rounded-[7px] z-50 shadow-lg overflow-hidden">
+          {options.map(opt => (
+            <button key={opt.value} type="button"
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={cn(
+                'w-full text-left px-3 py-[9px] text-[13px] transition-colors hover:bg-[var(--muted)]',
+                opt.value === value ? 'text-accent font-semibold bg-[var(--accent-surface)]' : 'text-foreground'
+              )}>
+              {String(opt.label)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -631,12 +685,13 @@ function CompetitionSchemaPreview({
       <SectionLabel>Esquema de la competición</SectionLabel>
 
       {activeCats.length > 1 && (
-        <select value={idx} onChange={e => setSelIdx(Number(e.target.value))}
-          className="mt-2 mb-4 px-3 py-[7px] border border-border rounded-[7px] text-[12px] font-medium bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
-          {activeCats.map((c, i) => (
-            <option key={i} value={i}>{c.name}</option>
-          ))}
-        </select>
+        <div className="mt-2 mb-4">
+          <SS value={String(idx)} onChange={v => setSelIdx(Number(v))}>
+            {activeCats.map((c, i) => (
+              <option key={i} value={String(i)}>{c.name}</option>
+            ))}
+          </SS>
+        </div>
       )}
 
       {(() => {
@@ -714,14 +769,14 @@ function CustomFieldEditor({ field, isFirst, isLast, bothTypesEnabled, onUpdate,
   return (
     <div className="border border-border rounded-[9px] p-3 bg-white flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <select value={field.type}
-          onChange={e => onUpdate({ type: e.target.value as FieldType, options: [] })}
-          className="w-28 shrink-0 px-2 py-[6px] border border-border rounded-[6px] text-[11px] bg-white text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent">
-          <option value="text">Texto</option>
-          <option value="number">Número</option>
-          <option value="select">Selección</option>
-          <option value="checkbox">Checkbox</option>
-        </select>
+        <div className="w-28 shrink-0">
+          <SS value={field.type} onChange={v => onUpdate({ type: v as FieldType, options: [] })}>
+            <option value="text">Texto</option>
+            <option value="number">Número</option>
+            <option value="select">Selección</option>
+            <option value="checkbox">Checkbox</option>
+          </SS>
+        </div>
         <input value={field.label} onChange={e => onUpdate({ label: e.target.value })}
           placeholder="Etiqueta del campo"
           className="flex-1 min-w-0 px-2 py-[6px] border border-border rounded-[6px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
@@ -817,29 +872,45 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
             </div>
           </div>
         )}
-        {/* Fixed fields — player */}
-        {[
-          { label: 'Nombre completo' },
-          { label: 'Email' },
-          { label: 'Teléfono' },
-        ].map(f => (
-          <div key={f.label}>
+        {/* System fields — player */}
+        {(
+          [
+            { key: 'name',  label: 'Nombre completo', kind: 'text' },
+            { key: 'email', label: 'Email',            kind: 'text' },
+            { key: 'phone', label: 'Teléfono',         kind: 'text' },
+            { key: 'level', label: 'Nivel',            kind: 'number' },
+          ] as const
+        ).map(({ key, label, kind }) => (
+          <div key={key}>
             <label className="block text-[11px] font-semibold text-foreground mb-1">
-              {f.label} <span className="text-[var(--error)]">*</span>
+              {label}
+              {config.system_fields[key]
+                ? <span className="text-[var(--error)] ml-0.5">*</span>
+                : <span className="text-muted-foreground font-normal ml-1">(opcional)</span>}
             </label>
-            <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)]" />
+            <div className={cn('h-8 border border-border rounded-[6px] bg-[var(--muted)]', kind === 'number' ? 'w-24' : 'w-full')} />
           </div>
         ))}
         {/* Partner fields — only in pair mode */}
         {activePair && (
           <div className="flex flex-col gap-3 pt-2 border-t border-border">
             <p className="text-[10px] font-bold uppercase tracking-wide text-accent">Tu pareja</p>
-            {[{ label: 'Nombre completo (pareja)' }, { label: 'Email (pareja)' }].map(f => (
-              <div key={f.label}>
+            {(
+              [
+                { key: 'partner_name',  label: 'Nombre completo (pareja)', kind: 'text' },
+                { key: 'partner_email', label: 'Email (pareja)',            kind: 'text' },
+                { key: 'partner_phone', label: 'Teléfono (pareja)',         kind: 'text' },
+                { key: 'partner_level', label: 'Nivel (pareja)',            kind: 'number' },
+              ] as const
+            ).map(({ key, label, kind }) => (
+              <div key={key}>
                 <label className="block text-[11px] font-semibold text-foreground mb-1">
-                  {f.label} <span className="text-[var(--error)]">*</span>
+                  {label}
+                  {config.system_fields[key]
+                    ? <span className="text-[var(--error)] ml-0.5">*</span>
+                    : <span className="text-muted-foreground font-normal ml-1">(opcional)</span>}
                 </label>
-                <div className="w-full h-8 border border-accent/30 rounded-[6px] bg-[var(--accent-surface)]" />
+                <div className={cn('h-8 border border-accent/30 rounded-[6px] bg-[var(--accent-surface)]', kind === 'number' ? 'w-24' : 'w-full')} />
               </div>
             ))}
           </div>
@@ -875,7 +946,10 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
           <div className="flex items-start gap-2">
             <div className="w-4 h-4 border-2 border-border rounded bg-white shrink-0 mt-0.5" />
             <span className="text-[11px] font-medium text-foreground">
-              Acepto los términos y condiciones <span className="text-[var(--error)]">*</span>
+              Acepto los términos y condiciones
+              {config.system_fields.conditions
+                ? <span className="text-[var(--error)] ml-0.5">*</span>
+                : <span className="text-muted-foreground font-normal ml-1">(opcional)</span>}
             </span>
           </div>
         </div>
@@ -1045,11 +1119,19 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
     if (savedRegConfig && typeof savedRegConfig === 'object' && Array.isArray(savedRegConfig.custom_fields)) {
       return {
         registration_types: Array.isArray(savedRegConfig.registration_types) ? savedRegConfig.registration_types : fallbackTypes,
+        system_fields: { ...DEFAULT_SYSTEM_FIELDS, ...(savedRegConfig.system_fields ?? {}) },
         custom_fields: savedRegConfig.custom_fields.map(f => ({ ...f, applies_to: (f.applies_to ?? 'all') as FieldAppliesTo })),
       }
     }
-    return { registration_types: fallbackTypes, custom_fields: [] }
+    return { registration_types: fallbackTypes, system_fields: { ...DEFAULT_SYSTEM_FIELDS }, custom_fields: [] }
   })
+
+  function toggleSystemField(key: keyof SystemFieldRequirements) {
+    setRegistrationConfig(rc => ({
+      ...rc,
+      system_fields: { ...rc.system_fields, [key]: !rc.system_fields[key] },
+    }))
+  }
 
   function addCustomField() {
     const newField: CustomField = {
@@ -1565,12 +1647,12 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
             <div className="flex flex-col gap-2">
               {timeBlocks.map(block => (
                 <div key={block.id} className="flex items-center gap-2 flex-wrap">
-                  <select value={block.courtName}
-                    onChange={e => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, courtName: e.target.value } : bl))}
-                    className="px-2 py-[7px] border border-border rounded-[7px] text-[12px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
-                    {namedCourts.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                    {namedCourts.length === 0 && <option value="">Sin pistas</option>}
-                  </select>
+                  <div className="w-32 shrink-0">
+                    <SS value={block.courtName} onChange={v => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, courtName: v } : bl))}>
+                      {namedCourts.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                      {namedCourts.length === 0 && <option value="">Sin pistas</option>}
+                    </SS>
+                  </div>
                   <SI type="time" value={block.from} onChange={v => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, from: v } : bl))} className="w-28" />
                   <span className="text-[12px] text-muted-foreground">—</span>
                   <SI type="time" value={block.to} onChange={v => setTimeBlocks(b => b.map(bl => bl.id === block.id ? { ...bl, to: v } : bl))} className="w-28" />
@@ -1701,43 +1783,65 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
             <Divider />
 
-            {/* Fixed fields */}
+            {/* System fields */}
             <div className="mt-5 mb-5">
-              <p className="text-[12px] font-semibold text-foreground mb-2">Campos obligatorios del sistema</p>
+              <p className="text-[12px] font-semibold text-foreground mb-0.5">Campos del sistema</p>
+              <p className="text-[11px] text-muted-foreground mb-2">El toggle indica si el campo es obligatorio u opcional para el jugador</p>
               <div className="flex flex-col gap-1.5">
-                {[
-                  { label: 'Nombre completo', type: 'texto' },
-                  { label: 'Email', type: 'email' },
-                  { label: 'Teléfono', type: 'texto' },
-                ].map(f => (
-                  <div key={f.label} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--muted)] border border-border rounded-[7px]">
+                {([
+                  { key: 'name',   label: 'Nombre completo', type: 'texto' },
+                  { key: 'email',  label: 'Email',           type: 'email' },
+                  { key: 'phone',  label: 'Teléfono',        type: 'texto' },
+                  { key: 'level',  label: 'Nivel',           type: 'número' },
+                ] as { key: keyof SystemFieldRequirements; label: string; type: string }[]).map(f => (
+                  <div key={f.key} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--muted)] border border-border rounded-[7px]">
                     <span className="text-[11px] text-light">🔒</span>
                     <span className="flex-1 text-[12px] text-foreground font-medium">{f.label}</span>
                     <span className="text-[10px] text-muted-foreground bg-white border border-border px-2 py-0.5 rounded-full">{f.type}</span>
-                    <span className="text-[10px] text-[var(--error)] font-semibold">Obligatorio</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                      <Toggle on={registrationConfig.system_fields[f.key]} onToggle={() => toggleSystemField(f.key)} />
+                      <span className={cn('text-[11px] font-semibold w-16', registrationConfig.system_fields[f.key] ? 'text-[var(--error)]' : 'text-muted-foreground')}>
+                        {registrationConfig.system_fields[f.key] ? 'Obligatorio' : 'Opcional'}
+                      </span>
+                    </label>
                   </div>
                 ))}
+
                 {registrationConfig.registration_types.includes('pair') && (
                   <>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-accent mt-1 mb-0.5 px-1">Campos de la pareja</p>
-                    {[
-                      { label: 'Nombre completo (pareja)', type: 'texto' },
-                      { label: 'Email (pareja)', type: 'email' },
-                    ].map(f => (
-                      <div key={f.label} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--accent-surface)] border border-accent/25 rounded-[7px]">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-accent mt-2 mb-0.5 px-1">Campos de la pareja</p>
+                    {([
+                      { key: 'partner_name',  label: 'Nombre completo (pareja)', type: 'texto' },
+                      { key: 'partner_email', label: 'Email (pareja)',            type: 'email' },
+                      { key: 'partner_phone', label: 'Teléfono (pareja)',         type: 'texto' },
+                      { key: 'partner_level', label: 'Nivel (pareja)',            type: 'número' },
+                    ] as { key: keyof SystemFieldRequirements; label: string; type: string }[]).map(f => (
+                      <div key={f.key} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--accent-surface)] border border-accent/25 rounded-[7px]">
                         <span className="text-[11px] text-light">🔒</span>
                         <span className="flex-1 text-[12px] text-foreground font-medium">{f.label}</span>
                         <span className="text-[10px] text-accent bg-white border border-accent/25 px-2 py-0.5 rounded-full">{f.type}</span>
-                        <span className="text-[10px] text-[var(--error)] font-semibold">Obligatorio</span>
+                        <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                          <Toggle on={registrationConfig.system_fields[f.key]} onToggle={() => toggleSystemField(f.key)} />
+                          <span className={cn('text-[11px] font-semibold w-16', registrationConfig.system_fields[f.key] ? 'text-[var(--error)]' : 'text-muted-foreground')}>
+                            {registrationConfig.system_fields[f.key] ? 'Obligatorio' : 'Opcional'}
+                          </span>
+                        </label>
                       </div>
                     ))}
                   </>
                 )}
+
+                {/* Conditions — always last */}
                 <div className="flex items-center gap-2 px-3 py-[9px] bg-[var(--muted)] border border-border rounded-[7px]">
                   <span className="text-[11px] text-light">🔒</span>
                   <span className="flex-1 text-[12px] text-foreground font-medium">Acepto los términos y condiciones</span>
                   <span className="text-[10px] text-muted-foreground bg-white border border-border px-2 py-0.5 rounded-full">checkbox</span>
-                  <span className="text-[10px] text-[var(--error)] font-semibold">Obligatorio</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <Toggle on={registrationConfig.system_fields.conditions} onToggle={() => toggleSystemField('conditions')} />
+                    <span className={cn('text-[11px] font-semibold w-16', registrationConfig.system_fields.conditions ? 'text-[var(--error)]' : 'text-muted-foreground')}>
+                      {registrationConfig.system_fields.conditions ? 'Obligatorio' : 'Opcional'}
+                    </span>
+                  </label>
                 </div>
               </div>
             </div>
