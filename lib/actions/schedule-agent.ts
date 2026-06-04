@@ -43,7 +43,9 @@ Genera el calendario óptimo que:
 Añade slots vacíos al inicio de las categorías con menos partidos para que todas las finales acaben a la misma hora.
 
 ## GESTIÓN DE RESTRICCIONES IMPOSIBLES
-Si algo es matemáticamente imposible: explica el motivo con números, ofrece el mejor compromiso y genera ese calendario.
+Si algo es matemáticamente imposible con los parámetros del administrador:
+explica el motivo con números, propón alternativas (ampliar horario, añadir pistas, segundo día),
+pero **nunca cambies el formato (grupos, parejas, fases) sin que el administrador lo pida explícitamente**.
 
 ## AJUSTES ITERATIVOS
 Cuando el organizador pida un ajuste: aplica solo el cambio solicitado, recalcula los afectados, devuelve el calendario completo actualizado con un resumen de 2-3 líneas.
@@ -135,7 +137,7 @@ async function ensureTables() {
   await sql`
     INSERT INTO ai_prompts (name, content)
     VALUES ('schedule_agent', ${SCHEDULE_AGENT_PROMPT_FALLBACK})
-    ON CONFLICT (name) DO NOTHING
+    ON CONFLICT (name) DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()
   `
 }
 
@@ -163,10 +165,33 @@ export async function chatWithScheduleAgent(input: unknown): Promise<
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const basePrompt = await getSchedulePrompt()
 
-  // Append tournament context to system prompt so it's always available
-  // regardless of where we are in the conversation.
+  // Build system prompt with config always injected.
+  // Format params are extracted and listed as hard constraints BEFORE the full
+  // JSON so the model can't miss them or quietly override them.
+  const fmt = (tournamentConfig.format as Record<string, unknown>) ?? {}
+  const constraintBlock = `
+## ⚠️ RESTRICCIONES ABSOLUTAS — NUNCA LAS CAMBIES SIN PERMISO EXPLÍCITO
+
+El administrador ha configurado estos valores y son **fijos e inmutables**:
+
+| Parámetro | Valor obligatorio |
+|---|---|
+| Grupos por categoría | **${fmt.numGroups ?? '?'}** |
+| Parejas por grupo | **${fmt.teamsPerGroup ?? '?'}** |
+| Parejas que pasan por grupo | **${fmt.teamsAdvancePerGroup ?? '?'}** |
+| Partidos mínimos por pareja | **${fmt.minMatchesPerTeam ?? '?'}** |
+
+**PROHIBIDO** reducir grupos, eliminar parejas, saltarse fases o cambiar el formato para "caber" en el horario.
+
+Si el horario es matemáticamente imposible con estos parámetros:
+1. Explica el problema con números (tiempo necesario vs disponible).
+2. Propón soluciones al administrador: ampliar horario, añadir pistas, segundo día.
+3. Genera el calendario lo más completo posible **sin alterar el formato**.
+4. Solo cambia el formato si el administrador lo pide de forma explícita.`
+
   const systemPrompt = [
     basePrompt,
+    constraintBlock,
     '---',
     '## CONFIGURACIÓN DEL TORNEO ACTUAL',
     '```json',

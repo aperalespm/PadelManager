@@ -38,6 +38,30 @@ export function ScheduleAgent({
   const [showHistory, setShowHistory] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const historyRef = useRef<HTMLDivElement>(null)
+  const [chatWidth, setChatWidth] = useState(400)
+  const dragging = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartW = useRef(0)
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!dragging.current) return
+      const delta = e.clientX - dragStartX.current
+      setChatWidth(Math.max(260, Math.min(680, dragStartW.current + delta)))
+    }
+    function onUp() {
+      if (!dragging.current) return
+      dragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [])
 
   // Each assistant message that carries a schedule is a saved version.
   const versions = useMemo(() =>
@@ -158,17 +182,12 @@ export function ScheduleAgent({
   return (
     <div
       className="bg-background"
-      style={{
-        height: '100vh',
-        display: 'grid',
-        gridTemplateColumns: 'minmax(320px, 2fr) 3fr',
-        overflow: 'hidden',
-      }}
+      style={{ height: '100vh', display: 'flex', overflow: 'hidden' }}
     >
       {/* ── Left column: chat ─────────────────────────────────────── */}
       <div
-        className="border-r border-border overflow-hidden"
-        style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minWidth: 0 }}
+        className="border-r border-border overflow-hidden shrink-0"
+        style={{ width: chatWidth, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)' }}
       >
         {/* Header — auto */}
         <div className="px-5 py-4 border-b border-border">
@@ -206,9 +225,24 @@ export function ScheduleAgent({
         )}
       </div>
 
+      {/* ── Drag handle ───────────────────────────────────────────── */}
+      <div
+        className="group relative flex items-center justify-center shrink-0 cursor-col-resize"
+        style={{ width: 8 }}
+        onMouseDown={e => {
+          dragging.current = true
+          dragStartX.current = e.clientX
+          dragStartW.current = chatWidth
+          document.body.style.cursor = 'col-resize'
+          document.body.style.userSelect = 'none'
+        }}
+      >
+        <div className="w-px h-full bg-border group-hover:bg-accent/40 transition-colors" />
+      </div>
+
       {/* ── Right column: calendar ─────────────────────────────────── */}
       <div
-        className="overflow-hidden"
+        className="overflow-hidden flex-1"
         style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minWidth: 0 }}
       >
         {/* Actions bar — auto */}
