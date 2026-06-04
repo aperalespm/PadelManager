@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect, Children, isValidElement } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament, updateRegistrationConfig } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
 
@@ -1399,7 +1400,18 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isSaving && <span className="text-[12px] text-muted-foreground">Guardando...</span>}
-          {!isSaving && saveStatus === 'saved' && <span className="text-[12px] text-[var(--success)] font-medium">✓ Guardado</span>}
+          {!isSaving && saveStatus === 'saved' && (
+            <div className="flex items-center gap-2 text-[12px]">
+              <span className="text-[var(--success)] font-medium">✓ Guardado</span>
+              <Link
+                href={`/admin/${t.id as string}/horario?regenerate=1`}
+                className="flex items-center gap-1 text-accent font-semibold hover:underline"
+              >
+                <span>↺</span>
+                Actualizar horario
+              </Link>
+            </div>
+          )}
 
           {/* Delete */}
           {confirmDelete ? (

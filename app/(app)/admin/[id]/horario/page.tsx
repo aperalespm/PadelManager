@@ -5,8 +5,9 @@ import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function HorarioPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function HorarioPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params
+  const sp = await searchParams
   const tournament = await getTournamentById(id)
   if (!tournament) notFound()
 
@@ -71,6 +72,7 @@ export default async function HorarioPage({ params }: { params: Promise<{ id: st
       initialSchedule={initialData.schedule}
       initialIsPublished={initialData.isPublished}
       initialVersion={initialData.version}
+      autoRegenerate={sp.regenerate === '1'}
     />
   )
 }

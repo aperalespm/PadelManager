@@ -17,6 +17,7 @@ interface ScheduleAgentProps {
   initialSchedule: TournamentSchedule | null
   initialIsPublished: boolean
   initialVersion: number
+  autoRegenerate?: boolean
 }
 
 export function ScheduleAgent({
@@ -27,6 +28,7 @@ export function ScheduleAgent({
   initialSchedule,
   initialIsPublished,
   initialVersion,
+  autoRegenerate,
 }: ScheduleAgentProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [schedule, setSchedule] = useState<TournamentSchedule | null>(initialSchedule)
@@ -43,6 +45,12 @@ export function ScheduleAgent({
   const dragging = useRef(false)
   const dragStartX = useRef(0)
   const dragStartW = useRef(0)
+
+  useEffect(() => {
+    if (!autoRegenerate) return
+    sendMessage('Regenera el horario completo con la configuración actualizada del torneo, respetando los ajustes de sesiones anteriores si los hay.')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally empty — run once on mount
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -192,9 +200,21 @@ export function ScheduleAgent({
         style={{ width: chatWidth, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)' }}
       >
         {/* Header — auto */}
-        <div className="px-5 py-4 border-b border-border">
-          <h1 className="text-[18px] font-extrabold text-foreground tracking-[-0.4px]">Horario</h1>
-          <p className="text-[12px] text-muted-foreground mt-0.5">{tournamentName}</p>
+        <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-[18px] font-extrabold text-foreground tracking-[-0.4px]">Horario</h1>
+            <p className="text-[12px] text-muted-foreground mt-0.5">{tournamentName}</p>
+          </div>
+          {schedule && (
+            <button
+              onClick={() => sendMessage('Regenera el horario completo con la configuración actual del torneo, respetando los ajustes de sesiones anteriores si los hay.')}
+              disabled={isGenerating}
+              className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground border border-border px-2 py-1 rounded-[6px] hover:bg-muted transition-colors disabled:opacity-40 shrink-0 mt-0.5"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Regenerar
+            </button>
+          )}
         </div>
 
         {/* Body — minmax(0,1fr), bounded → scrolls */}
