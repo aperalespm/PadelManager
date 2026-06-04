@@ -139,6 +139,34 @@ export async function getMyRegistrations() {
   return { data: rows }
 }
 
+export async function getConfirmedPairsForSchedule(tournamentId: string): Promise<
+  Array<{ category: string; pairs: string[] }>
+> {
+  const rows = await sql`
+    SELECT
+      COALESCE(up1.display_name, r.player1_name, '?') AS p1_name,
+      COALESCE(up2.display_name, r.player2_name)       AS p2_name,
+      COALESCE((r.form_data->>'category')::text, '')   AS category
+    FROM registrations r
+    LEFT JOIN user_profiles up1 ON up1.user_id = r.player1_id
+    LEFT JOIN user_profiles up2 ON up2.user_id = r.player2_id
+    WHERE r.tournament_id = ${tournamentId} AND r.status = 'confirmed'
+    ORDER BY r.created_at ASC
+  `
+
+  const byCat: Record<string, string[]> = {}
+  for (const r of rows) {
+    const cat = (r.category as string) || ''
+    if (!byCat[cat]) byCat[cat] = []
+    const name = r.p2_name
+      ? `${r.p1_name} / ${r.p2_name}`
+      : (r.p1_name as string)
+    byCat[cat].push(name)
+  }
+
+  return Object.entries(byCat).map(([category, pairs]) => ({ category, pairs }))
+}
+
 export async function getMyActiveMatch() {
   const { data: session } = await auth.getSession()
   if (!session?.user) return { data: null }

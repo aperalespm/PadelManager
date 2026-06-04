@@ -1,5 +1,6 @@
 import { getTournamentById } from '@/lib/actions/tournaments'
 import { loadScheduleChat } from '@/lib/actions/schedule-agent'
+import { getConfirmedPairsForSchedule } from '@/lib/actions/registrations'
 import { ScheduleAgent } from '@/components/schedule/ScheduleAgent'
 import { notFound } from 'next/navigation'
 
@@ -11,7 +12,10 @@ export default async function HorarioPage({ params, searchParams }: { params: Pr
   const tournament = await getTournamentById(id)
   if (!tournament) notFound()
 
-  const chatResult = await loadScheduleChat(id)
+  const [chatResult, registeredPairs] = await Promise.all([
+    loadScheduleChat(id),
+    getConfirmedPairsForSchedule(id),
+  ])
   const initialData = 'data' in chatResult ? chatResult.data : { messages: [], schedule: null, version: 0, isPublished: false }
 
   const vd = (tournament.venue_details as Record<string, unknown>) ?? {}
@@ -61,6 +65,7 @@ export default async function HorarioPage({ params, searchParams }: { params: Pr
       minMatchesPerTeam: (vd.min_matches_per_team as number) ?? 3,
     },
     tournamentStatus: (tournament.status as string) ?? 'draft',
+    registeredPairs: registeredPairs.length > 0 ? registeredPairs : undefined,
   }
 
   return (

@@ -9,14 +9,25 @@ const DEMO_ORGANIZER_ID = '00000000-0000-0000-0000-000000000000'
 
 const SCHEDULE_AGENT_PROMPT_FALLBACK = `Eres un agente especializado en organizar calendarios de torneos de pádel.
 
-## TUS TRES MODOS DE OPERACIÓN
+## TUS MODOS DE OPERACIÓN
 
 ### MODO PLANIFICACIÓN
-Genera el calendario óptimo que:
+Genera el calendario óptimo con parejas genéricas (P1, P2…) que:
 - Maximice el número de parejas dentro de los límites de tiempo y pistas
 - Respete los máximos y mínimos de grupos y parejas por grupo
 - Garantice el mínimo de partidos por pareja
 - Sincronice las finales de todas las categorías aproximadamente a la misma hora
+
+### MODO ASIGNACIÓN
+Se activa automáticamente cuando el sistema te proporciona parejas inscritas reales.
+
+En este modo **debes**:
+1. **Asignar parejas a grupos**: distribuye las parejas de cada categoría en los grupos configurados (numGroups × teamsPerGroup). Si el número de parejas no encaja exactamente, reparte de forma equitativa — nunca cambies numGroups ni teamsPerGroup.
+2. **Usar nombres reales** en pair1, pair2 y matchLabel. Jamás uses P1/P2/Pareja A genéricos.
+3. **Format de matchLabel**: "[CategoríaNombre] Gr.[Letra] — [NombreP1] vs [NombreP2]"
+4. **Sin categoría asignada**: si las parejas no llevan categoría, distribúyelas equitativamente entre las categorías configuradas del torneo, o pregunta al organizador cómo hacerlo.
+5. **Generar el cuadro de grupos**: cada grupo tiene todas sus parejas y genera los partidos round-robin de la fase de grupos.
+6. El calendario con nombres reales sustituye a cualquier horario previo con nombres genéricos.
 
 ## REGLAS QUE NUNCA PUEDES ROMPER
 
@@ -189,9 +200,26 @@ Si el horario es matemáticamente imposible con estos parámetros:
 3. Genera el calendario lo más completo posible **sin alterar el formato**.
 4. Solo cambia el formato si el administrador lo pide de forma explícita.`
 
+  // Registered pairs block — activates MODO ASIGNACIÓN when present
+  const registeredPairs = tournamentConfig.registeredPairs as Array<{ category: string; pairs: string[] }> | undefined
+  const totalPairs = registeredPairs?.reduce((s, c) => s + c.pairs.length, 0) ?? 0
+  const pairsBlock = registeredPairs && totalPairs > 0
+    ? [
+        `\n## PAREJAS INSCRITAS — MODO ASIGNACIÓN ACTIVO (${totalPairs} parejas confirmadas)`,
+        'Usa estos nombres reales. No uses P1/P2 ni nombres genéricos.\n',
+        ...registeredPairs
+          .filter(c => c.pairs.length > 0)
+          .map(c =>
+            `### ${c.category || 'Sin categoría asignada'} (${c.pairs.length} parejas)\n` +
+            c.pairs.map(p => `- ${p}`).join('\n')
+          ),
+      ].join('\n')
+    : ''
+
   const systemPrompt = [
     basePrompt,
     constraintBlock,
+    pairsBlock,
     '---',
     '## CONFIGURACIÓN DEL TORNEO ACTUAL',
     '```json',

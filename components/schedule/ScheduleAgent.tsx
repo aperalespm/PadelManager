@@ -48,7 +48,10 @@ export function ScheduleAgent({
 
   useEffect(() => {
     if (!autoRegenerate) return
-    sendMessage('Regenera el horario completo con la configuración actualizada del torneo, respetando los ajustes de sesiones anteriores si los hay.')
+    const msg = hasPairs
+      ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
+      : 'Regenera el horario completo con la configuración actualizada del torneo, respetando los ajustes de sesiones anteriores si los hay.'
+    sendMessage(msg)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally empty — run once on mount
 
@@ -107,6 +110,10 @@ export function ScheduleAgent({
     setVersion(ver => ver + 1)
     setIsSaving(false)
   }
+
+  const hasPairs = Array.isArray(tournamentConfig.registeredPairs) &&
+    (tournamentConfig.registeredPairs as Array<{ pairs: string[] }>).some(c => c.pairs.length > 0)
+  const mode = hasPairs ? 'Asignación' : 'Planificación'
 
   const hasHistory = messages.length > 0
 
@@ -207,7 +214,11 @@ export function ScheduleAgent({
           </div>
           {schedule && (
             <button
-              onClick={() => sendMessage('Regenera el horario completo con la configuración actual del torneo, respetando los ajustes de sesiones anteriores si los hay.')}
+              onClick={() => sendMessage(
+                hasPairs
+                  ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
+                  : 'Regenera el horario completo con la configuración actual del torneo, respetando los ajustes de sesiones anteriores si los hay.'
+              )}
               disabled={isGenerating}
               className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground border border-border px-2 py-1 rounded-[6px] hover:bg-muted transition-colors disabled:opacity-40 shrink-0 mt-0.5"
             >
@@ -226,11 +237,17 @@ export function ScheduleAgent({
             <div>
               <p className="text-[15px] font-semibold text-foreground">Sin horario generado</p>
               <p className="text-[13px] text-muted-foreground mt-1 max-w-[240px]">
-                El agente generará el horario óptimo basándose en la configuración del torneo.
+                {hasPairs
+                  ? 'El agente asignará las parejas inscritas a los grupos y generará el horario completo con sus nombres.'
+                  : 'El agente generará el horario óptimo basándose en la configuración del torneo.'}
               </p>
             </div>
             <button
-              onClick={() => sendMessage('Genera el horario óptimo para este torneo.')}
+              onClick={() => sendMessage(
+                hasPairs
+                  ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
+                  : 'Genera el horario óptimo para este torneo.'
+              )}
               disabled={isGenerating}
               className="px-5 py-2.5 bg-accent text-white text-[13px] font-semibold rounded-[8px] hover:bg-accent/90 disabled:opacity-50 transition-opacity"
             >
@@ -239,7 +256,7 @@ export function ScheduleAgent({
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Generando...
                 </span>
-              ) : 'Generar horario'}
+              ) : hasPairs ? 'Generar horario con parejas reales' : 'Generar horario'}
             </button>
           </div>
         ) : (
@@ -271,7 +288,7 @@ export function ScheduleAgent({
         <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
-              Planificación
+              {mode}
             </span>
             {version > 0 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
             {versions.length > 1 && (
@@ -409,7 +426,7 @@ export function ScheduleAgent({
         <div className="px-6 py-3 border-b border-border flex items-center justify-between gap-4 bg-background">
           <div className="flex items-center gap-3">
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
-              Planificación
+              {mode}
             </span>
             {version > 0 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
             <span className="text-[13px] font-semibold text-foreground">{tournamentName}</span>
