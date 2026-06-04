@@ -114,7 +114,7 @@ export function ScheduleAgent({
   }
 
   return (
-    <div className="flex h-[calc(100vh-0px)] overflow-hidden">
+    <div className="flex h-screen overflow-hidden">
       {/* Left panel — Chat (40%) */}
       <div className="w-[40%] min-w-[320px] border-r border-border flex flex-col">
         {/* Header */}
