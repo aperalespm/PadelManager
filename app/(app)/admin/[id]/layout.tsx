@@ -24,7 +24,7 @@ export default async function AdminTournamentLayout({
   const activeMatchCount = (matches as Record<string, unknown>[]).filter(m => m.status === 'active' || m.status === 'disputed').length
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <AdminSidebar
         tournamentId={id}
         tournamentName={t.name as string}
@@ -33,7 +33,7 @@ export default async function AdminTournamentLayout({
         activeMatchCount={activeMatchCount}
         tournaments={allTournaments}
       />
-      <main className="flex-1 bg-background min-h-screen">
+      <main className="flex-1 bg-background overflow-y-auto">
         {children}
       </main>
     </div>
