@@ -1357,31 +1357,32 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
 
   const expandedCategories = expandCategories(categories)
 
-  // ── Capacity calculation (used in sticky bar + Inscripción tab) ──────────
-  const capacityEstimate = (() => {
+  // ── Capacity = brackets × groups × teams/group ───────────────────────────
+  // Courts/schedule are a scheduling constraint, not a registration cap.
+  const numBrackets = expandedCategories.length || 1
+  const _gs  = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+  const _tg  = Math.max(1, parseInt(formatState.num_groups) || 3)
+  const capacityEstimate = _tg * _gs * numBrackets
+
+  // ── Court feasibility (warn if schedule can't fit all group matches) ──────
+  const courtWarning = (() => {
     const courts = namedCourts.length || 1
     const [sh, sm] = schedStart.split(':').map(Number)
     const [eh, em] = schedEnd.split(':').map(Number)
     let totalMin = (eh * 60 + em) - (sh * 60 + sm)
-    if (isNaN(totalMin) || totalMin <= 0) totalMin = 600
+    if (isNaN(totalMin) || totalMin <= 0) return false
     if (lunchEnabled) totalMin -= (parseInt(lunchDuration) || 60)
     const transMin = parseInt(transitionMinutes) || 10
-    // Use per-phase time limit if set, fall back to global format setting, then 60 min
     const groupPhase = phases.find(p => p.name.toLowerCase().includes('grupo'))
     const matchDur = parseInt(groupPhase?.match_config.time_limit_minutes ?? '')
                    || parseInt(formatState.time_limit_minutes)
                    || 60
-    const slotDur = matchDur + transMin
-    const slotsPerCourt = Math.max(1, Math.floor(totalMin / slotDur))
-    const totalSlots = courts * slotsPerCourt
-    const gs = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+    const availableSlots = courts * Math.floor(totalMin / (matchDur + transMin))
     const adv = Math.max(1, parseInt(formatState.teams_advance_per_group) || 2)
-    const matchesPerGroup = gs * (gs - 1) / 2
-    const physicalMaxGroups = Math.max(1, Math.floor(totalSlots / (matchesPerGroup + adv)))
-    const physicalMax = physicalMaxGroups * gs
-    // Cap by target groups × group size when organizer has set a group count
-    const targetGroups = parseInt(formatState.num_groups) || 0
-    return targetGroups > 0 ? Math.min(physicalMax, targetGroups * gs) : physicalMax
+    const matchesPerGroup = _gs * (_gs - 1) / 2
+    // Group phase matches + rough knockout estimate per bracket
+    const neededSlots = numBrackets * (_tg * matchesPerGroup + (_tg * adv - 1))
+    return neededSlots > availableSlots
   })()
 
   const pricePerPair = parseFloat(priceInfo.replace(',', '.').replace(/[^0-9.]/g, '')) || 0
@@ -1465,23 +1466,36 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
       </div>
 
       {/* ── Capacity & Revenue sticky bar ────────────────────────── */}
-      <div className="sticky top-4 z-20 flex items-center gap-0 bg-white border border-border rounded-[10px] overflow-hidden shadow-sm">
-        <div className="flex-1 px-5 py-3 border-r border-border">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Capacidad estimada</p>
-          <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-accent">{capacityEstimate} <span className="text-[13px] font-semibold text-muted-foreground">parejas</span></p>
+      <div className="sticky top-4 z-20 flex flex-col bg-white border border-border rounded-[10px] overflow-hidden shadow-sm">
+        <div className="flex items-center">
+          <div className="flex-1 px-5 py-3 border-r border-border">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Capacidad estimada</p>
+            <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-accent">
+              {capacityEstimate} <span className="text-[13px] font-semibold text-muted-foreground">parejas</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">{numBrackets} bracket{numBrackets !== 1 ? 's' : ''} · {_tg} grupos · {_gs} eq/grupo</p>
+          </div>
+          <div className="flex-1 px-5 py-3 border-r border-border">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Precio por pareja</p>
+            <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-foreground">
+              {pricePerPair > 0 ? `${pricePerPair}€` : <span className="text-[13px] font-normal text-muted-foreground italic">Sin precio</span>}
+            </p>
+          </div>
+          <div className="flex-1 px-5 py-3 bg-[var(--success-surface)]">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--success)] mb-0.5">Facturación estimada</p>
+            <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-[var(--success)]">
+              {pricePerPair > 0 ? `${estimatedRevenue.toLocaleString('es-ES')}€` : <span className="text-[13px] font-normal italic">—</span>}
+            </p>
+          </div>
         </div>
-        <div className="flex-1 px-5 py-3 border-r border-border">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Precio por pareja</p>
-          <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-foreground">
-            {pricePerPair > 0 ? `${pricePerPair}€` : <span className="text-[13px] font-normal text-muted-foreground italic">Sin precio</span>}
-          </p>
-        </div>
-        <div className="flex-1 px-5 py-3 bg-[var(--success-surface)]">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--success)] mb-0.5">Facturación estimada</p>
-          <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-[var(--success)]">
-            {pricePerPair > 0 ? `${estimatedRevenue.toLocaleString('es-ES')}€` : <span className="text-[13px] font-normal italic">—</span>}
-          </p>
-        </div>
+        {courtWarning && (
+          <div className="border-t border-[var(--amber)]/30 bg-[var(--amber-surface)] px-5 py-2 flex items-center gap-2">
+            <span className="text-[var(--amber)] text-[13px]">⚠</span>
+            <p className="text-[12px] text-[var(--amber)] font-medium">
+              Las pistas pueden quedar ajustadas para este aforo. Revisa el número de pistas y el horario en la pestaña anterior.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Tab: Datos básicos + Localización ────────────────── */}
