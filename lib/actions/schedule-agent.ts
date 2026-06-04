@@ -149,6 +149,7 @@ const chatSchema = z.object({
     content: z.string(),
   })),
   tournamentConfig: z.record(z.string(), z.unknown()),
+  currentSchedule: z.unknown().optional(),
 })
 
 export async function chatWithScheduleAgent(input: unknown): Promise<
@@ -157,14 +158,24 @@ export async function chatWithScheduleAgent(input: unknown): Promise<
   const parsed = chatSchema.safeParse(input)
   if (!parsed.success) return { error: 'Datos inválidos' }
 
-  const { userMessage, conversationHistory, tournamentConfig } = parsed.data
+  const { userMessage, conversationHistory, tournamentConfig, currentSchedule } = parsed.data
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const systemPrompt = await getSchedulePrompt()
+  const basePrompt = await getSchedulePrompt()
 
-  const contextBlock = conversationHistory.length === 0
-    ? `CONFIGURACIÓN DEL TORNEO:\n${JSON.stringify(tournamentConfig, null, 2)}\n\n`
-    : ''
+  // Append tournament context to system prompt so it's always available
+  // regardless of where we are in the conversation.
+  const systemPrompt = [
+    basePrompt,
+    '---',
+    '## CONFIGURACIÓN DEL TORNEO ACTUAL',
+    '```json',
+    JSON.stringify(tournamentConfig, null, 2),
+    '```',
+    currentSchedule
+      ? `\n## HORARIO ACTUALMENTE GENERADO\n\`\`\`json\n${JSON.stringify(currentSchedule, null, 2)}\n\`\`\``
+      : '',
+  ].join('\n')
 
   try {
     const response = await client.messages.create({
@@ -178,7 +189,7 @@ export async function chatWithScheduleAgent(input: unknown): Promise<
         })),
         {
           role: 'user' as const,
-          content: `${contextBlock}${userMessage}`,
+          content: userMessage,
         },
       ],
     })
