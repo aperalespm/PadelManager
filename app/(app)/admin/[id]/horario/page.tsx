@@ -59,6 +59,7 @@ export default async function HorarioPage({ params }: { params: Promise<{ id: st
       teamsAdvancePerGroup: (vd.teams_advance_per_group as number) ?? 2,
       minMatchesPerTeam: (vd.min_matches_per_team as number) ?? 3,
     },
+    tournamentStatus: (tournament.status as string) ?? 'draft',
   }
 
   return (
