@@ -38,7 +38,7 @@ export function ScheduleChat({ messages, isGenerating, onSend }: ScheduleChatPro
       style={{ display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto', height: '100%' }}
     >
       {/* Messages — 1fr, scrolls */}
-      <div className="overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      <div className="overflow-y-auto px-4 py-4 space-y-3">
         {messages.map((msg, i) => (
           <div key={i} className={cn('flex flex-col', msg.role === 'user' ? 'items-end' : 'items-start')}>
             <div className={cn(
