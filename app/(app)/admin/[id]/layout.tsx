@@ -33,7 +33,7 @@ export default async function AdminTournamentLayout({
         activeMatchCount={activeMatchCount}
         tournaments={allTournaments}
       />
-      <main className="flex-1 bg-background overflow-auto">
+      <main className="flex-1 bg-background min-h-screen">
         {children}
       </main>
     </div>
