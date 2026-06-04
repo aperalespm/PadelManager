@@ -50,6 +50,7 @@ export function ScheduleAgent({
       userMessage: text,
       conversationHistory: newMessages.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
       tournamentConfig,
+      currentSchedule: schedule ?? undefined,
     })
 
     if ('error' in result) {
