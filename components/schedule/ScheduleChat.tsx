@@ -27,10 +27,18 @@ export function ScheduleChat({ messages, isGenerating, onSend }: ScheduleChatPro
     onSend(text)
   }
 
+  /*
+   * Grid 1fr auto: messages take all remaining height (bounded → scroll),
+   * input bar is fixed at the bottom (auto height).
+   * height: 100% fills the 1fr cell given by the parent grid.
+   */
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+    <div
+      className="overflow-hidden"
+      style={{ display: 'grid', gridTemplateRows: '1fr auto', height: '100%' }}
+    >
+      {/* Messages — 1fr, scrolls */}
+      <div className="overflow-y-auto px-4 py-4 flex flex-col gap-3">
         {messages.map((msg, i) => (
           <div key={i} className={cn('flex flex-col', msg.role === 'user' ? 'items-end' : 'items-start')}>
             <div className={cn(
@@ -67,8 +75,8 @@ export function ScheduleChat({ messages, isGenerating, onSend }: ScheduleChatPro
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <form onSubmit={handleSubmit} className="border-t border-border px-4 py-3 flex gap-2 shrink-0">
+      {/* Input bar — auto, fixed at bottom */}
+      <form onSubmit={handleSubmit} className="border-t border-border px-4 py-3 flex gap-2">
         <input
           value={input}
           onChange={e => setInput(e.target.value)}

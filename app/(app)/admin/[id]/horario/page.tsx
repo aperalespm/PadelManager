@@ -63,16 +63,14 @@ export default async function HorarioPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <div className="h-full overflow-hidden">
-      <ScheduleAgent
-        tournamentId={id}
-        tournamentName={tournament.name as string}
-        tournamentConfig={tournamentConfig}
-        initialMessages={initialData.messages}
-        initialSchedule={initialData.schedule}
-        initialIsPublished={initialData.isPublished}
-        initialVersion={initialData.version}
-      />
-    </div>
+    <ScheduleAgent
+      tournamentId={id}
+      tournamentName={tournament.name as string}
+      tournamentConfig={tournamentConfig}
+      initialMessages={initialData.messages}
+      initialSchedule={initialData.schedule}
+      initialIsPublished={initialData.isPublished}
+      initialVersion={initialData.version}
+    />
   )
 }

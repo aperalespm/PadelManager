@@ -45,22 +45,15 @@ export function ScheduleAgent({
     setIsGenerating(true)
     setSaveError(null)
 
-    const conversationHistory = newMessages.map(m => ({ role: m.role, content: m.content }))
-
     const result = await chatWithScheduleAgent({
       tournamentId,
       userMessage: text,
-      conversationHistory: conversationHistory.slice(0, -1), // exclude the one we just added
+      conversationHistory: newMessages.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
       tournamentConfig,
     })
 
     if ('error' in result) {
-      const errMsg: ChatMessage = {
-        role: 'assistant',
-        content: result.error,
-        timestamp: new Date().toISOString(),
-      }
-      setMessages(prev => [...prev, errMsg])
+      setMessages(prev => [...prev, { role: 'assistant', content: result.error, timestamp: new Date().toISOString() }])
       setIsGenerating(false)
       return
     }
@@ -72,13 +65,11 @@ export function ScheduleAgent({
       schedule: newSchedule ?? undefined,
       timestamp: new Date().toISOString(),
     }
-
     const updatedMessages = [...newMessages, assistantMsg]
     setMessages(updatedMessages)
     if (newSchedule) setSchedule(newSchedule)
     setIsGenerating(false)
 
-    // Auto-save
     const scheduleToSave = newSchedule ?? schedule
     if (scheduleToSave) {
       setIsSaving(true)
@@ -113,20 +104,32 @@ export function ScheduleAgent({
     if (!('error' in result)) setIsPublished(true)
   }
 
+  /*
+   * Layout strategy
+   * ───────────────
+   * Root: position:sticky top:0 height:100vh — absolute viewport height,
+   *   no dependency on any parent height whatsoever.
+   * Each column: CSS Grid with gridTemplateRows "auto 1fr"
+   *   auto = header/actions bar (natural height)
+   *   1fr  = always exactly the remaining space → overflow-y-auto works
+   */
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Left panel — Chat (40%) — CSS grid so header=auto, body=1fr */}
+    <div
+      className="flex overflow-hidden bg-background"
+      style={{ position: 'sticky', top: 0, height: '100vh' }}
+    >
+      {/* ── Left column: chat ─────────────────────────────────────── */}
       <div
-        className="w-[40%] min-w-[320px] border-r border-border overflow-hidden"
-        style={{ display: 'grid', gridTemplateRows: 'auto 1fr' }}
+        className="border-r border-border overflow-hidden bg-background"
+        style={{ width: '40%', minWidth: 320, display: 'grid', gridTemplateRows: 'auto 1fr' }}
       >
-        {/* Header — auto row */}
-        <div className="px-5 py-4 border-b border-border">
+        {/* Header — auto */}
+        <div className="px-5 py-4 border-b border-border shrink-0">
           <h1 className="text-[18px] font-extrabold text-foreground tracking-[-0.4px]">Horario</h1>
           <p className="text-[12px] text-muted-foreground mt-0.5">{tournamentName}</p>
         </div>
 
-        {/* Chat or empty state — 1fr row */}
+        {/* Body — 1fr, bounded, scrollable */}
         {!hasHistory ? (
           <div className="overflow-y-auto flex flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="w-12 h-12 rounded-full bg-[var(--accent-surface)] flex items-center justify-center">
@@ -152,28 +155,22 @@ export function ScheduleAgent({
             </button>
           </div>
         ) : (
-          <ScheduleChat
-            messages={messages}
-            isGenerating={isGenerating}
-            onSend={sendMessage}
-          />
+          <ScheduleChat messages={messages} isGenerating={isGenerating} onSend={sendMessage} />
         )}
       </div>
 
-      {/* Right panel — Calendar (60%) — CSS grid so actions=auto, content=1fr */}
+      {/* ── Right column: calendar ─────────────────────────────────── */}
       <div
-        className="flex-1 overflow-hidden"
+        className="flex-1 overflow-hidden bg-background"
         style={{ display: 'grid', gridTemplateRows: 'auto 1fr' }}
       >
-        {/* Actions bar — auto row */}
+        {/* Actions bar — auto */}
         <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
               Planificación
             </span>
-            {version > 0 && (
-              <span className="text-[11px] text-muted-foreground">v{version}</span>
-            )}
+            {version > 0 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
             {isSaving && <span className="text-[11px] text-muted-foreground">Guardando...</span>}
             {saveError && <span className="text-[11px] text-[var(--error)]">{saveError}</span>}
           </div>
@@ -205,7 +202,7 @@ export function ScheduleAgent({
           </div>
         </div>
 
-        {/* Content — 1fr row: exactly the remaining space, always bounded → scroll works */}
+        {/* Calendar content — 1fr, bounded, scrollable */}
         <div className="overflow-y-auto p-5 flex flex-col gap-4">
           {schedule ? (
             <>
@@ -215,13 +212,11 @@ export function ScheduleAgent({
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center text-center py-16">
+            <div className="flex items-center justify-center py-24 text-center">
               <div>
                 <Calendar className="w-10 h-10 text-muted-foreground/40 mb-3 mx-auto" />
                 <p className="text-[14px] font-semibold text-muted-foreground">Sin horario</p>
-                <p className="text-[12px] text-muted-foreground/70 mt-1">
-                  El horario generado aparecerá aquí
-                </p>
+                <p className="text-[12px] text-muted-foreground/70 mt-1">El horario generado aparecerá aquí</p>
               </div>
             </div>
           )}
