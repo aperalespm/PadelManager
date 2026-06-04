@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Calendar } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { Calendar, Clock, RotateCcw } from 'lucide-react'
 import { chatWithScheduleAgent, saveSchedule, publishSchedule } from '@/lib/actions/schedule-agent'
 import { ScheduleChat } from '@/components/schedule/ScheduleChat'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
@@ -35,6 +35,45 @@ export function ScheduleAgent({
   const [isPublished, setIsPublished] = useState(initialIsPublished)
   const [version, setVersion] = useState(initialVersion)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const historyRef = useRef<HTMLDivElement>(null)
+
+  // Each assistant message that carries a schedule is a saved version.
+  const versions = useMemo(() =>
+    messages
+      .filter((m): m is ChatMessage & { schedule: TournamentSchedule } =>
+        m.role === 'assistant' && !!m.schedule)
+      .map((m, i) => ({ num: i + 1, schedule: m.schedule, timestamp: m.timestamp })),
+    [messages]
+  )
+
+  // null → show live schedule; number → show that version
+  const displayedSchedule = previewIndex !== null ? (versions[previewIndex]?.schedule ?? null) : schedule
+
+  useEffect(() => {
+    if (!showHistory) return
+    function onDown(e: MouseEvent) {
+      if (historyRef.current && !historyRef.current.contains(e.target as Node)) setShowHistory(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [showHistory])
+
+  async function handleRestore(idx: number) {
+    const v = versions[idx]
+    if (!v) return
+    setSchedule(v.schedule)
+    setPreviewIndex(null)
+    setIsSaving(true)
+    await saveSchedule({
+      tournamentId,
+      scheduleData: v.schedule as unknown as Record<string, unknown>,
+      messages: messages as unknown as Record<string, unknown>[],
+    })
+    setVersion(ver => ver + 1)
+    setIsSaving(false)
+  }
 
   const hasHistory = messages.length > 0
 
@@ -179,6 +218,42 @@ export function ScheduleAgent({
               Planificación
             </span>
             {version > 0 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
+            {versions.length > 1 && (
+              <div className="relative" ref={historyRef}>
+                <button
+                  onClick={() => setShowHistory(s => !s)}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded-[5px] hover:bg-muted transition-colors"
+                >
+                  <Clock className="w-3 h-3" />
+                  {versions.length} versiones
+                </button>
+                {showHistory && (
+                  <div className="absolute left-0 top-7 bg-popover border border-border rounded-[10px] shadow-lg z-50 py-1 min-w-[190px]">
+                    {versions.map((v, i) => {
+                      const isActive = previewIndex === i || (i === versions.length - 1 && previewIndex === null)
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => { setPreviewIndex(i === versions.length - 1 ? null : i); setShowHistory(false) }}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-[12px] flex items-center gap-2 hover:bg-muted transition-colors',
+                            isActive && 'text-accent'
+                          )}
+                        >
+                          <span className="font-semibold w-6">v{v.num}</span>
+                          <span className="text-muted-foreground flex-1">
+                            {new Date(v.timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {i === versions.length - 1 && (
+                            <span className="text-[10px] bg-[var(--accent-surface)] text-accent px-1.5 py-0.5 rounded-full">actual</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             {isSaving && <span className="text-[11px] text-muted-foreground">Guardando...</span>}
             {saveError && <span className="text-[11px] text-[var(--error)]">{saveError}</span>}
           </div>
@@ -210,26 +285,52 @@ export function ScheduleAgent({
           </div>
         </div>
 
-        {/* Calendar content — minmax(0,1fr), bounded → scrolls.
-            Block layout (no flex): flex-shrink would compress children
-            to fit the container, eliminating overflow and killing scroll. */}
-        <div className="overflow-y-auto p-5 space-y-4">
-          {schedule ? (
-            <>
-              <ScheduleSummaryBar summary={schedule.summary} />
-              <div className="bg-card border border-border rounded-[10px] overflow-hidden">
-                <ScheduleCalendar schedule={schedule} />
+        {/* Calendar content — minmax(0,1fr), bounded → scrolls. */}
+        <div className="overflow-y-auto">
+          {previewIndex !== null && (
+            <div className="mx-5 mt-4 px-3.5 py-2 bg-muted border border-border rounded-[8px] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-[12px] text-foreground">
+                <RotateCcw className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span>
+                  Viendo <strong>v{versions[previewIndex]?.num}</strong>
+                  {' · '}
+                  {new Date(versions[previewIndex]?.timestamp ?? '').toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-center py-24 text-center">
-              <div>
-                <Calendar className="w-10 h-10 text-muted-foreground/40 mb-3 mx-auto" />
-                <p className="text-[14px] font-semibold text-muted-foreground">Sin horario</p>
-                <p className="text-[12px] text-muted-foreground/70 mt-1">El horario generado aparecerá aquí</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleRestore(previewIndex)}
+                  className="text-[11px] font-semibold text-accent hover:underline"
+                >
+                  Restaurar
+                </button>
+                <button
+                  onClick={() => setPreviewIndex(null)}
+                  className="text-[12px] text-muted-foreground hover:text-foreground leading-none"
+                >
+                  ✕
+                </button>
               </div>
             </div>
           )}
+          <div className="p-5 space-y-4">
+            {displayedSchedule ? (
+              <>
+                <ScheduleSummaryBar summary={displayedSchedule.summary} />
+                <div className="bg-card border border-border rounded-[10px] overflow-hidden">
+                  <ScheduleCalendar schedule={displayedSchedule} />
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center py-24 text-center">
+                <div>
+                  <Calendar className="w-10 h-10 text-muted-foreground/40 mb-3 mx-auto" />
+                  <p className="text-[14px] font-semibold text-muted-foreground">Sin horario</p>
+                  <p className="text-[12px] text-muted-foreground/70 mt-1">El horario generado aparecerá aquí</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
