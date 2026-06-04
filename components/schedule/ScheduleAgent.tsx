@@ -209,8 +209,10 @@ export function ScheduleAgent({
           </div>
         </div>
 
-        {/* Calendar content — minmax(0,1fr), bounded → scrolls */}
-        <div className="overflow-y-auto p-5 flex flex-col gap-4">
+        {/* Calendar content — minmax(0,1fr), bounded → scrolls.
+            Block layout (no flex): flex-shrink would compress children
+            to fit the container, eliminating overflow and killing scroll. */}
+        <div className="overflow-y-auto p-5 space-y-4">
           {schedule ? (
             <>
               <ScheduleSummaryBar summary={schedule.summary} />
