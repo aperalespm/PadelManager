@@ -6,6 +6,11 @@ import { registerSchema } from '@/lib/validations'
 import { z } from 'zod'
 
 export async function getRegistrations(tournamentId: string) {
+  // Ensure all columns added by later actions exist before querying
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player2_name TEXT`
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS registration_type TEXT DEFAULT 'pair'`
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS form_data JSONB DEFAULT '{}'`
 
   const rows = await sql`
     SELECT r.*,
