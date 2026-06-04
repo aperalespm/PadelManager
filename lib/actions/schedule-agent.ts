@@ -102,6 +102,15 @@ async function getSchedulePrompt(): Promise<string> {
 
 async function ensureTables() {
   await sql`
+    CREATE TABLE IF NOT EXISTS ai_prompts (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name       TEXT NOT NULL UNIQUE,
+      content    TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  await sql`
     CREATE TABLE IF NOT EXISTS tournament_schedules (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id         TEXT NOT NULL,
