@@ -1,0 +1,217 @@
+'use client'
+
+import { useState } from 'react'
+import { cn } from '@/lib/utils'
+
+// ── Bracket diagram constants ─────────────────────────────────────────────────
+const BSLOT = 24
+const BMATCH = BSLOT * 2
+const BCOL = 106
+const BGAP = 22
+
+function schMatchTop(round: number, idx: number): number {
+  const pad = BSLOT * (Math.pow(2, round) - 1)
+  const gap = BMATCH * (Math.pow(2, round) - 1)
+  return pad + idx * (BMATCH + gap)
+}
+
+function schMatchCenterY(round: number, idx: number): number {
+  return schMatchTop(round, idx) + BSLOT
+}
+
+function groupsElimPhases(numGroups: number, teamsAdvance: number): string[] {
+  const total = numGroups * teamsAdvance
+  const phases = ['Fase de grupos']
+  if (total > 8) phases.push('Octavos de final')
+  if (total > 4) phases.push('Cuartos de final')
+  if (total > 2) phases.push('Semifinal')
+  phases.push('Final')
+  return phases
+}
+
+function BracketDiagram({ phases, matchCounts }: { phases: string[]; matchCounts: number[] }) {
+  if (!phases.length) return null
+
+  const totalH = matchCounts[0] * BMATCH
+  const CHAMP_W = 52
+  const HDR_H = 20
+
+  type Seg = { x1: number; y1: number; x2: number; y2: number }
+  const segs: Seg[] = []
+
+  for (let r = 0; r < phases.length - 1; r++) {
+    const cx = r * (BCOL + BGAP)
+    const nx = (r + 1) * (BCOL + BGAP)
+    const midX = cx + BCOL + BGAP / 2
+    for (let m = 0; m < matchCounts[r]; m += 2) {
+      const y1 = schMatchCenterY(r, m)
+      const y2 = schMatchCenterY(r, m + 1)
+      const yMid = (y1 + y2) / 2
+      segs.push({ x1: cx + BCOL, y1, x2: midX, y2: y1 })
+      segs.push({ x1: cx + BCOL, y1: y2, x2: midX, y2: y2 })
+      segs.push({ x1: midX, y1, x2: midX, y2 })
+      segs.push({ x1: midX, y1: yMid, x2: nx, y2: yMid })
+    }
+  }
+  const lr = phases.length - 1
+  const lx = lr * (BCOL + BGAP)
+  const champY = schMatchCenterY(lr, 0)
+  const champMidX = lx + BCOL + BGAP / 2
+  segs.push({ x1: lx + BCOL, y1: champY, x2: champMidX, y2: champY })
+
+  const totalW = phases.length * (BCOL + BGAP) + CHAMP_W
+
+  return (
+    <div className="relative shrink-0" style={{ width: totalW, height: totalH + HDR_H }}>
+      {phases.map((name, r) => (
+        <div key={r}
+          className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground overflow-hidden whitespace-nowrap"
+          style={{ left: r * (BCOL + BGAP), top: 0, width: BCOL }}>{name}
+        </div>
+      ))}
+      <div className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground"
+        style={{ left: lr * (BCOL + BGAP) + BCOL + BGAP / 2 - 8, top: 0, width: CHAMP_W }}>Campeón</div>
+
+      <svg className="absolute pointer-events-none" style={{ left: 0, top: HDR_H }} width={totalW} height={totalH}>
+        {segs.map((s, i) => (
+          <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="#cbd5e1" strokeWidth={1.5} />
+        ))}
+      </svg>
+
+      {phases.map((_, r) =>
+        Array.from({ length: matchCounts[r] }, (__, m) => (
+          <div key={`${r}-${m}`}
+            className="absolute border border-border rounded-[5px] overflow-hidden bg-white"
+            style={{ left: r * (BCOL + BGAP), top: HDR_H + schMatchTop(r, m), width: BCOL, height: BMATCH }}>
+            <div className="px-2 text-[11px] flex items-center border-b border-border text-muted-foreground/40" style={{ height: BSLOT }}>
+              Ganador
+            </div>
+            <div className="px-2 text-[11px] flex items-center text-muted-foreground/40" style={{ height: BSLOT }}>
+              Ganador
+            </div>
+          </div>
+        ))
+      )}
+
+      <div className="absolute flex items-center justify-center"
+        style={{ left: champMidX, top: HDR_H + schMatchTop(lr, 0) + BSLOT / 2 - 14, width: 28, height: 28 }}>
+        <span className="text-[22px] leading-none">🏆</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Group card with real pair names ───────────────────────────────────────────
+
+const SLOT_H = 30
+
+function GroupCardFilled({
+  label,
+  pairs,
+  advanceCount,
+}: {
+  label: string
+  pairs: Array<{ id: string; name: string }>
+  advanceCount: number
+}) {
+  return (
+    <div className="border border-border rounded-[7px] overflow-hidden shrink-0 w-[180px]">
+      <div className="bg-[#1e3a5f] text-white text-[9px] font-bold uppercase tracking-wide py-[5px] text-center">
+        {label}
+      </div>
+      {pairs.map((p, i) => (
+        <div key={p.id}
+          style={{ height: SLOT_H }}
+          className={cn(
+            'px-2 flex items-center gap-1.5 border-t border-border/40',
+            i < advanceCount
+              ? 'bg-[var(--accent-surface)] text-accent font-semibold'
+              : 'bg-white text-muted-foreground'
+          )}>
+          <span className={cn('text-[9px] shrink-0', i < advanceCount ? 'text-[var(--success)] font-bold' : '')}>
+            {i < advanceCount ? '✓' : '○'}
+          </span>
+          <span className="text-[11px] truncate leading-tight">{p.name}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Public component ──────────────────────────────────────────────────────────
+
+interface GroupBracketViewProps {
+  // catMap[categoryLabel][groupLabel] = pairs
+  catMap: Record<string, Record<string, Array<{ id: string; name: string }>>>
+  numGroups: number
+  teamsAdvancePerGroup: number
+}
+
+export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup }: GroupBracketViewProps) {
+  const catLabels = Object.keys(catMap).sort()
+  const [selCat, setSelCat] = useState(catLabels[0] ?? '')
+
+  // Compute elimination phases for the bracket diagram
+  const elimPhases = groupsElimPhases(numGroups, teamsAdvancePerGroup).slice(1)
+  const mc: number[] = []
+  let n = 1
+  for (let i = elimPhases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
+
+  const groupMap = catMap[selCat] ?? {}
+  const groupLabels = Object.keys(groupMap).sort()
+  const cols = Math.max(1, Math.ceil(groupLabels.length / 2))
+
+  const hasMultipleCats = catLabels.length > 1 || (catLabels.length === 1 && catLabels[0] !== '')
+
+  return (
+    <div className="w-full">
+      {/* Category selector */}
+      {hasMultipleCats && (
+        <div className="mb-5">
+          <select
+            value={selCat}
+            onChange={e => setSelCat(e.target.value)}
+            className="border border-border rounded-[7px] px-3 py-1.5 text-[13px] font-semibold bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40"
+          >
+            {catLabels.map(c => (
+              <option key={c} value={c}>{c || 'Todas las parejas'}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {groupLabels.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4">No hay grupos para esta categoría.</p>
+      ) : (
+        <div className="flex items-start gap-8 overflow-x-auto pb-4">
+          {/* Groups grid */}
+          <div className="shrink-0">
+            <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Fase de grupos</p>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 180px)`, gap: '8px' }}>
+              {groupLabels.map(grp => (
+                <GroupCardFilled
+                  key={grp}
+                  label={grp}
+                  pairs={groupMap[grp]}
+                  advanceCount={teamsAdvancePerGroup}
+                />
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2">
+              Top {teamsAdvancePerGroup} por grupo · {groupLabels.length * teamsAdvancePerGroup} clasificados
+            </p>
+          </div>
+
+          {/* Arrow */}
+          <div className="flex items-center self-center shrink-0 text-muted-foreground text-lg pt-4">→</div>
+
+          {/* Elimination bracket */}
+          <div className="shrink-0">
+            <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Eliminatoria</p>
+            <BracketDiagram phases={elimPhases} matchCounts={mc} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
