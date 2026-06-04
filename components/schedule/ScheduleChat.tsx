@@ -28,14 +28,14 @@ export function ScheduleChat({ messages, isGenerating, onSend }: ScheduleChatPro
   }
 
   /*
-   * Grid 1fr auto: messages take all remaining height (bounded → scroll),
-   * input bar is fixed at the bottom (auto height).
-   * height: 100% fills the 1fr cell given by the parent grid.
+   * Grid "minmax(0,1fr) auto": messages take all remaining height
+   * (bounded by minmax(0,...) → actually scrolls), input bar pinned at
+   * the bottom (auto). height:100% fills the parent grid track.
    */
   return (
     <div
       className="overflow-hidden"
-      style={{ display: 'grid', gridTemplateRows: '1fr auto', height: '100%' }}
+      style={{ display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto', height: '100%' }}
     >
       {/* Messages — 1fr, scrolls */}
       <div className="overflow-y-auto px-4 py-4 flex flex-col gap-3">

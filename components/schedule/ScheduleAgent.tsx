@@ -105,31 +105,38 @@ export function ScheduleAgent({
   }
 
   /*
-   * Layout strategy
-   * ───────────────
-   * Root: position:sticky top:0 height:100vh — absolute viewport height,
-   *   no dependency on any parent height whatsoever.
-   * Each column: CSS Grid with gridTemplateRows "auto 1fr"
-   *   auto = header/actions bar (natural height)
-   *   1fr  = always exactly the remaining space → overflow-y-auto works
+   * LAYOUT — the only reliable recipe for independent column scroll
+   * ────────────────────────────────────────────────────────────────
+   * Root:    height:100vh (zero parent dependency), grid 2 columns.
+   * Column:  grid rows "auto minmax(0,1fr)".
+   *          ⚠️ minmax(0,1fr) — NOT 1fr. Plain `1fr` == minmax(AUTO,1fr),
+   *          and the `auto` minimum lets the track grow past its share to
+   *          fit content, so overflow never has a bounded box to scroll in.
+   *          minmax(0,...) pins the minimum to 0 → track == remaining space.
+   * Body:    overflow-y-auto inside the minmax(0,1fr) track → scrolls.
    */
   return (
     <div
-      className="flex overflow-hidden bg-background"
-      style={{ position: 'sticky', top: 0, height: '100vh' }}
+      className="bg-background"
+      style={{
+        height: '100vh',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(320px, 2fr) 3fr',
+        overflow: 'hidden',
+      }}
     >
       {/* ── Left column: chat ─────────────────────────────────────── */}
       <div
-        className="border-r border-border overflow-hidden bg-background"
-        style={{ width: '40%', minWidth: 320, display: 'grid', gridTemplateRows: 'auto 1fr' }}
+        className="border-r border-border overflow-hidden"
+        style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minWidth: 0 }}
       >
         {/* Header — auto */}
-        <div className="px-5 py-4 border-b border-border shrink-0">
+        <div className="px-5 py-4 border-b border-border">
           <h1 className="text-[18px] font-extrabold text-foreground tracking-[-0.4px]">Horario</h1>
           <p className="text-[12px] text-muted-foreground mt-0.5">{tournamentName}</p>
         </div>
 
-        {/* Body — 1fr, bounded, scrollable */}
+        {/* Body — minmax(0,1fr), bounded → scrolls */}
         {!hasHistory ? (
           <div className="overflow-y-auto flex flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="w-12 h-12 rounded-full bg-[var(--accent-surface)] flex items-center justify-center">
@@ -161,8 +168,8 @@ export function ScheduleAgent({
 
       {/* ── Right column: calendar ─────────────────────────────────── */}
       <div
-        className="flex-1 overflow-hidden bg-background"
-        style={{ display: 'grid', gridTemplateRows: 'auto 1fr' }}
+        className="overflow-hidden"
+        style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minWidth: 0 }}
       >
         {/* Actions bar — auto */}
         <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
@@ -202,7 +209,7 @@ export function ScheduleAgent({
           </div>
         </div>
 
-        {/* Calendar content — 1fr, bounded, scrollable */}
+        {/* Calendar content — minmax(0,1fr), bounded → scrolls */}
         <div className="overflow-y-auto p-5 flex flex-col gap-4">
           {schedule ? (
             <>
