@@ -114,9 +114,9 @@ export function ScheduleAgent({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {/* Left panel — Chat (40%) */}
-      <div className="w-[40%] min-w-[320px] border-r border-border flex flex-col">
+      <div className="w-[40%] min-w-[320px] border-r border-border flex flex-col min-h-0">
         {/* Header */}
         <div className="px-5 py-4 border-b border-border shrink-0">
           <h1 className="text-[18px] font-extrabold text-foreground tracking-[-0.4px]">Horario</h1>
@@ -158,7 +158,7 @@ export function ScheduleAgent({
       </div>
 
       {/* Right panel — Calendar (60%) */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {/* Actions bar */}
         <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2">
@@ -200,7 +200,7 @@ export function ScheduleAgent({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 flex flex-col gap-4">
           {schedule ? (
             <>
               <ScheduleSummaryBar summary={schedule.summary} />
