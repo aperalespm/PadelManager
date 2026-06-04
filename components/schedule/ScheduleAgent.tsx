@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Calendar, Clock, RotateCcw } from 'lucide-react'
+import { Calendar, Clock, RotateCcw, Maximize2, X } from 'lucide-react'
 import { chatWithScheduleAgent, saveSchedule, publishSchedule } from '@/lib/actions/schedule-agent'
 import { ScheduleChat } from '@/components/schedule/ScheduleChat'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
@@ -37,6 +37,7 @@ export function ScheduleAgent({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const [fullscreen, setFullscreen] = useState(false)
   const historyRef = useRef<HTMLDivElement>(null)
   const [chatWidth, setChatWidth] = useState(400)
   const dragging = useRef(false)
@@ -180,6 +181,7 @@ export function ScheduleAgent({
    * Body:    overflow-y-auto inside the minmax(0,1fr) track → scrolls.
    */
   return (
+    <>
     <div
       className="bg-background"
       style={{ height: '100vh', display: 'flex', overflow: 'hidden' }}
@@ -293,6 +295,14 @@ export function ScheduleAgent({
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setFullscreen(true)}
+              disabled={!displayedSchedule}
+              title="Pantalla completa"
+              className="flex items-center justify-center w-7 h-7 rounded-[6px] border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+            <button
               onClick={handleSave}
               disabled={!schedule || isSaving}
               className={cn(
@@ -368,5 +378,39 @@ export function ScheduleAgent({
         </div>
       </div>
     </div>
+
+    {/* ── Fullscreen overlay ─────────────────────────────────────── */}
+    {fullscreen && displayedSchedule && (
+      <div
+        className="fixed inset-0 z-50 bg-background flex flex-col"
+        style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)' }}
+      >
+        {/* Header */}
+        <div className="px-6 py-3 border-b border-border flex items-center justify-between gap-4 bg-background">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
+              Planificación
+            </span>
+            {version > 0 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
+            <span className="text-[13px] font-semibold text-foreground">{tournamentName}</span>
+          </div>
+          <button
+            onClick={() => setFullscreen(false)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground border border-border rounded-[7px] hover:bg-muted transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+            Cerrar
+          </button>
+        </div>
+        {/* Content */}
+        <div className="overflow-y-auto p-6 space-y-4">
+          <ScheduleSummaryBar summary={displayedSchedule.summary} />
+          <div className="bg-card border border-border rounded-[10px] overflow-hidden">
+            <ScheduleCalendar schedule={displayedSchedule} />
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

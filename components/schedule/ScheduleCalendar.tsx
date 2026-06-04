@@ -54,15 +54,19 @@ export function ScheduleCalendar({ schedule }: ScheduleCalendarProps) {
   }
 
   return (
-    <div className="overflow-auto">
-      <table className="w-full border-collapse text-[12px]">
+    <div className="w-full overflow-hidden">
+      <table className="w-full table-fixed border-collapse text-[12px]">
+        <colgroup>
+          <col className="w-16" />
+          {courtsOrdered.map(c => <col key={c.number} />)}
+        </colgroup>
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground w-16 sticky left-0 bg-card">
+            <th className="text-left px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground sticky left-0 bg-card">
               Hora
             </th>
             {courtsOrdered.map(c => (
-              <th key={c.number} className="text-center px-2 py-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground min-w-[130px]">
+              <th key={c.number} className="text-center px-2 py-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 {c.name}
               </th>
             ))}
@@ -75,14 +79,14 @@ export function ScheduleCalendar({ schedule }: ScheduleCalendarProps) {
 
             return (
               <tr key={time} className="border-b border-border/50">
-                <td className="px-3 py-1 font-mono text-[11px] text-muted-foreground align-top sticky left-0 bg-card">
+                <td className="px-3 py-1 font-mono text-[11px] text-muted-foreground align-top sticky left-0 bg-card whitespace-nowrap">
                   {time}
                 </td>
                 {courtsOrdered.map(c => {
                   const m = rowMatches[c.number]
                   if (!m) {
                     return (
-                      <td key={c.number} className="px-2 py-1">
+                      <td key={c.number} className="px-1.5 py-1">
                         {hasAnyMatch && <div className="h-[52px]" />}
                       </td>
                     )
@@ -92,7 +96,7 @@ export function ScheduleCalendar({ schedule }: ScheduleCalendarProps) {
                   return (
                     <td key={c.number} className="px-1.5 py-1">
                       <div className={cn(
-                        'rounded-[6px] border px-2 py-1.5 h-[52px] flex flex-col justify-between',
+                        'rounded-[6px] border px-2 py-1.5 h-[52px] flex flex-col justify-between overflow-hidden',
                         colors.bg, colors.border,
                         isPhase && 'border-t-2 border-t-foreground/30'
                       )}>
