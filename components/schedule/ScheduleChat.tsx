@@ -28,7 +28,7 @@ export function ScheduleChat({ messages, isGenerating, onSend }: ScheduleChatPro
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
         {messages.map((msg, i) => (

@@ -115,17 +115,20 @@ export function ScheduleAgent({
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Left panel — Chat (40%) */}
-      <div className="w-[40%] min-w-[320px] border-r border-border flex flex-col min-h-0">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-border shrink-0">
+      {/* Left panel — Chat (40%) — CSS grid so header=auto, body=1fr */}
+      <div
+        className="w-[40%] min-w-[320px] border-r border-border overflow-hidden"
+        style={{ display: 'grid', gridTemplateRows: 'auto 1fr' }}
+      >
+        {/* Header — auto row */}
+        <div className="px-5 py-4 border-b border-border">
           <h1 className="text-[18px] font-extrabold text-foreground tracking-[-0.4px]">Horario</h1>
           <p className="text-[12px] text-muted-foreground mt-0.5">{tournamentName}</p>
         </div>
 
-        {/* Chat or empty state */}
+        {/* Chat or empty state — 1fr row */}
         {!hasHistory ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
+          <div className="overflow-y-auto flex flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="w-12 h-12 rounded-full bg-[var(--accent-surface)] flex items-center justify-center">
               <Calendar className="w-6 h-6 text-accent" />
             </div>
@@ -157,10 +160,13 @@ export function ScheduleAgent({
         )}
       </div>
 
-      {/* Right panel — Calendar (60%) */}
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-        {/* Actions bar */}
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3 shrink-0">
+      {/* Right panel — Calendar (60%) — CSS grid so actions=auto, content=1fr */}
+      <div
+        className="flex-1 overflow-hidden"
+        style={{ display: 'grid', gridTemplateRows: 'auto 1fr' }}
+      >
+        {/* Actions bar — auto row */}
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
               Planificación
@@ -199,8 +205,8 @@ export function ScheduleAgent({
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 flex flex-col gap-4">
+        {/* Content — 1fr row: exactly the remaining space, always bounded → scroll works */}
+        <div className="overflow-y-auto p-5 flex flex-col gap-4">
           {schedule ? (
             <>
               <ScheduleSummaryBar summary={schedule.summary} />
@@ -209,12 +215,14 @@ export function ScheduleAgent({
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center py-16">
-              <Calendar className="w-10 h-10 text-muted-foreground/40 mb-3" />
-              <p className="text-[14px] font-semibold text-muted-foreground">Sin horario</p>
-              <p className="text-[12px] text-muted-foreground/70 mt-1">
-                El horario generado aparecerá aquí
-              </p>
+            <div className="flex items-center justify-center text-center py-16">
+              <div>
+                <Calendar className="w-10 h-10 text-muted-foreground/40 mb-3 mx-auto" />
+                <p className="text-[14px] font-semibold text-muted-foreground">Sin horario</p>
+                <p className="text-[12px] text-muted-foreground/70 mt-1">
+                  El horario generado aparecerá aquí
+                </p>
+              </div>
             </div>
           )}
         </div>
