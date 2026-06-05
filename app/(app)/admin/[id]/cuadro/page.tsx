@@ -33,7 +33,6 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
 
   const t = tournament as Record<string, unknown>
   const format = t.format as string
-  const status = t.status as string
   const isGroupsElim = format === 'groups_elimination'
 
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
@@ -47,7 +46,7 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
 
   const [matches, regCounts] = await Promise.all([
     getMatchesForTournament(id) as Promise<Record<string, unknown>[]>,
-    status === 'open' ? getRegistrationCountsByCategory(id) : Promise.resolve([]),
+    getRegistrationCountsByCategory(id),
   ])
 
   const groupBracketResult = isGroupsElim && matches.length > 0
@@ -73,7 +72,7 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
         capacity: capacityPerCategory,
       }))
 
-  const showFillStatus = status === 'open' && fillData.length > 0
+  const showFillStatus = fillData.length > 0
   const totalConfirmed = fillData.reduce((s, c) => s + c.confirmed, 0)
   const totalCapacity = fillData.reduce((s, c) => s + c.capacity, 0)
 
