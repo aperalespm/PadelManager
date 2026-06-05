@@ -162,7 +162,7 @@ export async function generateGroupBracket(tournamentId: string) {
     }
   }
 
-  await sql`UPDATE tournaments SET status = 'active', updated_at = NOW() WHERE id = ${tournamentId}`
+  await sql`UPDATE tournaments SET updated_at = NOW() WHERE id = ${tournamentId}`
   return { data: true }
 }
 

@@ -9,7 +9,6 @@ import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-// Mirrors expandCategories from TournamentConfigForm — keeps names in sync.
 function expandCategoryNames(cats: Array<{ name: string; genders?: string[] }>): string[] {
   const result: string[] = []
   for (const cat of cats) {
@@ -54,16 +53,11 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
     : null
   const catMap = groupBracketResult?.data ?? null
 
-  // Build per-category fill data. Categories with no registrations still appear if configured.
+  // Build fill data — configured categories first, then any uncategorised
   const fillData = categoryNames.length > 0
     ? categoryNames.map(name => {
         const row = regCounts.find(r => r.category === name)
-        return {
-          name,
-          confirmed: row?.confirmed ?? 0,
-          pending: row?.pending ?? 0,
-          capacity: capacityPerCategory,
-        }
+        return { name, confirmed: row?.confirmed ?? 0, pending: row?.pending ?? 0, capacity: capacityPerCategory }
       })
     : regCounts.map(r => ({
         name: r.category || 'Sin categoría',
@@ -72,89 +66,65 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
         capacity: capacityPerCategory,
       }))
 
-  const showFillStatus = fillData.length > 0
   const totalConfirmed = fillData.reduce((s, c) => s + c.confirmed, 0)
-  const totalCapacity = fillData.reduce((s, c) => s + c.capacity, 0)
+  const totalCapacity  = fillData.reduce((s, c) => s + c.capacity, 0)
 
   return (
     <div className="px-9 py-8 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">Cuadro del torneo</h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">
             {t.name as string} · {format?.replace('_', ' ')}
           </p>
         </div>
-        <div className="flex gap-2">
-          {isGroupsElim && matches.length === 0 && (
-            <GenerateBracketButton tournamentId={id} />
-          )}
-        </div>
+        {isGroupsElim && (
+          <GenerateBracketButton tournamentId={id} hasMatches={matches.length > 0} />
+        )}
       </div>
 
-      {/* ── Category fill status (open registration phase) ─────────────── */}
-      {showFillStatus && (
-        <div className="bg-card border border-border rounded-xl p-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[14px] font-bold text-foreground">Inscripciones por categoría</h2>
-            <span className="text-[12px] text-muted-foreground">
-              {totalConfirmed} / {totalCapacity} plazas confirmadas
-            </span>
-          </div>
+      {/* ── Category fill strip ─────────────────────────────────────────── */}
+      {fillData.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-4 py-2.5 bg-card border border-border rounded-lg">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mr-1">
+            Inscripciones
+          </span>
+          {fillData.map(cat => {
+            const pct      = cat.capacity > 0 ? cat.confirmed / cat.capacity : 0
+            const isFull   = cat.confirmed >= cat.capacity
+            const isHalf   = pct >= 0.5
 
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-            {fillData.map(cat => {
-              const pct = cat.capacity > 0 ? Math.min(1, cat.confirmed / cat.capacity) : 0
-              const isFull = cat.confirmed >= cat.capacity
-              const isHalfway = pct >= 0.5
-              const remaining = Math.max(0, cat.capacity - cat.confirmed)
+            const dotCls  = isFull ? 'bg-[var(--success)]' : isHalf ? 'bg-accent' : 'bg-[var(--warning)]'
+            const textCls = isFull ? 'text-[var(--success)]' : isHalf ? 'text-accent' : 'text-[var(--warning)]'
+            const bgCls   = isFull
+              ? 'bg-[var(--success-surface)] border-[var(--success)]/25'
+              : isHalf
+              ? 'bg-[var(--accent-surface)] border-accent/25'
+              : 'bg-[var(--warning-surface)] border-[var(--warning)]/25'
 
-              const barColor = isFull
-                ? 'bg-[var(--success)]'
-                : isHalfway
-                ? 'bg-accent'
-                : 'bg-[var(--warning)]'
-
-              const badgeColor = isFull
-                ? 'bg-[var(--success-surface)] text-[var(--success)] border-[var(--success)]/30'
-                : isHalfway
-                ? 'bg-[var(--accent-surface)] text-accent border-accent/30'
-                : 'bg-[var(--warning-surface)] text-[var(--warning)] border-[var(--warning)]/30'
-
-              return (
-                <div key={cat.name} className="flex flex-col gap-2 p-3 bg-background border border-border rounded-lg">
-                  <div className="flex items-start justify-between gap-1">
-                    <span className="text-[13px] font-semibold text-foreground leading-tight">{cat.name}</span>
-                    <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${badgeColor}`}>
-                      {isFull ? 'Completo' : `${remaining} libre${remaining !== 1 ? 's' : ''}`}
-                    </span>
-                  </div>
-
-                  {/* progress bar */}
-                  <div className="h-1.5 rounded-full bg-border overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${barColor}`}
-                      style={{ width: `${Math.round(pct * 100)}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>
-                      <span className="font-semibold text-foreground">{cat.confirmed}</span> confirmadas
-                      {cat.pending > 0 && (
-                        <span className="ml-1.5 text-[var(--warning)]">+{cat.pending} pend.</span>
-                      )}
-                    </span>
-                    <span>{cat.capacity} plazas</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+            return (
+              <span
+                key={cat.name}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[12px] font-medium ${bgCls} ${textCls}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotCls}`} />
+                {cat.name}
+                <span className="font-bold">{cat.confirmed}/{cat.capacity}</span>
+                {cat.pending > 0 && (
+                  <span className="text-[10px] opacity-70">(+{cat.pending})</span>
+                )}
+              </span>
+            )
+          })}
+          <span className="text-[11px] text-muted-foreground ml-1">
+            · {totalConfirmed}/{totalCapacity} total
+          </span>
         </div>
       )}
 
-      {/* ── Bracket ───────────────────────────────────────────────────────── */}
+      {/* ── Bracket ─────────────────────────────────────────────────────── */}
       {matches.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-8 text-center flex flex-col items-center gap-3">
           {isGroupsElim ? (
