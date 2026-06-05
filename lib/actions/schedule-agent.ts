@@ -200,12 +200,14 @@ Si el horario es matemáticamente imposible con estos parámetros:
 3. Genera el calendario lo más completo posible **sin alterar el formato**.
 4. Solo cambia el formato si el administrador lo pide de forma explícita.`
 
-  // Registered pairs block — activates MODO ASIGNACIÓN when present
+  // Registered pairs block — injected in Asignación and En vivo modes
+  const tStatus = (tournamentConfig.tournamentStatus as string) ?? 'draft'
+  const modeLabel = tStatus === 'active' ? 'EN VIVO' : tStatus === 'open' ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
   const registeredPairs = tournamentConfig.registeredPairs as Array<{ category: string; pairs: string[] }> | undefined
   const totalPairs = registeredPairs?.reduce((s, c) => s + c.pairs.length, 0) ?? 0
   const pairsBlock = registeredPairs && totalPairs > 0
     ? [
-        `\n## PAREJAS INSCRITAS — MODO ASIGNACIÓN ACTIVO (${totalPairs} parejas confirmadas)`,
+        `\n## PAREJAS INSCRITAS — MODO ${modeLabel} (${totalPairs} parejas confirmadas)`,
         'Usa estos nombres reales. No uses P1/P2 ni nombres genéricos.\n',
         ...registeredPairs
           .filter(c => c.pairs.length > 0)

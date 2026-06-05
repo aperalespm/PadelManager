@@ -48,7 +48,7 @@ export function ScheduleAgent({
 
   useEffect(() => {
     if (!autoRegenerate) return
-    const msg = hasPairs
+    const msg = isAssignment
       ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
       : 'Regenera el horario completo con la configuración actualizada del torneo, respetando los ajustes de sesiones anteriores si los hay.'
     sendMessage(msg)
@@ -111,9 +111,11 @@ export function ScheduleAgent({
     setIsSaving(false)
   }
 
-  const hasPairs = Array.isArray(tournamentConfig.registeredPairs) &&
-    (tournamentConfig.registeredPairs as Array<{ pairs: string[] }>).some(c => c.pairs.length > 0)
-  const mode = hasPairs ? 'Asignación' : 'Planificación'
+  const tournamentStatus = (tournamentConfig.tournamentStatus as string) ?? 'draft'
+  const mode = tournamentStatus === 'active' ? 'En vivo'
+    : tournamentStatus === 'open' ? 'Asignación'
+    : 'Planificación'
+  const isAssignment = tournamentStatus === 'open' || tournamentStatus === 'active'
 
   const hasHistory = messages.length > 0
 
@@ -215,7 +217,7 @@ export function ScheduleAgent({
           {schedule && (
             <button
               onClick={() => sendMessage(
-                hasPairs
+                isAssignment
                   ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
                   : 'Regenera el horario completo con la configuración actual del torneo, respetando los ajustes de sesiones anteriores si los hay.'
               )}
@@ -237,14 +239,14 @@ export function ScheduleAgent({
             <div>
               <p className="text-[15px] font-semibold text-foreground">Sin horario generado</p>
               <p className="text-[13px] text-muted-foreground mt-1 max-w-[240px]">
-                {hasPairs
+                {isAssignment
                   ? 'El agente asignará las parejas inscritas a los grupos y generará el horario completo con sus nombres.'
                   : 'El agente generará el horario óptimo basándose en la configuración del torneo.'}
               </p>
             </div>
             <button
               onClick={() => sendMessage(
-                hasPairs
+                isAssignment
                   ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
                   : 'Genera el horario óptimo para este torneo.'
               )}
@@ -256,7 +258,7 @@ export function ScheduleAgent({
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Generando...
                 </span>
-              ) : hasPairs ? 'Generar horario con parejas reales' : 'Generar horario'}
+              ) : isAssignment ? 'Generar horario con parejas reales' : 'Generar horario'}
             </button>
           </div>
         ) : (
