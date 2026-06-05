@@ -23,6 +23,7 @@ interface RegistrationTableProps {
   tournamentId: string
   tournament: Record<string, unknown>
   registrations: Record<string, unknown>[]
+  categoryOptions: string[]
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -48,7 +49,7 @@ function buildPlayerRows(regs: Record<string, unknown>[]): PlayerRow[] {
   const rows: PlayerRow[] = []
   for (const r of regs) {
     const fd = (r.form_data as Record<string, unknown>) ?? {}
-    const cat = (fd.category as string) || (r.player1_category as string) || null
+    const cat = (r.category as string) || (fd.category as string) || (r.player1_category as string) || null
     const date = r.created_at
       ? new Date(r.created_at as string).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
       : '—'
@@ -80,7 +81,7 @@ function buildPlayerRows(regs: Record<string, unknown>[]): PlayerRow[] {
   return rows
 }
 
-export function RegistrationTable({ tournamentId, tournament: t, registrations: initialRegs }: RegistrationTableProps) {
+export function RegistrationTable({ tournamentId, tournament: t, registrations: initialRegs, categoryOptions }: RegistrationTableProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [filter, setFilter] = useState('Todos')
@@ -116,23 +117,6 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
     return [(t.registration_type as string) ?? 'pair']
   })()
 
-  const categoryOptions: string[] = (() => {
-    const vd = (t.venue_details as Record<string, unknown>) ?? {}
-    const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
-    const result: string[] = []
-    for (const cat of rawCats) {
-      if (!cat.name?.trim()) continue
-      if (!cat.genders || cat.genders.length === 0) {
-        result.push(cat.name)
-      } else {
-        for (const g of cat.genders) {
-          const suffix = g === 'masculino' ? ' Masculino' : g === 'femenino' ? ' Femenino' : ' Mixto'
-          result.push(cat.name + suffix)
-        }
-      }
-    }
-    return result
-  })()
 
   const confirmed = initialRegs.filter(r => r.status === 'confirmed').length
   const pending = initialRegs.filter(r => r.status === 'pending').length
@@ -183,11 +167,12 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
 
   function openEdit(reg: Record<string, unknown>) {
     const fd = (reg.form_data as Record<string, unknown>) ?? {}
+    const existingCategory = (reg.category as string) || (fd.category as string) || ''
     setEditReg(reg)
     setEditP1((reg.player1_name as string) || '')
     setEditP2((reg.player2_name as string) || '')
     setEditStatus((reg.status as 'confirmed' | 'pending' | 'waitlist') || 'confirmed')
-    setEditFormData({ ...fd })
+    setEditFormData({ ...fd, category: existingCategory })
   }
 
   function handleSaveEdit() {
@@ -452,7 +437,7 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
                 const status = r.status as string
                 const cfg = statusConfig[status] ?? statusConfig.pending
                 const fd = (r.form_data as Record<string, unknown>) ?? {}
-                const cat = (fd.category as string) || (r.player1_category as string) || null
+                const cat = (r.category as string) || (fd.category as string) || (r.player1_category as string) || null
                 const p1 = (r.player1_name as string) || '?'
                 const p2 = (r.player2_name as string) || null
                 const name = p2 ? `${p1} (+ ${p2})` : p1
