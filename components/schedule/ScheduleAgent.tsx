@@ -21,6 +21,7 @@ interface ScheduleAgentProps {
   autoRegenerate?: boolean
   tournamentUpdatedAt?: string | null
   scheduleUpdatedAt?: string | null
+  lastRegistrationAt?: string | null
 }
 
 export function ScheduleAgent({
@@ -35,6 +36,7 @@ export function ScheduleAgent({
   autoRegenerate,
   tournamentUpdatedAt,
   scheduleUpdatedAt,
+  lastRegistrationAt,
 }: ScheduleAgentProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [schedule, setSchedule] = useState<TournamentSchedule | null>(initialSchedule)
@@ -126,12 +128,32 @@ export function ScheduleAgent({
 
   const hasHistory = messages.length > 0
 
-  const scheduleOutOfSync = !!(
-    schedule &&
-    scheduleUpdatedAt &&
-    tournamentUpdatedAt &&
+  // Config changed after last schedule save
+  const configChanged = !!(
+    schedule && scheduleUpdatedAt && tournamentUpdatedAt &&
     new Date(tournamentUpdatedAt) > new Date(scheduleUpdatedAt)
   )
+  // New confirmed registrations since last schedule save
+  const registrationsChanged = !!(
+    schedule && scheduleUpdatedAt && lastRegistrationAt &&
+    new Date(lastRegistrationAt) > new Date(scheduleUpdatedAt)
+  )
+  // Schedule has generic placeholder names (P1, P2…) but real pairs exist
+  const registeredPairs = tournamentConfig.registeredPairs as Array<{ pairs: string[] }> | undefined
+  const hasRealPairs = (registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0) >= 2
+  const hasGenericNames = !!(
+    schedule &&
+    hasRealPairs &&
+    schedule.matches.slice(0, 8).some(m => /^(P\d+|Pareja\s+[A-Z])$/i.test(m.pair1) || /^(P\d+|Pareja\s+[A-Z])$/i.test(m.pair2))
+  )
+
+  const scheduleOutOfSync = configChanged || registrationsChanged || hasGenericNames
+
+  const outOfSyncReason = hasGenericNames
+    ? `El horario tiene nombres genéricos pero hay ${registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0} parejas confirmadas. Actualízalo para asignarlas a los grupos.`
+    : registrationsChanged
+    ? 'Hay nuevas parejas confirmadas desde la última generación del horario.'
+    : 'La configuración del torneo ha cambiado desde que se generó este horario.'
 
   // freshContext=true → don't include chat history (avoids context overflow on regenerate)
   async function sendMessage(text: string, freshContext = false) {
@@ -385,11 +407,11 @@ export function ScheduleAgent({
           {scheduleOutOfSync && (
             <div className="px-5 py-2.5 bg-[var(--warning-surface)] border-b border-[var(--warning)]/30 flex items-center justify-between gap-3">
               <p className="text-[12px] text-[var(--warning)] font-medium">
-                ⚠️ La configuración del torneo ha cambiado desde que se generó este horario.
+                ⚠️ {outOfSyncReason}
               </p>
               <button
                 onClick={() => sendMessage(
-                  isAssignment
+                  hasRealPairs
                     ? 'Regenera el horario completo usando las parejas inscritas actuales y la configuración actualizada del torneo.'
                     : 'Regenera el horario completo con la configuración actualizada del torneo.',
                   true
@@ -397,7 +419,7 @@ export function ScheduleAgent({
                 disabled={isGenerating}
                 className="shrink-0 text-[11px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-2.5 py-1 rounded-[6px] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
               >
-                Regenerar ahora
+                {hasRealPairs ? 'Actualizar con parejas reales' : 'Regenerar ahora'}
               </button>
             </div>
           )}

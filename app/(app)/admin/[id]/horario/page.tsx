@@ -16,7 +16,7 @@ export default async function HorarioPage({ params, searchParams }: { params: Pr
     loadScheduleChat(id),
     getConfirmedPairsForSchedule(id),
   ])
-  const initialData = 'data' in chatResult ? chatResult.data : { messages: [], schedule: null, version: 0, isPublished: false, scheduleUpdatedAt: null, versionHistory: [] }
+  const initialData = 'data' in chatResult ? chatResult.data : { messages: [], schedule: null, version: 0, isPublished: false, scheduleUpdatedAt: null, versionHistory: [], lastRegistrationAt: null }
 
   const vd = (tournament.venue_details as Record<string, unknown>) ?? {}
   const schedule = (vd.schedule as Record<string, unknown>) ?? {}
@@ -70,6 +70,7 @@ export default async function HorarioPage({ params, searchParams }: { params: Pr
 
   const tournamentUpdatedAt = tournament.updated_at ? String(tournament.updated_at) : null
   const scheduleUpdatedAt = initialData.scheduleUpdatedAt ?? null
+  const lastRegistrationAt = initialData.lastRegistrationAt ?? null
 
   return (
     <ScheduleAgent
@@ -84,6 +85,7 @@ export default async function HorarioPage({ params, searchParams }: { params: Pr
       autoRegenerate={sp.regenerate === '1'}
       tournamentUpdatedAt={tournamentUpdatedAt}
       scheduleUpdatedAt={scheduleUpdatedAt}
+      lastRegistrationAt={lastRegistrationAt}
     />
   )
 }
