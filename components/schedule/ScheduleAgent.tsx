@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
-import { Calendar, Clock, RotateCcw, Maximize2, X } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Calendar, Clock, Maximize2, X } from 'lucide-react'
 import { chatWithScheduleAgent, saveSchedule, publishSchedule } from '@/lib/actions/schedule-agent'
+import type { VersionSnapshot } from '@/lib/actions/schedule-agent'
 import { ScheduleChat } from '@/components/schedule/ScheduleChat'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
-import { ScheduleSummaryBar } from '@/components/schedule/ScheduleSummary'
 import { cn } from '@/lib/utils'
 import type { ChatMessage, TournamentSchedule } from '@/lib/types/schedule'
 
@@ -17,6 +17,7 @@ interface ScheduleAgentProps {
   initialSchedule: TournamentSchedule | null
   initialIsPublished: boolean
   initialVersion: number
+  initialVersionHistory: VersionSnapshot[]
   autoRegenerate?: boolean
   tournamentUpdatedAt?: string | null
   scheduleUpdatedAt?: string | null
@@ -30,6 +31,7 @@ export function ScheduleAgent({
   initialSchedule,
   initialIsPublished,
   initialVersion,
+  initialVersionHistory,
   autoRegenerate,
   tournamentUpdatedAt,
   scheduleUpdatedAt,
@@ -40,6 +42,7 @@ export function ScheduleAgent({
   const [isSaving, setIsSaving] = useState(false)
   const [isPublished, setIsPublished] = useState(initialIsPublished)
   const [version, setVersion] = useState(initialVersion)
+  const [versionHistory, setVersionHistory] = useState<VersionSnapshot[]>(initialVersionHistory)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
@@ -55,7 +58,7 @@ export function ScheduleAgent({
     const msg = isAssignment
       ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
       : 'Regenera el horario completo con la configuración actualizada del torneo, respetando los ajustes de sesiones anteriores si los hay.'
-    sendMessage(msg)
+    sendMessage(msg, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally empty — run once on mount
 
@@ -79,18 +82,6 @@ export function ScheduleAgent({
     }
   }, [])
 
-  // Each assistant message that carries a schedule is a saved version.
-  const versions = useMemo(() =>
-    messages
-      .filter((m): m is ChatMessage & { schedule: TournamentSchedule } =>
-        m.role === 'assistant' && !!m.schedule)
-      .map((m, i) => ({ num: i + 1, schedule: m.schedule, timestamp: m.timestamp })),
-    [messages]
-  )
-
-  // null → show live schedule; number → show that version
-  const displayedSchedule = previewIndex !== null ? (versions[previewIndex]?.schedule ?? null) : schedule
-
   useEffect(() => {
     if (!showHistory) return
     function onDown(e: MouseEvent) {
@@ -100,18 +91,30 @@ export function ScheduleAgent({
     return () => document.removeEventListener('mousedown', onDown)
   }, [showHistory])
 
+  // null → live schedule; number → preview of that version index in history
+  const displayedSchedule = previewIndex !== null
+    ? (versionHistory[previewIndex]?.schedule ?? null)
+    : schedule
+
   async function handleRestore(idx: number) {
-    const v = versions[idx]
+    const v = versionHistory[idx]
     if (!v) return
     setSchedule(v.schedule)
     setPreviewIndex(null)
     setIsSaving(true)
-    await saveSchedule({
+    const result = await saveSchedule({
       tournamentId,
       scheduleData: v.schedule as unknown as Record<string, unknown>,
       messages: messages as unknown as Record<string, unknown>[],
+      versionLabel: `Restaurado v${v.version}`,
     })
-    setVersion(ver => ver + 1)
+    if ('data' in result) {
+      setVersion(result.data.version)
+      setVersionHistory(prev => [
+        ...prev,
+        { version: result.data.version, savedAt: new Date().toISOString(), label: `Restaurado v${v.version}`, schedule: v.schedule },
+      ].slice(-25))
+    }
     setIsSaving(false)
   }
 
@@ -123,7 +126,6 @@ export function ScheduleAgent({
 
   const hasHistory = messages.length > 0
 
-  // Show warning when the schedule exists but tournament config was updated after it was generated
   const scheduleOutOfSync = !!(
     schedule &&
     scheduleUpdatedAt &&
@@ -131,17 +133,22 @@ export function ScheduleAgent({
     new Date(tournamentUpdatedAt) > new Date(scheduleUpdatedAt)
   )
 
-  async function sendMessage(text: string) {
+  // freshContext=true → don't include chat history (avoids context overflow on regenerate)
+  async function sendMessage(text: string, freshContext = false) {
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setIsGenerating(true)
     setSaveError(null)
 
+    const history = freshContext
+      ? []
+      : newMessages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+
     const result = await chatWithScheduleAgent({
       tournamentId,
       userMessage: text,
-      conversationHistory: newMessages.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
+      conversationHistory: history,
       tournamentConfig,
       currentSchedule: schedule ?? undefined,
     })
@@ -167,12 +174,22 @@ export function ScheduleAgent({
     const scheduleToSave = newSchedule ?? schedule
     if (scheduleToSave) {
       setIsSaving(true)
-      await saveSchedule({
+      const label = newSchedule ? 'Generado (AI)' : 'Auto-guardado'
+      const result2 = await saveSchedule({
         tournamentId,
         scheduleData: scheduleToSave as unknown as Record<string, unknown>,
         messages: updatedMessages as unknown as Record<string, unknown>[],
+        versionLabel: label,
       })
-      setVersion(v => v + 1)
+      if ('data' in result2) {
+        setVersion(result2.data.version)
+        if (newSchedule) {
+          setVersionHistory(prev => [
+            ...prev,
+            { version: result2.data.version, savedAt: new Date().toISOString(), label, schedule: newSchedule },
+          ].slice(-25))
+        }
+      }
       setIsSaving(false)
     }
   }
@@ -185,9 +202,17 @@ export function ScheduleAgent({
       tournamentId,
       scheduleData: schedule as unknown as Record<string, unknown>,
       messages: messages as unknown as Record<string, unknown>[],
+      versionLabel: 'Guardado manual',
     })
-    if ('error' in result) setSaveError(result.error)
-    else setVersion(v => v + 1)
+    if ('error' in result) {
+      setSaveError(result.error)
+    } else {
+      setVersion(result.data.version)
+      setVersionHistory(prev => [
+        ...prev,
+        { version: result.data.version, savedAt: new Date().toISOString(), label: 'Guardado manual', schedule },
+      ].slice(-25))
+    }
     setIsSaving(false)
   }
 
@@ -198,17 +223,6 @@ export function ScheduleAgent({
     if (!('error' in result)) setIsPublished(true)
   }
 
-  /*
-   * LAYOUT — the only reliable recipe for independent column scroll
-   * ────────────────────────────────────────────────────────────────
-   * Root:    height:100vh (zero parent dependency), grid 2 columns.
-   * Column:  grid rows "auto minmax(0,1fr)".
-   *          ⚠️ minmax(0,1fr) — NOT 1fr. Plain `1fr` == minmax(AUTO,1fr),
-   *          and the `auto` minimum lets the track grow past its share to
-   *          fit content, so overflow never has a bounded box to scroll in.
-   *          minmax(0,...) pins the minimum to 0 → track == remaining space.
-   * Body:    overflow-y-auto inside the minmax(0,1fr) track → scrolls.
-   */
   return (
     <>
     <div
@@ -220,29 +234,13 @@ export function ScheduleAgent({
         className="border-r border-border overflow-hidden shrink-0"
         style={{ width: chatWidth, display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)' }}
       >
-        {/* Header — auto */}
-        <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-2">
-          <div>
-            <h1 className="text-[18px] font-extrabold text-foreground tracking-[-0.4px]">Horario</h1>
-            <p className="text-[12px] text-muted-foreground mt-0.5">{tournamentName}</p>
-          </div>
-          {schedule && (
-            <button
-              onClick={() => sendMessage(
-                isAssignment
-                  ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
-                  : 'Regenera el horario completo con la configuración actual del torneo, respetando los ajustes de sesiones anteriores si los hay.'
-              )}
-              disabled={isGenerating}
-              className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground border border-border px-2 py-1 rounded-[6px] hover:bg-muted transition-colors disabled:opacity-40 shrink-0 mt-0.5"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Regenerar
-            </button>
-          )}
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-border">
+          <h1 className="text-[18px] font-extrabold text-foreground tracking-[-0.4px]">Horario</h1>
+          <p className="text-[12px] text-muted-foreground mt-0.5">{tournamentName}</p>
         </div>
 
-        {/* Body — minmax(0,1fr), bounded → scrolls */}
+        {/* Body */}
         {!hasHistory ? (
           <div className="overflow-y-auto flex flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="w-12 h-12 rounded-full bg-[var(--accent-surface)] flex items-center justify-center">
@@ -260,7 +258,8 @@ export function ScheduleAgent({
               onClick={() => sendMessage(
                 isAssignment
                   ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
-                  : 'Genera el horario óptimo para este torneo.'
+                  : 'Genera el horario óptimo para este torneo.',
+                true
               )}
               disabled={isGenerating}
               className="px-5 py-2.5 bg-accent text-white text-[13px] font-semibold rounded-[8px] hover:bg-accent/90 disabled:opacity-50 transition-opacity"
@@ -298,118 +297,124 @@ export function ScheduleAgent({
         className="overflow-hidden flex-1"
         style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minWidth: 0 }}
       >
-        {/* Actions bar + optional warning — auto */}
+        {/* Actions bar */}
         <div>
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
-              {mode}
-            </span>
-            {version > 0 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
-            {versions.length > 1 && (
-              <div className="relative" ref={historyRef}>
-                <button
-                  onClick={() => setShowHistory(s => !s)}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded-[5px] hover:bg-muted transition-colors"
-                >
-                  <Clock className="w-3 h-3" />
-                  {versions.length} versiones
-                </button>
-                {showHistory && (
-                  <div className="absolute left-0 top-7 bg-popover border border-border rounded-[10px] shadow-lg z-50 py-1 min-w-[190px]">
-                    {versions.map((v, i) => {
-                      const isActive = previewIndex === i || (i === versions.length - 1 && previewIndex === null)
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => { setPreviewIndex(i === versions.length - 1 ? null : i); setShowHistory(false) }}
-                          className={cn(
-                            'w-full text-left px-3 py-2 text-[12px] flex items-center gap-2 hover:bg-muted transition-colors',
-                            isActive && 'text-accent'
-                          )}
-                        >
-                          <span className="font-semibold w-6">v{v.num}</span>
-                          <span className="text-muted-foreground flex-1">
-                            {new Date(v.timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          {i === versions.length - 1 && (
-                            <span className="text-[10px] bg-[var(--accent-surface)] text-accent px-1.5 py-0.5 rounded-full">actual</span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
+          <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
+                {mode}
+              </span>
+              {version > 0 && (
+                <div className="relative" ref={historyRef}>
+                  <button
+                    onClick={() => setShowHistory(s => !s)}
+                    disabled={versionHistory.length === 0}
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded-[5px] hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-default"
+                  >
+                    <Clock className="w-3 h-3" />
+                    v{version}
+                    {versionHistory.length > 0 && ` · ${versionHistory.length} guardados`}
+                  </button>
+                  {showHistory && versionHistory.length > 0 && (
+                    <div className="absolute left-0 top-7 bg-popover border border-border rounded-[10px] shadow-lg z-50 py-1 min-w-[220px] max-h-[320px] overflow-y-auto">
+                      {[...versionHistory].reverse().map((v, ri) => {
+                        const idx = versionHistory.length - 1 - ri
+                        const isActive = previewIndex === idx || (idx === versionHistory.length - 1 && previewIndex === null)
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => { setPreviewIndex(idx === versionHistory.length - 1 ? null : idx); setShowHistory(false) }}
+                            className={cn(
+                              'w-full text-left px-3 py-2 text-[12px] flex items-center gap-2 hover:bg-muted transition-colors',
+                              isActive && 'text-accent'
+                            )}
+                          >
+                            <span className="font-semibold w-6">v{v.version}</span>
+                            <span className="text-muted-foreground flex-1 truncate">{v.label}</span>
+                            <span className="text-muted-foreground text-[10px] shrink-0">
+                              {new Date(v.savedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {idx === versionHistory.length - 1 && (
+                              <span className="text-[10px] bg-[var(--accent-surface)] text-accent px-1.5 py-0.5 rounded-full shrink-0">actual</span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              {isSaving && <span className="text-[11px] text-muted-foreground">Guardando...</span>}
+              {saveError && <span className="text-[11px] text-[var(--error)]">{saveError}</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setFullscreen(true)}
+                disabled={!displayedSchedule}
+                title="Pantalla completa"
+                className="flex items-center justify-center w-7 h-7 rounded-[6px] border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!schedule || isSaving}
+                className={cn(
+                  'px-3 py-1.5 text-[12px] font-semibold rounded-[7px] border border-border transition-colors',
+                  schedule ? 'hover:bg-muted text-foreground' : 'opacity-40 cursor-not-allowed text-muted-foreground'
                 )}
-              </div>
-            )}
-            {isSaving && <span className="text-[11px] text-muted-foreground">Guardando...</span>}
-            {saveError && <span className="text-[11px] text-[var(--error)]">{saveError}</span>}
+              >
+                Guardar
+              </button>
+              <button
+                onClick={handlePublish}
+                disabled={!schedule || isSaving || isPublished}
+                className={cn(
+                  'px-3 py-1.5 text-[12px] font-semibold rounded-[7px] transition-colors',
+                  isPublished
+                    ? 'bg-[var(--success-surface)] text-[var(--success)] border border-[var(--success)]/30 cursor-default'
+                    : schedule
+                    ? 'bg-accent text-white hover:bg-accent/90'
+                    : 'bg-accent/40 text-white cursor-not-allowed'
+                )}
+              >
+                {isPublished ? '✓ Publicado' : 'Publicar'}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFullscreen(true)}
-              disabled={!displayedSchedule}
-              title="Pantalla completa"
-              className="flex items-center justify-center w-7 h-7 rounded-[6px] border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!schedule || isSaving}
-              className={cn(
-                'px-3 py-1.5 text-[12px] font-semibold rounded-[7px] border border-border transition-colors',
-                schedule ? 'hover:bg-muted text-foreground' : 'opacity-40 cursor-not-allowed text-muted-foreground'
-              )}
-            >
-              Guardar
-            </button>
-            <button
-              onClick={handlePublish}
-              disabled={!schedule || isSaving || isPublished}
-              className={cn(
-                'px-3 py-1.5 text-[12px] font-semibold rounded-[7px] transition-colors',
-                isPublished
-                  ? 'bg-[var(--success-surface)] text-[var(--success)] border border-[var(--success)]/30 cursor-default'
-                  : schedule
-                  ? 'bg-accent text-white hover:bg-accent/90'
-                  : 'bg-accent/40 text-white cursor-not-allowed'
-              )}
-            >
-              {isPublished ? '✓ Publicado' : 'Publicar'}
-            </button>
-          </div>
-        </div>
-        {scheduleOutOfSync && (
-          <div className="px-5 py-2.5 bg-[var(--warning-surface)] border-b border-[var(--warning)]/30 flex items-center justify-between gap-3">
-            <p className="text-[12px] text-[var(--warning)] font-medium">
-              ⚠️ La configuración del torneo ha cambiado desde que se generó este horario.
-            </p>
-            <button
-              onClick={() => sendMessage(
-                isAssignment
-                  ? 'Regenera el horario completo usando las parejas inscritas actuales y la configuración actualizada del torneo.'
-                  : 'Regenera el horario completo con la configuración actualizada del torneo.'
-              )}
-              disabled={isGenerating}
-              className="shrink-0 text-[11px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-2.5 py-1 rounded-[6px] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
-            >
-              Regenerar ahora
-            </button>
-          </div>
-        )}
+          {scheduleOutOfSync && (
+            <div className="px-5 py-2.5 bg-[var(--warning-surface)] border-b border-[var(--warning)]/30 flex items-center justify-between gap-3">
+              <p className="text-[12px] text-[var(--warning)] font-medium">
+                ⚠️ La configuración del torneo ha cambiado desde que se generó este horario.
+              </p>
+              <button
+                onClick={() => sendMessage(
+                  isAssignment
+                    ? 'Regenera el horario completo usando las parejas inscritas actuales y la configuración actualizada del torneo.'
+                    : 'Regenera el horario completo con la configuración actualizada del torneo.',
+                  true
+                )}
+                disabled={isGenerating}
+                className="shrink-0 text-[11px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-2.5 py-1 rounded-[6px] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
+              >
+                Regenerar ahora
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Calendar content — minmax(0,1fr), bounded → scrolls. */}
+        {/* Calendar content */}
         <div className="overflow-y-auto">
           {previewIndex !== null && (
             <div className="mx-5 mt-4 px-3.5 py-2 bg-muted border border-border rounded-[8px] flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-[12px] text-foreground">
-                <RotateCcw className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <span>
-                  Viendo <strong>v{versions[previewIndex]?.num}</strong>
+                  Viendo <strong>v{versionHistory[previewIndex]?.version}</strong>
+                  {' — '}
+                  {versionHistory[previewIndex]?.label}
                   {' · '}
-                  {new Date(versions[previewIndex]?.timestamp ?? '').toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(versionHistory[previewIndex]?.savedAt ?? '').toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
               <div className="flex items-center gap-3">
@@ -428,14 +433,11 @@ export function ScheduleAgent({
               </div>
             </div>
           )}
-          <div className="p-5 space-y-4">
+          <div className="p-5">
             {displayedSchedule ? (
-              <>
-                <ScheduleSummaryBar summary={displayedSchedule.summary} />
-                <div className="bg-card border border-border rounded-[10px] overflow-hidden">
-                  <ScheduleCalendar schedule={displayedSchedule} />
-                </div>
-              </>
+              <div className="bg-card border border-border rounded-[10px] overflow-hidden">
+                <ScheduleCalendar schedule={displayedSchedule} />
+              </div>
             ) : (
               <div className="flex items-center justify-center py-24 text-center">
                 <div>
@@ -456,7 +458,6 @@ export function ScheduleAgent({
         className="fixed inset-0 z-50 bg-background flex flex-col"
         style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)' }}
       >
-        {/* Header */}
         <div className="px-6 py-3 border-b border-border flex items-center justify-between gap-4 bg-background">
           <div className="flex items-center gap-3">
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
@@ -473,9 +474,7 @@ export function ScheduleAgent({
             Cerrar
           </button>
         </div>
-        {/* Content */}
-        <div className="overflow-y-auto p-6 space-y-4">
-          <ScheduleSummaryBar summary={displayedSchedule.summary} />
+        <div className="overflow-y-auto p-6">
           <div className="bg-card border border-border rounded-[10px] overflow-hidden">
             <ScheduleCalendar schedule={displayedSchedule} />
           </div>

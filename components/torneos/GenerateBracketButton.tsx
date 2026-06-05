@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { generateGroupBracket, updateGroupBracket } from '@/lib/actions/bracket'
+import { generateGroupBracket, generateGroupBracketFromSchedule, updateGroupBracket } from '@/lib/actions/bracket'
 
 interface Props {
   tournamentId: string
@@ -18,6 +18,15 @@ export function GenerateBracketButton({ tournamentId, hasMatches, schedulePublis
   const [confirmRegen, setConfirmRegen] = useState(false)
 
   function runGenerate() {
+    startTransition(async () => {
+      // Use schedule group assignments when available; falls back to random if schedule has generic names
+      const result = await generateGroupBracketFromSchedule(tournamentId)
+      if (result.error) { alert(result.error); return }
+      router.refresh()
+    })
+  }
+
+  function runGenerateRandom() {
     startTransition(async () => {
       const result = await generateGroupBracket(tournamentId)
       if (result.error) { alert(result.error); return }
@@ -71,7 +80,7 @@ export function GenerateBracketButton({ tournamentId, hasMatches, schedulePublis
           ¿Regenerar desde cero? Se perderán los partidos actuales.
         </span>
         <button
-          onClick={() => { setConfirmRegen(false); runGenerate() }}
+          onClick={() => { setConfirmRegen(false); runGenerateRandom() }}
           disabled={isPending}
           className="px-2.5 py-1 bg-[var(--warning)] text-white text-[12px] font-semibold rounded-[5px] hover:opacity-90 disabled:opacity-50 transition-opacity"
         >

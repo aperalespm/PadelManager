@@ -135,6 +135,7 @@ async function ensureTables() {
       updated_at      TIMESTAMPTZ DEFAULT NOW()
     )
   `
+  await sql`ALTER TABLE tournament_schedules ADD COLUMN IF NOT EXISTS version_history JSONB DEFAULT '[]'`
   await sql`
     CREATE TABLE IF NOT EXISTS tournament_schedule_chats (
       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -235,7 +236,7 @@ Si el horario es matemáticamente imposible con estos parámetros:
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 8096,
+      max_tokens: 16000,
       system: systemPrompt,
       messages: [
         ...conversationHistory.map(m => ({
@@ -275,23 +276,43 @@ const saveSchema = z.object({
   tournamentId: z.string().uuid(),
   scheduleData: z.record(z.string(), z.unknown()),
   messages: z.array(z.record(z.string(), z.unknown())),
+  versionLabel: z.string().optional(),
 })
 
-export async function saveSchedule(input: unknown): Promise<{ data: { success: true } } | { error: string }> {
+export async function saveSchedule(input: unknown): Promise<{ data: { success: true; version: number } } | { error: string }> {
   const parsed = saveSchema.safeParse(input)
   if (!parsed.success) return { error: 'Datos inválidos' }
 
-  const { tournamentId, scheduleData, messages } = parsed.data
+  const { tournamentId, scheduleData, messages, versionLabel } = parsed.data
 
   try {
+    // Fetch current version_history and version counter
+    const existing = await sql`
+      SELECT version, COALESCE(version_history, '[]'::jsonb) AS version_history
+      FROM tournament_schedules WHERE tournament_id = ${tournamentId}
+    `
+    const currentVersion = (existing[0]?.version as number) ?? 0
+    const nextVersion = currentVersion + 1
+    const existingHistory = (existing[0]?.version_history as Array<Record<string, unknown>>) ?? []
+
+    const newEntry = {
+      version: nextVersion,
+      savedAt: new Date().toISOString(),
+      label: versionLabel ?? 'Guardado',
+      schedule: scheduleData,
+    }
+    // Keep last 25 snapshots
+    const updatedHistory = [...existingHistory, newEntry].slice(-25)
+
     await sql`
-      INSERT INTO tournament_schedules (user_id, tournament_id, schedule_data)
-      VALUES (${DEMO_ORGANIZER_ID}, ${tournamentId}, ${JSON.stringify(scheduleData)})
+      INSERT INTO tournament_schedules (user_id, tournament_id, schedule_data, version_history)
+      VALUES (${DEMO_ORGANIZER_ID}, ${tournamentId}, ${JSON.stringify(scheduleData)}, ${JSON.stringify(updatedHistory)})
       ON CONFLICT (tournament_id)
       DO UPDATE SET
-        schedule_data = ${JSON.stringify(scheduleData)},
-        version = tournament_schedules.version + 1,
-        updated_at = NOW()
+        schedule_data    = ${JSON.stringify(scheduleData)},
+        version          = ${nextVersion},
+        version_history  = ${JSON.stringify(updatedHistory)},
+        updated_at       = NOW()
     `
     await sql`
       INSERT INTO tournament_schedule_chats (user_id, tournament_id, messages)
@@ -301,13 +322,20 @@ export async function saveSchedule(input: unknown): Promise<{ data: { success: t
         messages = ${JSON.stringify(messages)},
         updated_at = NOW()
     `
-    return { data: { success: true } }
+    return { data: { success: true, version: nextVersion } }
   } catch {
     return { error: 'Ha ocurrido un error guardando el horario.' }
   }
 }
 
 // ── Load chat history + schedule ──────────────────────────────────────────────
+
+export type VersionSnapshot = {
+  version: number
+  savedAt: string
+  label: string
+  schedule: TournamentSchedule
+}
 
 export async function loadScheduleChat(tournamentId: string): Promise<{
   data: {
@@ -316,6 +344,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
     version: number
     isPublished: boolean
     scheduleUpdatedAt: string | null
+    versionHistory: VersionSnapshot[]
   }
 } | { error: string }> {
   try {
@@ -328,7 +357,9 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
         LIMIT 1
       `,
       sql`
-        SELECT schedule_data, version, is_published, updated_at FROM tournament_schedules
+        SELECT schedule_data, version, is_published, updated_at,
+               COALESCE(version_history, '[]'::jsonb) AS version_history
+        FROM tournament_schedules
         WHERE tournament_id = ${tournamentId}
         LIMIT 1
       `,
@@ -341,6 +372,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
         version: (scheduleRows[0]?.version as number) || 0,
         isPublished: (scheduleRows[0]?.is_published as boolean) || false,
         scheduleUpdatedAt: scheduleRows[0]?.updated_at ? String(scheduleRows[0].updated_at) : null,
+        versionHistory: (scheduleRows[0]?.version_history as VersionSnapshot[]) || [],
       },
     }
   } catch {
