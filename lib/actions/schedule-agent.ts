@@ -365,7 +365,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
         LIMIT 1
       `,
       sql`
-        SELECT MAX(created_at) AS last_at
+        SELECT MAX(updated_at) AS last_at
         FROM registrations
         WHERE tournament_id = ${tournamentId} AND status = 'confirmed'
       `,

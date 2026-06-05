@@ -133,24 +133,37 @@ export function ScheduleAgent({
     schedule && scheduleUpdatedAt && tournamentUpdatedAt &&
     new Date(tournamentUpdatedAt) > new Date(scheduleUpdatedAt)
   )
-  // New confirmed registrations since last schedule save
+  // New confirmed registrations confirmed/updated since last schedule save
   const registrationsChanged = !!(
     schedule && scheduleUpdatedAt && lastRegistrationAt &&
     new Date(lastRegistrationAt) > new Date(scheduleUpdatedAt)
   )
-  // Schedule has generic placeholder names (P1, P2…) but real pairs exist
+  // Real pair names are NOT present in the schedule (robust check — avoids
+  // fragile regex guessing of what pattern the AI used for generic names)
   const registeredPairs = tournamentConfig.registeredPairs as Array<{ pairs: string[] }> | undefined
-  const hasRealPairs = (registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0) >= 2
-  const hasGenericNames = !!(
-    schedule &&
-    hasRealPairs &&
-    schedule.matches.slice(0, 8).some(m => /^(P\d+|Pareja\s+[A-Z])$/i.test(m.pair1) || /^(P\d+|Pareja\s+[A-Z])$/i.test(m.pair2))
+  const totalRealPairs = registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0
+  const hasRealPairs = totalRealPairs >= 2
+  const realPairNameSet = new Set(
+    (registeredPairs ?? []).flatMap(c => c.pairs.map(p => p.trim()))
   )
+  // Check if any of the first matches reference a known real pair name
+  // (also check matchLabel as fallback when pair1/pair2 may differ in format)
+  const scheduleHasRealNames = hasRealPairs && !!(
+    schedule?.matches.slice(0, 6).some(m => {
+      const p1 = (m.pair1 ?? '').trim()
+      const p2 = (m.pair2 ?? '').trim()
+      const lbl = m.matchLabel ?? ''
+      if (realPairNameSet.has(p1) || realPairNameSet.has(p2)) return true
+      // Fallback: check if the label contains any known name
+      return [...realPairNameSet].some(name => name.length > 2 && lbl.includes(name))
+    })
+  )
+  const hasGenericNames = hasRealPairs && !!schedule && !scheduleHasRealNames
 
   const scheduleOutOfSync = configChanged || registrationsChanged || hasGenericNames
 
   const outOfSyncReason = hasGenericNames
-    ? `El horario tiene nombres genéricos pero hay ${registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0} parejas confirmadas. Actualízalo para asignarlas a los grupos.`
+    ? `El horario tiene nombres genéricos pero hay ${totalRealPairs} parejas confirmadas. Actualízalo para asignarlas a los grupos.`
     : registrationsChanged
     ? 'Hay nuevas parejas confirmadas desde la última generación del horario.'
     : 'La configuración del torneo ha cambiado desde que se generó este horario.'
@@ -203,14 +216,12 @@ export function ScheduleAgent({
         messages: updatedMessages as unknown as Record<string, unknown>[],
         versionLabel: label,
       })
-      if ('data' in result2) {
+      if ('data' in result2 && newSchedule) {
         setVersion(result2.data.version)
-        if (newSchedule) {
-          setVersionHistory(prev => [
-            ...prev,
-            { version: result2.data.version, savedAt: new Date().toISOString(), label, schedule: newSchedule },
-          ].slice(-25))
-        }
+        setVersionHistory(prev => [
+          ...prev,
+          { version: result2.data.version, savedAt: new Date().toISOString(), label, schedule: newSchedule },
+        ].slice(-25))
       }
       setIsSaving(false)
     }
@@ -326,7 +337,7 @@ export function ScheduleAgent({
               <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
                 {mode}
               </span>
-              {version > 0 && (
+              {(versionHistory.length > 0 || schedule) && (
                 <div className="relative" ref={historyRef}>
                   <button
                     onClick={() => setShowHistory(s => !s)}
@@ -334,8 +345,9 @@ export function ScheduleAgent({
                     className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded-[5px] hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-default"
                   >
                     <Clock className="w-3 h-3" />
-                    v{version}
-                    {versionHistory.length > 0 && ` · ${versionHistory.length} guardados`}
+                    {versionHistory.length > 0
+                      ? `${versionHistory.length} ${versionHistory.length === 1 ? 'versión' : 'versiones'} guardadas`
+                      : 'Sin versiones guardadas'}
                   </button>
                   {showHistory && versionHistory.length > 0 && (
                     <div className="absolute left-0 top-7 bg-popover border border-border rounded-[10px] shadow-lg z-50 py-1 min-w-[220px] max-h-[320px] overflow-y-auto">
@@ -351,7 +363,6 @@ export function ScheduleAgent({
                               isActive && 'text-accent'
                             )}
                           >
-                            <span className="font-semibold w-6">v{v.version}</span>
                             <span className="text-muted-foreground flex-1 truncate">{v.label}</span>
                             <span className="text-muted-foreground text-[10px] shrink-0">
                               {new Date(v.savedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
@@ -485,7 +496,6 @@ export function ScheduleAgent({
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
               {mode}
             </span>
-            {version > 0 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
             <span className="text-[13px] font-semibold text-foreground">{tournamentName}</span>
           </div>
           <button
