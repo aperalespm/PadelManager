@@ -109,31 +109,47 @@ function GroupCardFilled({
   label,
   pairs,
   advanceCount,
+  isDraft,
 }: {
   label: string
   pairs: Array<{ id: string; name: string }>
   advanceCount: number
+  isDraft?: boolean
 }) {
   return (
     <div className="border border-border rounded-[7px] overflow-hidden shrink-0 w-[180px]">
       <div className="bg-[#1e3a5f] text-white text-[9px] font-bold uppercase tracking-wide py-[5px] text-center">
         {label}
       </div>
-      {pairs.map((p, i) => (
-        <div key={p.id}
-          style={{ height: SLOT_H }}
-          className={cn(
-            'px-2 flex items-center gap-1.5 border-t border-border/40',
-            i < advanceCount
-              ? 'bg-[var(--accent-surface)] text-accent font-semibold'
-              : 'bg-white text-muted-foreground'
-          )}>
-          <span className={cn('text-[9px] shrink-0', i < advanceCount ? 'text-[var(--success)] font-bold' : '')}>
-            {i < advanceCount ? '✓' : '○'}
-          </span>
-          <span className="text-[11px] truncate leading-tight">{p.name}</span>
-        </div>
-      ))}
+      {pairs.map((p, i) => {
+        const isSlot = p.id.startsWith('__slot__')
+        return (
+          <div key={p.id}
+            style={{ height: SLOT_H }}
+            className={cn(
+              'px-2 flex items-center gap-1.5 border-t border-border/40',
+              isSlot
+                ? 'bg-muted/40'
+                : !isDraft && i < advanceCount
+                  ? 'bg-[var(--accent-surface)] text-accent font-semibold'
+                  : 'bg-white text-muted-foreground'
+            )}>
+            <span className={cn(
+              'text-[9px] shrink-0',
+              isSlot ? 'text-border' :
+              !isDraft && i < advanceCount ? 'text-[var(--success)] font-bold' : 'text-muted-foreground/50'
+            )}>
+              {isSlot ? '·' : !isDraft && i < advanceCount ? '✓' : '○'}
+            </span>
+            <span className={cn(
+              'text-[11px] truncate leading-tight',
+              isSlot ? 'text-muted-foreground/40 italic' : ''
+            )}>
+              {p.name}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -145,9 +161,10 @@ interface GroupBracketViewProps {
   catMap: Record<string, Record<string, Array<{ id: string; name: string }>>>
   numGroups: number
   teamsAdvancePerGroup: number
+  isDraft?: boolean
 }
 
-export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup }: GroupBracketViewProps) {
+export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup, isDraft }: GroupBracketViewProps) {
   const catLabels = Object.keys(catMap).sort()
   const [selCat, setSelCat] = useState(catLabels[0] ?? '')
 
@@ -194,6 +211,7 @@ export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup }: Gr
                   label={grp}
                   pairs={groupMap[grp]}
                   advanceCount={teamsAdvancePerGroup}
+                  isDraft={isDraft}
                 />
               ))}
             </div>

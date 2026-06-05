@@ -166,6 +166,199 @@ export async function generateGroupBracket(tournamentId: string) {
   return { data: true }
 }
 
+// ── Update: add new confirmed registrations to existing groups ────────────────
+
+export async function updateGroupBracket(tournamentId: string) {
+  await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS group_label TEXT`
+  await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS category_label TEXT`
+
+  const tRows = await sql`SELECT * FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!tRows[0]) return { error: 'Torneo no encontrado' }
+  const t = tRows[0]
+
+  const phases = await sql`SELECT * FROM tournament_phases WHERE tournament_id = ${tournamentId} ORDER BY phase_order ASC`
+  if (!phases.length) return { error: 'Configura las fases primero' }
+  const groupsPhase = phases[0]
+
+  const vd = (t.venue_details as Record<string, unknown>) ?? {}
+  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '4')) || 4)
+  const groupLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+  // All confirmed registrations
+  const allConfirmed = await sql`SELECT * FROM registrations WHERE tournament_id = ${tournamentId} AND status = 'confirmed'`
+
+  // Registrations already present in any match
+  const inMatches = await sql`
+    SELECT DISTINCT unnest(ARRAY[team1_reg_id, team2_reg_id]) AS reg_id
+    FROM matches
+    WHERE tournament_id = ${tournamentId}
+      AND (team1_reg_id IS NOT NULL OR team2_reg_id IS NOT NULL)
+  `
+  const alreadyIds = new Set(inMatches.map(r => r.reg_id as string).filter(Boolean))
+
+  const newRegs = allConfirmed.filter(r => !alreadyIds.has(r.id as string))
+  if (newRegs.length === 0) return { data: true }
+
+  // Build group structure from existing matches: cat → groupLabel → reg_id[]
+  const existing = await sql`
+    SELECT group_label, COALESCE(category_label, '') AS category_label, team1_reg_id AS reg_id
+    FROM matches WHERE tournament_id = ${tournamentId} AND team1_reg_id IS NOT NULL AND group_label IS NOT NULL
+    UNION
+    SELECT group_label, COALESCE(category_label, '') AS category_label, team2_reg_id AS reg_id
+    FROM matches WHERE tournament_id = ${tournamentId} AND team2_reg_id IS NOT NULL AND group_label IS NOT NULL
+  `
+  const groupStructure: Record<string, Record<string, string[]>> = {}
+  for (const row of existing) {
+    const cat = row.category_label as string
+    const grp = row.group_label as string
+    if (!groupStructure[cat]) groupStructure[cat] = {}
+    if (!groupStructure[cat][grp]) groupStructure[cat][grp] = []
+    if (!groupStructure[cat][grp].includes(row.reg_id as string)) {
+      groupStructure[cat][grp].push(row.reg_id as string)
+    }
+  }
+
+  // Group new regs by category
+  const newByCat: Record<string, typeof newRegs> = {}
+  for (const r of newRegs) {
+    const fd = (r.form_data as Record<string, unknown>) ?? {}
+    const cat = (fd.category as string) || ''
+    if (!newByCat[cat]) newByCat[cat] = []
+    newByCat[cat].push(r)
+  }
+
+  const maxMatchNum = await sql`SELECT COALESCE(MAX(match_number), 0) AS n FROM matches WHERE tournament_id = ${tournamentId}`
+  let matchNum = (maxMatchNum[0].n as number) + 1
+
+  for (const [catLabel, catNewRegs] of Object.entries(newByCat)) {
+    if (!groupStructure[catLabel]) groupStructure[catLabel] = {}
+    const catGroups = groupStructure[catLabel]
+
+    for (const newReg of catNewRegs) {
+      // Find group with fewest teams that still has room
+      let targetGroup: string | null = null
+      let minSize = Infinity
+      for (const [grpLabel, regIds] of Object.entries(catGroups)) {
+        if (regIds.length < teamsPerGroup && regIds.length < minSize) {
+          minSize = regIds.length
+          targetGroup = grpLabel
+        }
+      }
+      // No room in any existing group — create a new one
+      if (!targetGroup) {
+        const nextIdx = Object.keys(catGroups).length
+        targetGroup = `Grupo ${groupLetters[nextIdx] ?? nextIdx}`
+        catGroups[targetGroup] = []
+      }
+
+      const existingInGroup = [...catGroups[targetGroup]]
+      catGroups[targetGroup].push(newReg.id as string)
+
+      // New reg vs each already-in-group reg
+      for (const existingId of existingInGroup) {
+        await sql`
+          INSERT INTO matches (
+            tournament_id, phase_id, round, match_number,
+            team1_reg_id, team2_reg_id,
+            group_label, category_label, status
+          ) VALUES (
+            ${tournamentId}, ${groupsPhase.id}, 1, ${matchNum},
+            ${existingId}, ${newReg.id as string},
+            ${targetGroup}, ${catLabel || null}, 'pending'
+          )
+        `
+        matchNum++
+      }
+    }
+  }
+
+  await sql`UPDATE tournaments SET updated_at = NOW() WHERE id = ${tournamentId}`
+  return { data: true }
+}
+
+// ── Draft preview: slot layout with confirmed pairs + placeholders ─────────────
+
+export async function getGroupBracketDraftData(tournamentId: string) {
+  const tRows = await sql`SELECT * FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!tRows[0]) return { data: {} as Record<string, Record<string, Array<{ id: string; name: string }>>> }
+  const t = tRows[0]
+
+  const vd = (t.venue_details as Record<string, unknown>) ?? {}
+  const numGroups = Math.max(1, parseInt(String(vd.num_groups ?? '3')) || 3)
+  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '4')) || 4)
+  const groupLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+  // Expand configured categories (same logic as the page)
+  const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
+  const categoryNames: string[] = []
+  for (const cat of rawCats) {
+    if (!cat.name?.trim()) continue
+    if (!cat.genders || cat.genders.length === 0) {
+      categoryNames.push(cat.name)
+    } else {
+      for (const g of cat.genders) {
+        const suffix = g === 'masculino' ? ' Masculino' : g === 'femenino' ? ' Femenino' : ' Mixto'
+        categoryNames.push(cat.name + suffix)
+      }
+    }
+  }
+
+  // Confirmed registrations with display names
+  const regs = await sql`
+    SELECT
+      r.id, r.form_data, r.player1_id, r.player2_id,
+      r.player1_name, r.player2_name,
+      CASE
+        WHEN p1.display_name IS NOT NULL
+        THEN p1.display_name || ' / ' || COALESCE(p2.display_name, r.player2_name, '?')
+        ELSE COALESCE(r.player1_name, '?') || ' / ' || COALESCE(r.player2_name, '?')
+      END AS pair_name
+    FROM registrations r
+    LEFT JOIN user_profiles p1 ON p1.user_id = r.player1_id
+    LEFT JOIN user_profiles p2 ON p2.user_id = r.player2_id
+    WHERE r.tournament_id = ${tournamentId} AND r.status = 'confirmed'
+    ORDER BY r.created_at ASC
+  `
+
+  const catMap: Record<string, Record<string, Array<{ id: string; name: string }>>> = {}
+
+  function buildCategory(catName: string, catRegs: typeof regs) {
+    catMap[catName] = {}
+    for (let g = 0; g < numGroups; g++) {
+      catMap[catName][`Grupo ${groupLetters[g]}`] = []
+    }
+    // Distribute confirmed regs round-robin across groups
+    catRegs.forEach((reg, i) => {
+      const grp = `Grupo ${groupLetters[i % numGroups]}`
+      catMap[catName][grp].push({ id: reg.id as string, name: reg.pair_name as string })
+    })
+    // Fill remaining slots with placeholders
+    for (let g = 0; g < numGroups; g++) {
+      const grp = `Grupo ${groupLetters[g]}`
+      const existing = catMap[catName][grp].length
+      for (let s = existing + 1; s <= teamsPerGroup; s++) {
+        catMap[catName][grp].push({ id: `__slot__${catName}-${g}-${s}`, name: `P${s}` })
+      }
+    }
+  }
+
+  if (categoryNames.length > 0) {
+    const regsByCat: Record<string, typeof regs> = {}
+    for (const name of categoryNames) regsByCat[name] = []
+    for (const r of regs) {
+      const fd = (r.form_data as Record<string, unknown>) ?? {}
+      const cat = (fd.category as string) || ''
+      if (cat in regsByCat) regsByCat[cat].push(r)
+      else if (categoryNames.length === 1) regsByCat[categoryNames[0]].push(r)
+    }
+    for (const [name, catRegs] of Object.entries(regsByCat)) buildCategory(name, catRegs)
+  } else {
+    buildCategory('', regs)
+  }
+
+  return { data: catMap }
+}
+
 export async function getGroupBracketData(tournamentId: string) {
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS group_label TEXT`
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS category_label TEXT`
