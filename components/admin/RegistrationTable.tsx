@@ -116,6 +116,24 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
     return [(t.registration_type as string) ?? 'pair']
   })()
 
+  const categoryOptions: string[] = (() => {
+    const vd = (t.venue_details as Record<string, unknown>) ?? {}
+    const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
+    const result: string[] = []
+    for (const cat of rawCats) {
+      if (!cat.name?.trim()) continue
+      if (!cat.genders || cat.genders.length === 0) {
+        result.push(cat.name)
+      } else {
+        for (const g of cat.genders) {
+          const suffix = g === 'masculino' ? ' Masculino' : g === 'femenino' ? ' Femenino' : ' Mixto'
+          result.push(cat.name + suffix)
+        }
+      }
+    }
+    return result
+  })()
+
   const confirmed = initialRegs.filter(r => r.status === 'confirmed').length
   const pending = initialRegs.filter(r => r.status === 'pending').length
   const waitlist = initialRegs.filter(r => r.status === 'waitlist').length
@@ -599,11 +617,24 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Categoría
                 </label>
-                <Input
-                  value={(editFormData.category as string) ?? ''}
-                  onChange={e => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
-                  placeholder="Ej. A, B, mixto..."
-                />
+                {categoryOptions.length > 0 ? (
+                  <select
+                    value={(editFormData.category as string) ?? ''}
+                    onChange={e => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
+                    className="border border-border rounded-[8px] text-[14px] bg-background px-3 py-2 w-full outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                  >
+                    <option value="">Sin categoría</option>
+                    {categoryOptions.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    value={(editFormData.category as string) ?? ''}
+                    onChange={e => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
+                    placeholder="Ej. A, B, mixto..."
+                  />
+                )}
               </div>
 
               {/* Email */}
@@ -754,6 +785,7 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
         <AddParticipantModal
           tournamentId={tournamentId}
           registrationTypes={registrationTypes}
+          categories={categoryOptions}
           onSuccess={() => {
             setShowAddModal(false)
             router.refresh()

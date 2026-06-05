@@ -50,6 +50,7 @@ const addParticipantSchema = z.object({
   partner_email: z.string().email().optional(),
   registration_type: z.enum(['pair', 'individual']).optional(),
   status: z.enum(['confirmed', 'pending']).optional(),
+  category: z.string().optional(),
 })
 
 export async function addParticipantByAdmin(input: unknown) {
@@ -59,7 +60,7 @@ export async function addParticipantByAdmin(input: unknown) {
   const parsed = addParticipantSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
-  const { tournament_id, name, email, partner_name, partner_email, registration_type, status } = parsed.data
+  const { tournament_id, name, email, partner_name, partner_email, registration_type, status, category } = parsed.data
 
   const t = await sql`SELECT organizer_id, max_players, status FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
@@ -83,7 +84,7 @@ export async function addParticipantByAdmin(input: unknown) {
 
   const rows = await sql`
     INSERT INTO registrations (tournament_id, player1_id, player1_name, player2_name, registration_type, form_data, status, waitlist_position)
-    VALUES (${tournament_id}, null, ${name}, ${partner_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify({ name, email, partner_name, partner_email })}, ${finalStatus}, ${waitlistPosition})
+    VALUES (${tournament_id}, null, ${name}, ${partner_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify({ name, email, partner_name, partner_email, category })}, ${finalStatus}, ${waitlistPosition})
     RETURNING *
   `
   return { data: rows[0] }

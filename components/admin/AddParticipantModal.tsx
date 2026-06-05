@@ -7,11 +7,12 @@ import { cn } from '@/lib/utils'
 interface Props {
   tournamentId: string
   registrationTypes: string[]
+  categories: string[]
   onSuccess: () => void
   onClose: () => void
 }
 
-export function AddParticipantModal({ tournamentId, registrationTypes, onSuccess, onClose }: Props) {
+export function AddParticipantModal({ tournamentId, registrationTypes, categories, onSuccess, onClose }: Props) {
   const hasBothTypes = registrationTypes.includes('pair') && registrationTypes.includes('individual')
   const defaultType = registrationTypes.includes('pair') ? 'pair' : 'individual'
 
@@ -20,6 +21,7 @@ export function AddParticipantModal({ tournamentId, registrationTypes, onSuccess
   const [email, setEmail] = useState('')
   const [partnerName, setPartnerName] = useState('')
   const [partnerEmail, setPartnerEmail] = useState('')
+  const [category, setCategory] = useState(categories[0] ?? '')
   const [status, setStatus] = useState<'confirmed' | 'pending'>('confirmed')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -44,6 +46,7 @@ export function AddParticipantModal({ tournamentId, registrationTypes, onSuccess
         partner_email: regType === 'pair' ? (partnerEmail || undefined) : undefined,
         registration_type: regType,
         status,
+        category: category || undefined,
       })
       if ('error' in result && result.error) {
         setError(result.error as string)
@@ -140,6 +143,26 @@ export function AddParticipantModal({ tournamentId, registrationTypes, onSuccess
                 />
               </div>
             </>
+          )}
+
+          {/* Category */}
+          {categories.length > 0 && (
+            <div>
+              <label className="block text-[12px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                Categoría <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                required
+                className={inputClass}
+              >
+                <option value="">Seleccionar categoría...</option>
+                {categories.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
           )}
 
           {/* Status */}
