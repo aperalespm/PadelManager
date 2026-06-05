@@ -23,6 +23,7 @@ interface RegistrationTableProps {
   tournamentId: string
   tournament: Record<string, unknown>
   registrations: Record<string, unknown>[]
+  categoryOptions: string[]
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -48,7 +49,7 @@ function buildPlayerRows(regs: Record<string, unknown>[]): PlayerRow[] {
   const rows: PlayerRow[] = []
   for (const r of regs) {
     const fd = (r.form_data as Record<string, unknown>) ?? {}
-    const cat = (fd.category as string) || (r.player1_category as string) || null
+    const cat = (r.category as string) || (fd.category as string) || (r.player1_category as string) || null
     const date = r.created_at
       ? new Date(r.created_at as string).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
       : '—'
@@ -80,7 +81,7 @@ function buildPlayerRows(regs: Record<string, unknown>[]): PlayerRow[] {
   return rows
 }
 
-export function RegistrationTable({ tournamentId, tournament: t, registrations: initialRegs }: RegistrationTableProps) {
+export function RegistrationTable({ tournamentId, tournament: t, registrations: initialRegs, categoryOptions }: RegistrationTableProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [filter, setFilter] = useState('Todos')
@@ -115,6 +116,7 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
     }
     return [(t.registration_type as string) ?? 'pair']
   })()
+
 
   const confirmed = initialRegs.filter(r => r.status === 'confirmed').length
   const pending = initialRegs.filter(r => r.status === 'pending').length
@@ -165,11 +167,12 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
 
   function openEdit(reg: Record<string, unknown>) {
     const fd = (reg.form_data as Record<string, unknown>) ?? {}
+    const existingCategory = (reg.category as string) || (fd.category as string) || ''
     setEditReg(reg)
     setEditP1((reg.player1_name as string) || '')
     setEditP2((reg.player2_name as string) || '')
     setEditStatus((reg.status as 'confirmed' | 'pending' | 'waitlist') || 'confirmed')
-    setEditFormData({ ...fd })
+    setEditFormData({ ...fd, category: existingCategory })
   }
 
   function handleSaveEdit() {
@@ -434,7 +437,7 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
                 const status = r.status as string
                 const cfg = statusConfig[status] ?? statusConfig.pending
                 const fd = (r.form_data as Record<string, unknown>) ?? {}
-                const cat = (fd.category as string) || (r.player1_category as string) || null
+                const cat = (r.category as string) || (fd.category as string) || (r.player1_category as string) || null
                 const p1 = (r.player1_name as string) || '?'
                 const p2 = (r.player2_name as string) || null
                 const name = p2 ? `${p1} (+ ${p2})` : p1
@@ -599,11 +602,24 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Categoría
                 </label>
-                <Input
-                  value={(editFormData.category as string) ?? ''}
-                  onChange={e => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
-                  placeholder="Ej. A, B, mixto..."
-                />
+                {categoryOptions.length > 0 ? (
+                  <select
+                    value={(editFormData.category as string) ?? ''}
+                    onChange={e => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
+                    className="border border-border rounded-[8px] text-[14px] bg-background px-3 py-2 w-full outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                  >
+                    <option value="">Sin categoría</option>
+                    {categoryOptions.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    value={(editFormData.category as string) ?? ''}
+                    onChange={e => setEditFormData(prev => ({ ...prev, category: e.target.value }))}
+                    placeholder="Ej. A, B, mixto..."
+                  />
+                )}
               </div>
 
               {/* Email */}
@@ -754,6 +770,7 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
         <AddParticipantModal
           tournamentId={tournamentId}
           registrationTypes={registrationTypes}
+          categories={categoryOptions}
           onSuccess={() => {
             setShowAddModal(false)
             router.refresh()
