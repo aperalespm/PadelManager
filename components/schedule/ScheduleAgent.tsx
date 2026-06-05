@@ -133,24 +133,37 @@ export function ScheduleAgent({
     schedule && scheduleUpdatedAt && tournamentUpdatedAt &&
     new Date(tournamentUpdatedAt) > new Date(scheduleUpdatedAt)
   )
-  // New confirmed registrations since last schedule save
+  // New confirmed registrations confirmed/updated since last schedule save
   const registrationsChanged = !!(
     schedule && scheduleUpdatedAt && lastRegistrationAt &&
     new Date(lastRegistrationAt) > new Date(scheduleUpdatedAt)
   )
-  // Schedule has generic placeholder names (P1, P2…) but real pairs exist
+  // Real pair names are NOT present in the schedule (robust check — avoids
+  // fragile regex guessing of what pattern the AI used for generic names)
   const registeredPairs = tournamentConfig.registeredPairs as Array<{ pairs: string[] }> | undefined
-  const hasRealPairs = (registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0) >= 2
-  const hasGenericNames = !!(
-    schedule &&
-    hasRealPairs &&
-    schedule.matches.slice(0, 8).some(m => /^(P\d+|Pareja\s+[A-Z])$/i.test(m.pair1) || /^(P\d+|Pareja\s+[A-Z])$/i.test(m.pair2))
+  const totalRealPairs = registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0
+  const hasRealPairs = totalRealPairs >= 2
+  const realPairNameSet = new Set(
+    (registeredPairs ?? []).flatMap(c => c.pairs.map(p => p.trim()))
   )
+  // Check if any of the first matches reference a known real pair name
+  // (also check matchLabel as fallback when pair1/pair2 may differ in format)
+  const scheduleHasRealNames = hasRealPairs && !!(
+    schedule?.matches.slice(0, 6).some(m => {
+      const p1 = (m.pair1 ?? '').trim()
+      const p2 = (m.pair2 ?? '').trim()
+      const lbl = m.matchLabel ?? ''
+      if (realPairNameSet.has(p1) || realPairNameSet.has(p2)) return true
+      // Fallback: check if the label contains any known name
+      return [...realPairNameSet].some(name => name.length > 2 && lbl.includes(name))
+    })
+  )
+  const hasGenericNames = hasRealPairs && !!schedule && !scheduleHasRealNames
 
   const scheduleOutOfSync = configChanged || registrationsChanged || hasGenericNames
 
   const outOfSyncReason = hasGenericNames
-    ? `El horario tiene nombres genéricos pero hay ${registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0} parejas confirmadas. Actualízalo para asignarlas a los grupos.`
+    ? `El horario tiene nombres genéricos pero hay ${totalRealPairs} parejas confirmadas. Actualízalo para asignarlas a los grupos.`
     : registrationsChanged
     ? 'Hay nuevas parejas confirmadas desde la última generación del horario.'
     : 'La configuración del torneo ha cambiado desde que se generó este horario.'
