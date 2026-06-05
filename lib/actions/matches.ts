@@ -160,6 +160,11 @@ export async function getMatchesForTournament(tournamentId: string) {
   return rows
 }
 
+export async function getMatchCountForTournament(tournamentId: string): Promise<number> {
+  const rows = await sql`SELECT count(*)::int AS n FROM matches WHERE tournament_id = ${tournamentId}`
+  return (rows[0]?.n as number) ?? 0
+}
+
 export async function adminOverrideScore(matchId: string, winnerId: string, finalScore: unknown) {
   const { data: session } = await auth.getSession()
   if (!session?.user) return { error: 'No autorizado' }

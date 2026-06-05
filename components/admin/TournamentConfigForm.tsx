@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 interface TournamentConfigFormProps {
   tournament: Record<string, unknown>
   otherTournaments: { id: string }[]
+  hasExistingMatches?: boolean
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1020,7 +1021,7 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export function TournamentConfigForm({ tournament: t, otherTournaments }: TournamentConfigFormProps) {
+export function TournamentConfigForm({ tournament: t, otherTournaments, hasExistingMatches }: TournamentConfigFormProps) {
   const router = useRouter()
   const [isDeleting, startDelete] = useTransition()
   const [isDuplicating, startDuplicate] = useTransition()
@@ -1476,6 +1477,21 @@ export function TournamentConfigForm({ tournament: t, otherTournaments }: Tourna
           </button>
         ))}
       </div>
+
+      {/* ── Cuadro out-of-sync warning ───────────────────────────── */}
+      {saveStatus === 'saved' && hasExistingMatches && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[var(--warning-surface)] border border-[var(--warning)]/30 rounded-[10px]">
+          <p className="text-[13px] text-[var(--warning)] font-medium">
+            ⚠️ El cuadro actual puede no reflejar estos cambios de configuración.
+          </p>
+          <Link
+            href={`/admin/${t.id as string}/cuadro`}
+            className="shrink-0 text-[12px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-3 py-1.5 rounded-[7px] hover:bg-[var(--warning)]/10 transition-colors"
+          >
+            Ir al cuadro →
+          </Link>
+        </div>
+      )}
 
       {/* ── Capacity & Revenue sticky bar ────────────────────────── */}
       <div className="sticky top-4 z-20 flex flex-col bg-white border border-border rounded-[10px] overflow-hidden shadow-sm">

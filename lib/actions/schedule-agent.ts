@@ -200,12 +200,14 @@ Si el horario es matemáticamente imposible con estos parámetros:
 3. Genera el calendario lo más completo posible **sin alterar el formato**.
 4. Solo cambia el formato si el administrador lo pide de forma explícita.`
 
-  // Registered pairs block — activates MODO ASIGNACIÓN when present
+  // Registered pairs block — injected in Asignación and En vivo modes
+  const tStatus = (tournamentConfig.tournamentStatus as string) ?? 'draft'
+  const modeLabel = tStatus === 'active' ? 'EN VIVO' : tStatus === 'open' ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
   const registeredPairs = tournamentConfig.registeredPairs as Array<{ category: string; pairs: string[] }> | undefined
   const totalPairs = registeredPairs?.reduce((s, c) => s + c.pairs.length, 0) ?? 0
   const pairsBlock = registeredPairs && totalPairs > 0
     ? [
-        `\n## PAREJAS INSCRITAS — MODO ASIGNACIÓN ACTIVO (${totalPairs} parejas confirmadas)`,
+        `\n## PAREJAS INSCRITAS — MODO ${modeLabel} (${totalPairs} parejas confirmadas)`,
         'Usa estos nombres reales. No uses P1/P2 ni nombres genéricos.\n',
         ...registeredPairs
           .filter(c => c.pairs.length > 0)
@@ -313,6 +315,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
     schedule: TournamentSchedule | null
     version: number
     isPublished: boolean
+    scheduleUpdatedAt: string | null
   }
 } | { error: string }> {
   try {
@@ -325,7 +328,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
         LIMIT 1
       `,
       sql`
-        SELECT schedule_data, version, is_published FROM tournament_schedules
+        SELECT schedule_data, version, is_published, updated_at FROM tournament_schedules
         WHERE tournament_id = ${tournamentId}
         LIMIT 1
       `,
@@ -337,6 +340,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
         schedule: (scheduleRows[0]?.schedule_data as TournamentSchedule) || null,
         version: (scheduleRows[0]?.version as number) || 0,
         isPublished: (scheduleRows[0]?.is_published as boolean) || false,
+        scheduleUpdatedAt: scheduleRows[0]?.updated_at ? String(scheduleRows[0].updated_at) : null,
       },
     }
   } catch {

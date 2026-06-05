@@ -18,6 +18,8 @@ interface ScheduleAgentProps {
   initialIsPublished: boolean
   initialVersion: number
   autoRegenerate?: boolean
+  tournamentUpdatedAt?: string | null
+  scheduleUpdatedAt?: string | null
 }
 
 export function ScheduleAgent({
@@ -29,6 +31,8 @@ export function ScheduleAgent({
   initialIsPublished,
   initialVersion,
   autoRegenerate,
+  tournamentUpdatedAt,
+  scheduleUpdatedAt,
 }: ScheduleAgentProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [schedule, setSchedule] = useState<TournamentSchedule | null>(initialSchedule)
@@ -48,7 +52,7 @@ export function ScheduleAgent({
 
   useEffect(() => {
     if (!autoRegenerate) return
-    const msg = hasPairs
+    const msg = isAssignment
       ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
       : 'Regenera el horario completo con la configuración actualizada del torneo, respetando los ajustes de sesiones anteriores si los hay.'
     sendMessage(msg)
@@ -111,11 +115,21 @@ export function ScheduleAgent({
     setIsSaving(false)
   }
 
-  const hasPairs = Array.isArray(tournamentConfig.registeredPairs) &&
-    (tournamentConfig.registeredPairs as Array<{ pairs: string[] }>).some(c => c.pairs.length > 0)
-  const mode = hasPairs ? 'Asignación' : 'Planificación'
+  const tournamentStatus = (tournamentConfig.tournamentStatus as string) ?? 'draft'
+  const mode = tournamentStatus === 'active' ? 'En vivo'
+    : tournamentStatus === 'open' ? 'Asignación'
+    : 'Planificación'
+  const isAssignment = tournamentStatus === 'open' || tournamentStatus === 'active'
 
   const hasHistory = messages.length > 0
+
+  // Show warning when the schedule exists but tournament config was updated after it was generated
+  const scheduleOutOfSync = !!(
+    schedule &&
+    scheduleUpdatedAt &&
+    tournamentUpdatedAt &&
+    new Date(tournamentUpdatedAt) > new Date(scheduleUpdatedAt)
+  )
 
   async function sendMessage(text: string) {
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: new Date().toISOString() }
@@ -215,7 +229,7 @@ export function ScheduleAgent({
           {schedule && (
             <button
               onClick={() => sendMessage(
-                hasPairs
+                isAssignment
                   ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
                   : 'Regenera el horario completo con la configuración actual del torneo, respetando los ajustes de sesiones anteriores si los hay.'
               )}
@@ -237,14 +251,14 @@ export function ScheduleAgent({
             <div>
               <p className="text-[15px] font-semibold text-foreground">Sin horario generado</p>
               <p className="text-[13px] text-muted-foreground mt-1 max-w-[240px]">
-                {hasPairs
+                {isAssignment
                   ? 'El agente asignará las parejas inscritas a los grupos y generará el horario completo con sus nombres.'
                   : 'El agente generará el horario óptimo basándose en la configuración del torneo.'}
               </p>
             </div>
             <button
               onClick={() => sendMessage(
-                hasPairs
+                isAssignment
                   ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
                   : 'Genera el horario óptimo para este torneo.'
               )}
@@ -256,7 +270,7 @@ export function ScheduleAgent({
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Generando...
                 </span>
-              ) : hasPairs ? 'Generar horario con parejas reales' : 'Generar horario'}
+              ) : isAssignment ? 'Generar horario con parejas reales' : 'Generar horario'}
             </button>
           </div>
         ) : (
@@ -284,7 +298,8 @@ export function ScheduleAgent({
         className="overflow-hidden flex-1"
         style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minWidth: 0 }}
       >
-        {/* Actions bar — auto */}
+        {/* Actions bar + optional warning — auto */}
+        <div>
         <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
@@ -364,6 +379,25 @@ export function ScheduleAgent({
               {isPublished ? '✓ Publicado' : 'Publicar'}
             </button>
           </div>
+        </div>
+        {scheduleOutOfSync && (
+          <div className="px-5 py-2.5 bg-[var(--warning-surface)] border-b border-[var(--warning)]/30 flex items-center justify-between gap-3">
+            <p className="text-[12px] text-[var(--warning)] font-medium">
+              ⚠️ La configuración del torneo ha cambiado desde que se generó este horario.
+            </p>
+            <button
+              onClick={() => sendMessage(
+                isAssignment
+                  ? 'Regenera el horario completo usando las parejas inscritas actuales y la configuración actualizada del torneo.'
+                  : 'Regenera el horario completo con la configuración actualizada del torneo.'
+              )}
+              disabled={isGenerating}
+              className="shrink-0 text-[11px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-2.5 py-1 rounded-[6px] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
+            >
+              Regenerar ahora
+            </button>
+          </div>
+        )}
         </div>
 
         {/* Calendar content — minmax(0,1fr), bounded → scrolls. */}

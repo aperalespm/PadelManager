@@ -5,6 +5,23 @@ import { sql } from '@/lib/db'
 import { registerSchema } from '@/lib/validations'
 import { z } from 'zod'
 
+export async function getRegistrationCountsByCategory(tournamentId: string): Promise<
+  Array<{ category: string; confirmed: number; pending: number; waitlist: number }>
+> {
+  const rows = await sql`
+    SELECT
+      COALESCE(form_data->>'category', '') AS category,
+      COUNT(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
+      COUNT(*) FILTER (WHERE status = 'pending')::int   AS pending,
+      COUNT(*) FILTER (WHERE status = 'waitlist')::int  AS waitlist
+    FROM registrations
+    WHERE tournament_id = ${tournamentId}
+    GROUP BY category
+    ORDER BY category ASC
+  `
+  return rows as Array<{ category: string; confirmed: number; pending: number; waitlist: number }>
+}
+
 export async function getRegistrations(tournamentId: string) {
   // Ensure all columns added by later actions exist before querying
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
@@ -193,4 +210,77 @@ export async function getMyActiveMatch() {
     LIMIT 1
   `
   return { data: rows[0] ?? null }
+}
+
+export async function deleteRegistration(registrationId: string) {
+  try {
+    // Nullify references in matches before deleting
+    await sql`UPDATE matches SET team1_reg_id = NULL WHERE team1_reg_id = ${registrationId}`
+    await sql`UPDATE matches SET team2_reg_id = NULL WHERE team2_reg_id = ${registrationId}`
+    await sql`DELETE FROM registrations WHERE id = ${registrationId}`
+    return { data: true }
+  } catch (e) {
+    return { error: String(e) }
+  }
+}
+
+export async function removePlayerFromPair(registrationId: string, playerIndex: 1 | 2) {
+  try {
+    if (playerIndex === 2) {
+      await sql`
+        UPDATE registrations
+        SET player2_name = NULL, player2_id = NULL, registration_type = 'individual', updated_at = NOW()
+        WHERE id = ${registrationId}
+      `
+    } else {
+      // Move player2 into player1 slot, clear player2
+      const rows = await sql`SELECT player2_name, player2_id FROM registrations WHERE id = ${registrationId} LIMIT 1`
+      if (!rows[0]) return { error: 'Registro no encontrado' }
+      const p2Name = rows[0].player2_name as string | null
+      const p2Id = rows[0].player2_id as string | null
+      await sql`
+        UPDATE registrations
+        SET player1_name = ${p2Name}, player1_id = ${p2Id},
+            player2_name = NULL, player2_id = NULL,
+            registration_type = 'individual', updated_at = NOW()
+        WHERE id = ${registrationId}
+      `
+    }
+    return { data: true }
+  } catch (e) {
+    return { error: String(e) }
+  }
+}
+
+const updateRegistrationSchema = z.object({
+  registrationId: z.string().uuid(),
+  player1_name: z.string().min(1),
+  player2_name: z.string().nullable(),
+  status: z.enum(['confirmed', 'pending', 'waitlist']),
+  form_data: z.record(z.string(), z.unknown()),
+})
+
+export async function updateRegistration(input: unknown) {
+  const parsed = updateRegistrationSchema.safeParse(input)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+
+  const { registrationId, player1_name, player2_name, status, form_data } = parsed.data
+  const registration_type = player2_name ? 'pair' : 'individual'
+
+  try {
+    await sql`
+      UPDATE registrations
+      SET
+        player1_name = ${player1_name},
+        player2_name = ${player2_name ?? null},
+        registration_type = ${registration_type},
+        status = ${status},
+        form_data = ${JSON.stringify(form_data)},
+        updated_at = NOW()
+      WHERE id = ${registrationId}
+    `
+    return { data: true }
+  } catch (e) {
+    return { error: String(e) }
+  }
 }

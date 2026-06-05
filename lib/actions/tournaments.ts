@@ -171,14 +171,38 @@ export async function duplicateTournament(id: string) {
 }
 
 export async function saveTournamentPhases(tournamentId: string, phases: Array<{ name: string; format: string; score_config: Record<string, unknown> }>) {
-  await sql`DELETE FROM tournament_phases WHERE tournament_id = ${tournamentId}`
+  // Read existing phases to preserve their IDs — matches.phase_id references them and
+  // a full DELETE would cascade-delete all matches via the FK constraint.
+  const existing = await sql`
+    SELECT id, phase_order FROM tournament_phases
+    WHERE tournament_id = ${tournamentId}
+    ORDER BY phase_order ASC
+  `
+
   for (let i = 0; i < phases.length; i++) {
     const p = phases[i]
-    await sql`
-      INSERT INTO tournament_phases (tournament_id, phase_order, name, format, score_config)
-      VALUES (${tournamentId}, ${i + 1}, ${p.name}, ${p.format}, ${JSON.stringify(p.score_config)})
-    `
+    const match = (existing as Array<{ id: string; phase_order: number }>).find(e => e.phase_order === i + 1)
+    if (match) {
+      await sql`
+        UPDATE tournament_phases
+        SET name = ${p.name}, format = ${p.format}, score_config = ${JSON.stringify(p.score_config)}::jsonb
+        WHERE id = ${match.id}
+      `
+    } else {
+      await sql`
+        INSERT INTO tournament_phases (tournament_id, phase_order, name, format, score_config)
+        VALUES (${tournamentId}, ${i + 1}, ${p.name}, ${p.format}, ${JSON.stringify(p.score_config)}::jsonb)
+      `
+    }
   }
+
+  // Remove any extra phases beyond the new count (preserves fewer phases case)
+  const toDelete = (existing as Array<{ id: string; phase_order: number }>)
+    .filter(e => e.phase_order > phases.length)
+  for (const phase of toDelete) {
+    await sql`DELETE FROM tournament_phases WHERE id = ${phase.id}`
+  }
+
   return { data: true }
 }
 
