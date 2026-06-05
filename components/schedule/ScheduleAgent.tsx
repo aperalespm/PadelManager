@@ -18,6 +18,8 @@ interface ScheduleAgentProps {
   initialIsPublished: boolean
   initialVersion: number
   autoRegenerate?: boolean
+  tournamentUpdatedAt?: string | null
+  scheduleUpdatedAt?: string | null
 }
 
 export function ScheduleAgent({
@@ -29,6 +31,8 @@ export function ScheduleAgent({
   initialIsPublished,
   initialVersion,
   autoRegenerate,
+  tournamentUpdatedAt,
+  scheduleUpdatedAt,
 }: ScheduleAgentProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [schedule, setSchedule] = useState<TournamentSchedule | null>(initialSchedule)
@@ -118,6 +122,14 @@ export function ScheduleAgent({
   const isAssignment = tournamentStatus === 'open' || tournamentStatus === 'active'
 
   const hasHistory = messages.length > 0
+
+  // Show warning when the schedule exists but tournament config was updated after it was generated
+  const scheduleOutOfSync = !!(
+    schedule &&
+    scheduleUpdatedAt &&
+    tournamentUpdatedAt &&
+    new Date(tournamentUpdatedAt) > new Date(scheduleUpdatedAt)
+  )
 
   async function sendMessage(text: string) {
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: new Date().toISOString() }
@@ -286,7 +298,8 @@ export function ScheduleAgent({
         className="overflow-hidden flex-1"
         style={{ display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', minWidth: 0 }}
       >
-        {/* Actions bar — auto */}
+        {/* Actions bar + optional warning — auto */}
+        <div>
         <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
@@ -366,6 +379,25 @@ export function ScheduleAgent({
               {isPublished ? '✓ Publicado' : 'Publicar'}
             </button>
           </div>
+        </div>
+        {scheduleOutOfSync && (
+          <div className="px-5 py-2.5 bg-[var(--warning-surface)] border-b border-[var(--warning)]/30 flex items-center justify-between gap-3">
+            <p className="text-[12px] text-[var(--warning)] font-medium">
+              ⚠️ La configuración del torneo ha cambiado desde que se generó este horario.
+            </p>
+            <button
+              onClick={() => sendMessage(
+                isAssignment
+                  ? 'Regenera el horario completo usando las parejas inscritas actuales y la configuración actualizada del torneo.'
+                  : 'Regenera el horario completo con la configuración actualizada del torneo.'
+              )}
+              disabled={isGenerating}
+              className="shrink-0 text-[11px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-2.5 py-1 rounded-[6px] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
+            >
+              Regenerar ahora
+            </button>
+          </div>
+        )}
         </div>
 
         {/* Calendar content — minmax(0,1fr), bounded → scrolls. */}

@@ -315,6 +315,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
     schedule: TournamentSchedule | null
     version: number
     isPublished: boolean
+    scheduleUpdatedAt: string | null
   }
 } | { error: string }> {
   try {
@@ -327,7 +328,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
         LIMIT 1
       `,
       sql`
-        SELECT schedule_data, version, is_published FROM tournament_schedules
+        SELECT schedule_data, version, is_published, updated_at FROM tournament_schedules
         WHERE tournament_id = ${tournamentId}
         LIMIT 1
       `,
@@ -339,6 +340,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
         schedule: (scheduleRows[0]?.schedule_data as TournamentSchedule) || null,
         version: (scheduleRows[0]?.version as number) || 0,
         isPublished: (scheduleRows[0]?.is_published as boolean) || false,
+        scheduleUpdatedAt: scheduleRows[0]?.updated_at ? String(scheduleRows[0].updated_at) : null,
       },
     }
   } catch {
