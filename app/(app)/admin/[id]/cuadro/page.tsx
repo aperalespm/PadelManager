@@ -1,7 +1,8 @@
 import { getTournamentById } from '@/lib/actions/tournaments'
 import { getMatchesForTournament } from '@/lib/actions/matches'
-import { getGroupBracketData } from '@/lib/actions/bracket'
+import { getGroupBracketData, getGroupBracketDraftData } from '@/lib/actions/bracket'
 import { getRegistrationCountsByCategory } from '@/lib/actions/registrations'
+import { loadScheduleChat } from '@/lib/actions/schedule-agent'
 import { TournamentBracket } from '@/components/torneos/TournamentBracket'
 import { GroupBracketView } from '@/components/torneos/GroupBracketView'
 import { GenerateBracketButton } from '@/components/torneos/GenerateBracketButton'
@@ -43,15 +44,26 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
   const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
   const categoryNames = expandCategoryNames(rawCats)
 
-  const [matches, regCounts] = await Promise.all([
+  const [matches, regCounts, scheduleResult] = await Promise.all([
     getMatchesForTournament(id) as Promise<Record<string, unknown>[]>,
     getRegistrationCountsByCategory(id),
+    loadScheduleChat(id),
   ])
 
-  const groupBracketResult = isGroupsElim && matches.length > 0
+  const isSchedulePublished = 'data' in scheduleResult ? scheduleResult.data.isPublished : false
+
+  const hasMatches = matches.length > 0
+
+  const groupBracketResult = isGroupsElim && hasMatches
     ? await getGroupBracketData(id)
     : null
   const catMap = groupBracketResult?.data ?? null
+
+  // Draft data: shown when no matches yet (slots with confirmed pairs + placeholders)
+  const draftDataResult = isGroupsElim && !hasMatches
+    ? await getGroupBracketDraftData(id)
+    : null
+  const draftCatMap = draftDataResult?.data ?? null
 
   // Build fill data — configured categories first, then any uncategorised
   const fillData = categoryNames.length > 0
@@ -81,7 +93,11 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
           </p>
         </div>
         {isGroupsElim && (
-          <GenerateBracketButton tournamentId={id} hasMatches={matches.length > 0} />
+          <GenerateBracketButton
+            tournamentId={id}
+            hasMatches={hasMatches}
+            schedulePublished={isSchedulePublished}
+          />
         )}
       </div>
 
@@ -125,23 +141,28 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
       )}
 
       {/* ── Bracket ─────────────────────────────────────────────────────── */}
-      {matches.length === 0 ? (
+      {isGroupsElim && !hasMatches && draftCatMap ? (
+        <>
+          <div className="bg-muted/60 border border-border rounded-lg px-4 py-2.5 text-[13px] text-muted-foreground">
+            Vista previa — Los grupos se rellenan con los inscritos confirmados. Pulsa &quot;Generar cuadro&quot; para crear los partidos.
+          </div>
+          <div className="bg-card border border-border rounded-xl p-6 w-full">
+            <GroupBracketView
+              catMap={draftCatMap}
+              numGroups={numGroups}
+              teamsAdvancePerGroup={teamsAdvancePerGroup}
+              isDraft
+            />
+          </div>
+        </>
+      ) : !hasMatches ? (
         <div className="bg-card border border-border rounded-xl p-8 text-center flex flex-col items-center gap-3">
-          {isGroupsElim ? (
-            <>
-              <p className="text-foreground font-semibold">Cuadro no generado</p>
-              <p className="text-[13px] text-muted-foreground max-w-md">
-                Pulsa "Generar cuadro" para asignar las parejas confirmadas a los grupos y crear los partidos de la fase de grupos.
-              </p>
-            </>
-          ) : (
-            <p className="text-muted-foreground">El cuadro se generará cuando cierres las inscripciones.</p>
-          )}
+          <p className="text-muted-foreground">El cuadro se generará cuando cierres las inscripciones.</p>
         </div>
       ) : isGroupsElim && catMap ? (
         <>
           <div className="bg-[var(--accent-surface)] border border-accent/30 rounded-lg px-4 py-2.5 text-sm text-accent">
-            💡 El cuadro se actualiza automáticamente cuando los jugadores validan resultados.
+            El cuadro se actualiza automáticamente cuando los jugadores validan resultados.
           </div>
           <div className="bg-card border border-border rounded-xl p-6 w-full">
             <GroupBracketView
@@ -154,7 +175,7 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
       ) : (
         <>
           <div className="bg-[var(--accent-surface)] border border-accent/30 rounded-lg px-4 py-2.5 text-sm text-accent">
-            💡 El cuadro se actualiza automáticamente cuando los jugadores validan resultados.
+            El cuadro se actualiza automáticamente cuando los jugadores validan resultados.
           </div>
           <TournamentBracket matches={matches} mode="admin" />
         </>
