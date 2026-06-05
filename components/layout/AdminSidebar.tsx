@@ -60,11 +60,11 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
 
   const navItems = [
     { href: `/admin/${tournamentId}`, label: 'Panel', icon: '◉', exact: true },
-    { href: `/admin/${tournamentId}/inscritos`, label: 'Inscritos', icon: '⊞' },
-    { href: `/admin/${tournamentId}/cuadro`, label: 'Cuadro', icon: '🏆' },
-    { href: `/admin/${tournamentId}/horario`, label: 'Horario', icon: '📅' },
-    { href: `/admin/${tournamentId}/vivo`, label: 'En vivo', icon: '▶', badge: activeMatchCount > 0 },
     { href: `/admin/${tournamentId}/config`, label: 'Configuración', icon: '⚙' },
+    { href: `/admin/${tournamentId}/inscritos`, label: 'Inscritos', icon: '⊞' },
+    { href: `/admin/${tournamentId}/horario`, label: 'Horario', icon: '📅' },
+    { href: `/admin/${tournamentId}/cuadro`, label: 'Cuadro', icon: '🏆' },
+    { href: `/admin/${tournamentId}/vivo`, label: 'En vivo', icon: '▶', badge: activeMatchCount > 0 },
   ]
 
   const initials = organizerName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
