@@ -5,6 +5,23 @@ import { sql } from '@/lib/db'
 import { registerSchema } from '@/lib/validations'
 import { z } from 'zod'
 
+export async function getRegistrationCountsByCategory(tournamentId: string): Promise<
+  Array<{ category: string; confirmed: number; pending: number; waitlist: number }>
+> {
+  const rows = await sql`
+    SELECT
+      COALESCE(form_data->>'category', '') AS category,
+      COUNT(*) FILTER (WHERE status = 'confirmed')::int AS confirmed,
+      COUNT(*) FILTER (WHERE status = 'pending')::int   AS pending,
+      COUNT(*) FILTER (WHERE status = 'waitlist')::int  AS waitlist
+    FROM registrations
+    WHERE tournament_id = ${tournamentId}
+    GROUP BY category
+    ORDER BY category ASC
+  `
+  return rows as Array<{ category: string; confirmed: number; pending: number; waitlist: number }>
+}
+
 export async function getRegistrations(tournamentId: string) {
   // Ensure all columns added by later actions exist before querying
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
