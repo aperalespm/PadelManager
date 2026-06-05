@@ -345,12 +345,13 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
     isPublished: boolean
     scheduleUpdatedAt: string | null
     versionHistory: VersionSnapshot[]
+    lastRegistrationAt: string | null
   }
 } | { error: string }> {
   try {
     await ensureTables()
 
-    const [chatRows, scheduleRows] = await Promise.all([
+    const [chatRows, scheduleRows, regRows] = await Promise.all([
       sql`
         SELECT messages FROM tournament_schedule_chats
         WHERE tournament_id = ${tournamentId}
@@ -363,16 +364,60 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
         WHERE tournament_id = ${tournamentId}
         LIMIT 1
       `,
+      sql`
+        SELECT MAX(created_at) AS last_at
+        FROM registrations
+        WHERE tournament_id = ${tournamentId} AND status = 'confirmed'
+      `,
     ])
+
+    const messages = (chatRows[0]?.messages as ChatMessage[]) || []
+    let versionHistory = (scheduleRows[0]?.version_history as VersionSnapshot[]) || []
+
+    // Back-fill history from message archive when column was empty (pre-migration sessions)
+    if (versionHistory.length === 0 && scheduleRows[0]) {
+      const msgSnapshots: VersionSnapshot[] = []
+      let num = 1
+      for (const m of messages) {
+        if (m.role === 'assistant' && m.schedule) {
+          msgSnapshots.push({
+            version: num++,
+            savedAt: m.timestamp,
+            label: 'Generado (AI)',
+            schedule: m.schedule,
+          })
+        }
+      }
+      // Always include the current saved schedule as the last entry
+      const currentSchedule = scheduleRows[0].schedule_data as TournamentSchedule
+      if (currentSchedule && (msgSnapshots.length === 0 || JSON.stringify(msgSnapshots[msgSnapshots.length - 1].schedule) !== JSON.stringify(currentSchedule))) {
+        msgSnapshots.push({
+          version: (scheduleRows[0].version as number) || msgSnapshots.length + 1,
+          savedAt: scheduleRows[0].updated_at ? String(scheduleRows[0].updated_at) : new Date().toISOString(),
+          label: 'Actual',
+          schedule: currentSchedule,
+        })
+      }
+      if (msgSnapshots.length > 0) {
+        versionHistory = msgSnapshots
+        // Persist back-filled history so it's available next time
+        await sql`
+          UPDATE tournament_schedules
+          SET version_history = ${JSON.stringify(msgSnapshots)}, updated_at = updated_at
+          WHERE tournament_id = ${tournamentId}
+        `
+      }
+    }
 
     return {
       data: {
-        messages: (chatRows[0]?.messages as ChatMessage[]) || [],
+        messages,
         schedule: (scheduleRows[0]?.schedule_data as TournamentSchedule) || null,
         version: (scheduleRows[0]?.version as number) || 0,
         isPublished: (scheduleRows[0]?.is_published as boolean) || false,
         scheduleUpdatedAt: scheduleRows[0]?.updated_at ? String(scheduleRows[0].updated_at) : null,
-        versionHistory: (scheduleRows[0]?.version_history as VersionSnapshot[]) || [],
+        versionHistory,
+        lastRegistrationAt: regRows[0]?.last_at ? String(regRows[0].last_at) : null,
       },
     }
   } catch {
