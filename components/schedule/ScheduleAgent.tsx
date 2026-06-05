@@ -203,14 +203,12 @@ export function ScheduleAgent({
         messages: updatedMessages as unknown as Record<string, unknown>[],
         versionLabel: label,
       })
-      if ('data' in result2) {
+      if ('data' in result2 && newSchedule) {
         setVersion(result2.data.version)
-        if (newSchedule) {
-          setVersionHistory(prev => [
-            ...prev,
-            { version: result2.data.version, savedAt: new Date().toISOString(), label, schedule: newSchedule },
-          ].slice(-25))
-        }
+        setVersionHistory(prev => [
+          ...prev,
+          { version: result2.data.version, savedAt: new Date().toISOString(), label, schedule: newSchedule },
+        ].slice(-25))
       }
       setIsSaving(false)
     }
@@ -326,7 +324,7 @@ export function ScheduleAgent({
               <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
                 {mode}
               </span>
-              {version > 0 && (
+              {(versionHistory.length > 0 || schedule) && (
                 <div className="relative" ref={historyRef}>
                   <button
                     onClick={() => setShowHistory(s => !s)}
@@ -334,8 +332,9 @@ export function ScheduleAgent({
                     className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded-[5px] hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-default"
                   >
                     <Clock className="w-3 h-3" />
-                    v{version}
-                    {versionHistory.length > 0 && ` · ${versionHistory.length} guardados`}
+                    {versionHistory.length > 0
+                      ? `${versionHistory.length} ${versionHistory.length === 1 ? 'versión' : 'versiones'} guardadas`
+                      : 'Sin versiones guardadas'}
                   </button>
                   {showHistory && versionHistory.length > 0 && (
                     <div className="absolute left-0 top-7 bg-popover border border-border rounded-[10px] shadow-lg z-50 py-1 min-w-[220px] max-h-[320px] overflow-y-auto">
@@ -351,7 +350,6 @@ export function ScheduleAgent({
                               isActive && 'text-accent'
                             )}
                           >
-                            <span className="font-semibold w-6">v{v.version}</span>
                             <span className="text-muted-foreground flex-1 truncate">{v.label}</span>
                             <span className="text-muted-foreground text-[10px] shrink-0">
                               {new Date(v.savedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
@@ -485,7 +483,6 @@ export function ScheduleAgent({
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
               {mode}
             </span>
-            {version > 0 && <span className="text-[11px] text-muted-foreground">v{version}</span>}
             <span className="text-[13px] font-semibold text-foreground">{tournamentName}</span>
           </div>
           <button
