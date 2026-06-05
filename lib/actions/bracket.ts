@@ -101,6 +101,118 @@ export async function generateBracket(tournamentId: string) {
   return { data: true }
 }
 
+// ── Generate bracket using AI schedule group assignments ─────────────────────
+
+export async function generateGroupBracketFromSchedule(tournamentId: string) {
+  await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS group_label TEXT`
+  await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS category_label TEXT`
+
+  const tRows = await sql`SELECT * FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!tRows[0]) return { error: 'Torneo no encontrado' }
+
+  const phases = await sql`SELECT * FROM tournament_phases WHERE tournament_id = ${tournamentId} ORDER BY phase_order ASC`
+  if (!phases.length) return { error: 'Configura las fases primero' }
+  const groupsPhase = phases[0]
+
+  // Load saved schedule
+  const scheduleRows = await sql`SELECT schedule_data FROM tournament_schedules WHERE tournament_id = ${tournamentId} LIMIT 1`
+  if (!scheduleRows[0]) return { error: 'No hay horario guardado. Genera y guarda el horario primero.' }
+
+  const scheduleMatches = (scheduleRows[0].schedule_data as Record<string, unknown>).matches as Array<Record<string, unknown>> | undefined
+  if (!scheduleMatches?.length) return { error: 'El horario guardado no tiene partidos.' }
+
+  // Extract group assignments from groups-phase matches:
+  // { categoryName: { groupLabel: Set<pairName> } }
+  const groupAssignments: Record<string, Record<string, Set<string>>> = {}
+  for (const m of scheduleMatches) {
+    if (m.phase !== 'groups') continue
+    const cat = (m.categoryName as string) ?? ''
+    const label = (m.matchLabel as string) ?? ''
+    const grMatch = label.match(/\bGr\.([A-Z]+)\b/)
+    if (!grMatch) continue
+    const groupLabel = `Grupo ${grMatch[1]}`
+
+    if (!groupAssignments[cat]) groupAssignments[cat] = {}
+    if (!groupAssignments[cat][groupLabel]) groupAssignments[cat][groupLabel] = new Set()
+    if (m.pair1) groupAssignments[cat][groupLabel].add((m.pair1 as string).trim())
+    if (m.pair2) groupAssignments[cat][groupLabel].add((m.pair2 as string).trim())
+  }
+
+  if (Object.keys(groupAssignments).length === 0) {
+    return { error: 'El horario no tiene asignaciones de grupo. Regénéralo con las parejas inscritas.' }
+  }
+
+  // Build name → registration_id map (same name format as getConfirmedPairsForSchedule)
+  const regs = await sql`
+    SELECT
+      r.id, r.form_data,
+      CASE
+        WHEN p1.display_name IS NOT NULL
+        THEN p1.display_name || ' / ' || COALESCE(p2.display_name, r.player2_name, '?')
+        ELSE COALESCE(r.player1_name, '?') || ' / ' || COALESCE(r.player2_name, '?')
+      END AS pair_name
+    FROM registrations r
+    LEFT JOIN user_profiles p1 ON p1.user_id = r.player1_id
+    LEFT JOIN user_profiles p2 ON p2.user_id = r.player2_id
+    WHERE r.tournament_id = ${tournamentId} AND r.status = 'confirmed'
+  `
+
+  const nameToRegId = new Map<string, string>()
+  for (const r of regs) nameToRegId.set((r.pair_name as string).trim(), r.id as string)
+
+  // Verify we can match at least 2 pairs; fall back to random if schedule has only placeholders
+  const matchableCount = [...new Set(
+    Object.values(groupAssignments).flatMap(groups =>
+      Object.values(groups).flatMap(s => [...s])
+    )
+  )].filter(name => nameToRegId.has(name)).length
+
+  if (matchableCount < 2) {
+    // Schedule was generated with generic names — fall back to random assignment
+    return generateGroupBracket(tournamentId)
+  }
+
+  await sql`DELETE FROM matches WHERE tournament_id = ${tournamentId}`
+
+  let matchNum = 1
+
+  for (const [catLabel, groups] of Object.entries(groupAssignments)) {
+    for (const [groupLabel, pairNames] of Object.entries(groups)) {
+      const groupRegIds: string[] = []
+      for (const name of pairNames) {
+        const regId = nameToRegId.get(name)
+        if (regId) groupRegIds.push(regId)
+      }
+      if (groupRegIds.length < 2) continue
+
+      for (let i = 0; i < groupRegIds.length; i++) {
+        for (let j = i + 1; j < groupRegIds.length; j++) {
+          await sql`
+            INSERT INTO matches (
+              tournament_id, phase_id, round, match_number,
+              team1_reg_id, team2_reg_id,
+              group_label, category_label, status
+            ) VALUES (
+              ${tournamentId}, ${groupsPhase.id}, 1, ${matchNum},
+              ${groupRegIds[i]}, ${groupRegIds[j]},
+              ${groupLabel}, ${catLabel || null}, 'pending'
+            )
+          `
+          matchNum++
+        }
+      }
+    }
+  }
+
+  if (matchNum === 1) {
+    // Nothing was inserted — fall back
+    return generateGroupBracket(tournamentId)
+  }
+
+  await sql`UPDATE tournaments SET updated_at = NOW() WHERE id = ${tournamentId}`
+  return { data: true }
+}
+
 export async function generateGroupBracket(tournamentId: string) {
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS group_label TEXT`
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS category_label TEXT`
