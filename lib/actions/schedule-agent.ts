@@ -207,18 +207,14 @@ export async function chatWithScheduleAgent(input: unknown): Promise<
   if (!parsed.success) return { error: 'Datos inválidos' }
 
   const { userMessage, conversationHistory, tournamentConfig, currentSchedule, resetSchedule } = parsed.data
-  // When resetSchedule=true, don't pass the existing schedule so the AI can't
-  // carry over invented names from previous generations.
   const scheduleForContext = resetSchedule ? undefined : currentSchedule
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const basePrompt = await getSchedulePrompt()
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const basePrompt = await getSchedulePrompt()
 
-  // Build system prompt with config always injected.
-  // Format params are extracted and listed as hard constraints BEFORE the full
-  // JSON so the model can't miss them or quietly override them.
-  const fmt = (tournamentConfig.format as Record<string, unknown>) ?? {}
-  const constraintBlock = `
+    const fmt = (tournamentConfig.format as Record<string, unknown>) ?? {}
+    const constraintBlock = `
 ## ⚠️ RESTRICCIONES ABSOLUTAS — NUNCA LAS CAMBIES SIN PERMISO EXPLÍCITO
 
 El administrador ha configurado estos valores y son **fijos e inmutables**:
@@ -238,57 +234,53 @@ Si el horario es matemáticamente imposible con estos parámetros:
 3. Genera el calendario lo más completo posible **sin alterar el formato**.
 4. Solo cambia el formato si el administrador lo pide de forma explícita.`
 
-  // Registered pairs block — injected in Asignación and En vivo modes
-  const tStatus = (tournamentConfig.tournamentStatus as string) ?? 'draft'
-  // Active tournaments use assignment mode (real pairs known, same as 'open')
-  const modeLabel = (tStatus === 'open' || tStatus === 'active') ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
-  const registeredPairs = tournamentConfig.registeredPairs as Array<{ category: string; pairs: string[] }> | undefined
-  const totalPairs = registeredPairs?.reduce((s, c) => s + c.pairs.length, 0) ?? 0
+    const tStatus = (tournamentConfig.tournamentStatus as string) ?? 'draft'
+    const modeLabel = (tStatus === 'open' || tStatus === 'active') ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
+    const registeredPairs = tournamentConfig.registeredPairs as Array<{ category: string; pairs: string[] }> | undefined
+    const totalPairs = registeredPairs?.reduce((s, c) => s + c.pairs.length, 0) ?? 0
 
-  // All categories configured in the tournament
-  const allConfiguredCats = (tournamentConfig.categories as Array<{ id: string; name: string }> | undefined ?? [])
-  const categoriesWithPairs = new Set(registeredPairs?.map(c => c.category) ?? [])
-  const categoriesWithoutPairs = allConfiguredCats
-    .map(c => c.name)
-    .filter(name => !categoriesWithPairs.has(name))
+    const allConfiguredCats = (tournamentConfig.categories as Array<{ id: string; name: string }> | undefined ?? [])
+    const categoriesWithPairs = new Set(registeredPairs?.map(c => c.category) ?? [])
+    const categoriesWithoutPairs = allConfiguredCats
+      .map(c => c.name)
+      .filter(name => !categoriesWithPairs.has(name))
 
-  const pairsBlock = registeredPairs && totalPairs > 0
-    ? [
-        `\n## PAREJAS INSCRITAS — MODO ${modeLabel}`,
-        `En este torneo, SOLO las siguientes categorías tienen parejas inscritas reales:\n`,
-        ...registeredPairs
-          .filter(c => c.pairs.length > 0)
-          .map(c =>
-            `### ✅ ${c.category || 'Sin categoría asignada'} — USA NOMBRES REALES (${c.pairs.length} parejas)\n` +
-            c.pairs.map(p => `- ${p}`).join('\n')
-          ),
-        categoriesWithoutPairs.length > 0
-          ? [
-              `\n### ❌ CATEGORÍAS SIN INSCRIPCIONES — USA SIEMPRE NOMBRES GENÉRICOS`,
-              `Las siguientes categorías NO tienen ninguna pareja inscrita: **${categoriesWithoutPairs.join(', ')}**`,
-              `Para estas categorías DEBES usar nombres genéricos (P1, P2, P3…).`,
-              `PROHIBIDO: copiar nombres de horarios anteriores, inventar nombres, usar nombres reales de otras categorías.`,
-              `Si el horario previo tenía nombres inventados para estas categorías, IGNÓRALOS y sustitúyelos por P1, P2…`,
-            ].join('\n')
-          : '',
-      ].join('\n')
-    : ''
+    const pairsBlock = registeredPairs && totalPairs > 0
+      ? [
+          `\n## PAREJAS INSCRITAS — MODO ${modeLabel}`,
+          `En este torneo, SOLO las siguientes categorías tienen parejas inscritas reales:\n`,
+          ...registeredPairs
+            .filter(c => c.pairs.length > 0)
+            .map(c =>
+              `### ✅ ${c.category || 'Sin categoría asignada'} — USA NOMBRES REALES (${c.pairs.length} parejas)\n` +
+              c.pairs.map(p => `- ${p}`).join('\n')
+            ),
+          categoriesWithoutPairs.length > 0
+            ? [
+                `\n### ❌ CATEGORÍAS SIN INSCRIPCIONES — USA SIEMPRE NOMBRES GENÉRICOS`,
+                `Las siguientes categorías NO tienen ninguna pareja inscrita: **${categoriesWithoutPairs.join(', ')}**`,
+                `Para estas categorías DEBES usar nombres genéricos (P1, P2, P3…).`,
+                `PROHIBIDO: copiar nombres de horarios anteriores, inventar nombres, usar nombres reales de otras categorías.`,
+                `Si el horario previo tenía nombres inventados para estas categorías, IGNÓRALOS y sustitúyelos por P1, P2…`,
+              ].join('\n')
+            : '',
+        ].join('\n')
+      : ''
 
-  const systemPrompt = [
-    basePrompt,
-    constraintBlock,
-    pairsBlock,
-    '---',
-    '## CONFIGURACIÓN DEL TORNEO ACTUAL',
-    '```json',
-    JSON.stringify(tournamentConfig, null, 2),
-    '```',
-    scheduleForContext
-      ? `\n## HORARIO ACTUALMENTE GENERADO\n\`\`\`json\n${JSON.stringify(scheduleForContext, null, 2)}\n\`\`\``
-      : '',
-  ].join('\n')
+    const systemPrompt = [
+      basePrompt,
+      constraintBlock,
+      pairsBlock,
+      '---',
+      '## CONFIGURACIÓN DEL TORNEO ACTUAL',
+      '```json',
+      JSON.stringify(tournamentConfig, null, 2),
+      '```',
+      scheduleForContext
+        ? `\n## HORARIO ACTUALMENTE GENERADO\n\`\`\`json\n${JSON.stringify(scheduleForContext, null, 2)}\n\`\`\``
+        : '',
+    ].join('\n')
 
-  try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 32000,
@@ -298,14 +290,10 @@ Si el horario es matemáticamente imposible con estos parámetros:
           role: m.role as 'user' | 'assistant',
           content: m.content,
         })),
-        {
-          role: 'user' as const,
-          content: userMessage,
-        },
+        { role: 'user' as const, content: userMessage },
       ],
     })
 
-    // Detect truncated responses (hit token limit before finishing JSON)
     if (response.stop_reason === 'max_tokens') {
       return { error: 'La respuesta fue demasiado larga. Prueba a pedir un horario con menos categorías o partidos.' }
     }
@@ -330,8 +318,10 @@ Si el horario es matemáticamente imposible con estos parámetros:
     }
 
     return { data: { message: explanationText, schedule } }
-  } catch {
-    return { error: 'Ha ocurrido un error generando el horario. Por favor, inténtalo de nuevo.' }
+  } catch (e) {
+    console.error('[schedule-agent] chatWithScheduleAgent error:', e)
+    const msg = e instanceof Error ? e.message : String(e)
+    return { error: `Error al generar el horario: ${msg}` }
   }
 }
 
