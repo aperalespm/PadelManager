@@ -1343,6 +1343,22 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
     debounceRef.current = setTimeout(saveData, 1500)
   }
 
+  // Auto-save whenever any field changes (skip initial render)
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    scheduleSave()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    name, description, maxPlayers, priceInfo, startDate, endDate, cancelDl,
+    venueName, venueAddr, serviceList,
+    categories, format, formatState,
+    namedCourts, schedStart, schedEnd, transitionMinutes,
+    lunchEnabled, lunchTime, lunchDuration, phaseDurations,
+    timeBlocks, courtAssignEnabled, courtAssignments,
+    phases, registrationConfig,
+  ])
+
   async function switchTab(newTab: string) {
     if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null }
     await saveData()
@@ -1530,7 +1546,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
       {tab === 'datos' && (
         <div className="bg-white border border-border rounded-[10px] p-[26px]">
           <FieldRow label="Nombre del torneo" req>
-            <SI value={name} onChange={v => { setName(v); scheduleSave() }} className={name === 'Nuevo torneo' ? 'border-[var(--amber)] focus:ring-[var(--amber)]' : ''} />
+            <SI value={name} onChange={setName} className={name === 'Nuevo torneo' ? 'border-[var(--amber)] focus:ring-[var(--amber)]' : ''} />
             {name === 'Nuevo torneo' && (
               <p className="text-[11px] text-[var(--amber)] mt-1.5">Cambia el nombre antes de guardar</p>
             )}
