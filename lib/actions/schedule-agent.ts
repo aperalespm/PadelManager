@@ -238,7 +238,8 @@ Si el horario es matemáticamente imposible con estos parámetros:
 
   // Registered pairs block — injected in Asignación and En vivo modes
   const tStatus = (tournamentConfig.tournamentStatus as string) ?? 'draft'
-  const modeLabel = tStatus === 'active' ? 'EN VIVO' : tStatus === 'open' ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
+  // Active tournaments use assignment mode (real pairs known, same as 'open')
+  const modeLabel = (tStatus === 'open' || tStatus === 'active') ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
   const registeredPairs = tournamentConfig.registeredPairs as Array<{ category: string; pairs: string[] }> | undefined
   const totalPairs = registeredPairs?.reduce((s, c) => s + c.pairs.length, 0) ?? 0
 
@@ -288,7 +289,7 @@ Si el horario es matemáticamente imposible con estos parámetros:
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 16000,
+      max_tokens: 32000,
       system: systemPrompt,
       messages: [
         ...conversationHistory.map(m => ({
@@ -302,18 +303,28 @@ Si el horario es matemáticamente imposible con estos parámetros:
       ],
     })
 
+    // Detect truncated responses (hit token limit before finishing JSON)
+    if (response.stop_reason === 'max_tokens') {
+      return { error: 'La respuesta fue demasiado larga. Prueba a pedir un horario con menos categorías o partidos.' }
+    }
+
     const fullText = response.content[0].type === 'text' ? response.content[0].text : ''
     const parts = fullText.split('===SCHEDULE_JSON===')
     const explanationText = parts[0].trim()
     let schedule: TournamentSchedule | null = null
+    let parseError: string | null = null
 
     if (parts[1]) {
       try {
         const jsonStr = parts[1].trim().replace(/```json|```/g, '').trim()
         schedule = JSON.parse(jsonStr) as TournamentSchedule
-      } catch {
-        // respuesta sin JSON válido — solo texto
+      } catch (e) {
+        parseError = `No se pudo leer el calendario generado (JSON inválido). ${String(e)}`
       }
+    }
+
+    if (parseError && !schedule) {
+      return { data: { message: explanationText + '\n\n⚠️ ' + parseError, schedule: null } }
     }
 
     return { data: { message: explanationText, schedule } }
