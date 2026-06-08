@@ -140,13 +140,7 @@ export function ScheduleAgent({
     return !isGenericName(m.pair1 ?? '') || !isGenericName(m.pair2 ?? '')
   }))
   const scheduleOutOfSync = configChanged || registrationsChanged || hasGenericNames || scheduleHasStaleCategoryNames
-  const outOfSyncReason = hasGenericNames
-    ? `El horario tiene nombres genéricos pero hay ${totalRealPairs} parejas confirmadas. Actualízalo para asignarlas a los grupos.`
-    : scheduleHasStaleCategoryNames
-    ? 'El horario tiene nombres de inscripciones eliminadas. Actualízalo para usar los datos actuales.'
-    : registrationsChanged
-    ? 'Hay nuevas parejas confirmadas desde la última generación del horario.'
-    : 'La configuración del torneo ha cambiado desde que se generó este horario.'
+  const outOfSyncReason = 'Hay cambios pendientes de implementar en el horario.'
 
   // ── Previous user instructions (for history dropdown) ──────────────────────
   const userRequests = messages.filter(m => m.role === 'user').map(m => m.content)
@@ -474,7 +468,7 @@ export function ScheduleAgent({
               disabled={isGenerating}
               className="shrink-0 text-[11px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-2.5 py-1 rounded-[6px] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
             >
-              {hasRealPairs ? 'Actualizar con parejas reales' : 'Regenerar ahora'}
+              Actualizar horario
             </button>
           </div>
         )}
