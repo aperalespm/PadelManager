@@ -504,3 +504,21 @@ export async function publishSchedule(tournamentId: string): Promise<{ data: { s
     return { error: 'Ha ocurrido un error publicando el horario.' }
   }
 }
+
+// ── Poll for external changes ─────────────────────────────────────────────────
+// Called every 30 s from the client to detect new registrations or config
+// changes without a full page reload (e.g. a player registers online).
+
+export async function pollTournamentChanges(tournamentId: string): Promise<{
+  lastRegistrationAt: string | null
+  tournamentUpdatedAt: string | null
+}> {
+  const [regRows, tRows] = await Promise.all([
+    sql`SELECT MAX(updated_at) AS last_at FROM registrations WHERE tournament_id = ${tournamentId} AND status = 'confirmed'`,
+    sql`SELECT updated_at FROM tournaments WHERE id = ${tournamentId} LIMIT 1`,
+  ])
+  return {
+    lastRegistrationAt: regRows[0]?.last_at ? String(regRows[0].last_at) : null,
+    tournamentUpdatedAt: tRows[0]?.updated_at ? String(tRows[0].updated_at) : null,
+  }
+}

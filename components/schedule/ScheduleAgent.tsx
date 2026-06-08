@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Clock, Send, Maximize2, X, ChevronDown } from 'lucide-react'
-import { chatWithScheduleAgent, saveSchedule, publishSchedule } from '@/lib/actions/schedule-agent'
+import { chatWithScheduleAgent, saveSchedule, publishSchedule, pollTournamentChanges } from '@/lib/actions/schedule-agent'
 import type { VersionSnapshot } from '@/lib/actions/schedule-agent'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
 import { cn } from '@/lib/utils'
@@ -49,6 +49,9 @@ export function ScheduleAgent({
   // Used to dismiss the out-of-sync banner: after a successful generation, any
   // registrations/config changes must be NEWER than this timestamp to re-trigger.
   const [scheduleGeneratedAt, setScheduleGeneratedAt] = useState<string | null>(scheduleUpdatedAt ?? null)
+  // Live timestamps polled every 30 s to detect online registrations / config changes
+  const [liveLastRegistrationAt, setLiveLastRegistrationAt] = useState<string | null>(lastRegistrationAt ?? null)
+  const [liveTournamentUpdatedAt, setLiveTournamentUpdatedAt] = useState<string | null>(tournamentUpdatedAt ?? null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showRequests, setShowRequests] = useState(false)
@@ -67,6 +70,16 @@ export function ScheduleAgent({
     const t = setTimeout(() => setToast(null), 3000)
     return () => clearTimeout(t)
   }, [toast])
+
+  // Poll every 30 s for external changes (online registrations, config saves)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const result = await pollTournamentChanges(tournamentId)
+      if (result.lastRegistrationAt) setLiveLastRegistrationAt(result.lastRegistrationAt)
+      if (result.tournamentUpdatedAt) setLiveTournamentUpdatedAt(result.tournamentUpdatedAt)
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [tournamentId])
 
   useEffect(() => {
     if (!autoRegenerate) return
@@ -112,12 +125,12 @@ export function ScheduleAgent({
   // configChanged / registrationsChanged: compare against scheduleGeneratedAt,
   // not currentScheduleUpdatedAt, so manual Guardar clicks don't reset the banner.
   const configChanged = !!(
-    schedule && scheduleGeneratedAt && tournamentUpdatedAt &&
-    new Date(tournamentUpdatedAt) > new Date(scheduleGeneratedAt)
+    schedule && scheduleGeneratedAt && liveTournamentUpdatedAt &&
+    new Date(liveTournamentUpdatedAt) > new Date(scheduleGeneratedAt)
   )
   const registrationsChanged = !!(
-    schedule && scheduleGeneratedAt && lastRegistrationAt &&
-    new Date(lastRegistrationAt) > new Date(scheduleGeneratedAt)
+    schedule && scheduleGeneratedAt && liveLastRegistrationAt &&
+    new Date(liveLastRegistrationAt) > new Date(scheduleGeneratedAt)
   )
 
   // hasGenericNames: schedule was generated in planning mode (no real pairs assigned yet)
