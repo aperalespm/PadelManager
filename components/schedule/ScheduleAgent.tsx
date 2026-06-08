@@ -452,8 +452,14 @@ export function ScheduleAgent({
       </div>
 
       {/* ── Calendar ────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 relative">
         {calendarContent}
+        {isGenerating && (
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-20">
+            <span className="w-9 h-9 border-[3px] border-accent/20 border-t-accent rounded-full animate-spin" />
+            <p className="text-[13px] font-medium text-muted-foreground">Generando horario…</p>
+          </div>
+        )}
       </div>
 
       {/* ── Bottom input bar ─────────────────────────────────────────── */}
@@ -465,7 +471,7 @@ export function ScheduleAgent({
             onChange={e => setInputText(e.target.value)}
             placeholder={isGenerating ? 'Generando horario…' : 'Pide un ajuste… (ej: "finales a las 20:00", "pausa de 15 min entre partidos")'}
             disabled={isGenerating}
-            className="flex-1 text-[13px] bg-muted border border-border rounded-[8px] px-3 py-2 outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors placeholder:text-muted-foreground/60 disabled:opacity-60"
+            className="flex-1 text-[13px] bg-background border border-border rounded-[8px] px-3 py-2 outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors placeholder:text-muted-foreground/60 disabled:opacity-60"
           />
           <button
             type="submit"
