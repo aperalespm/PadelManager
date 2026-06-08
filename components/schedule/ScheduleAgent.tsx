@@ -57,6 +57,16 @@ export function ScheduleAgent({
   const requestsRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  // Disable parent scroll while this component is mounted so only the
+  // internal calendar area scrolls (avoids the double-scroll problem).
+  useEffect(() => {
+    const main = document.querySelector('main') as HTMLElement | null
+    if (!main) return
+    const prev = main.style.overflow
+    main.style.overflow = 'hidden'
+    return () => { main.style.overflow = prev }
+  }, [])
+
   // Auto-dismiss toast
   useEffect(() => {
     if (!toast) return
