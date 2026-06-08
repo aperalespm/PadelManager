@@ -1307,7 +1307,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
         schedule: {
           start_time:  schedStart,
           end_time:    schedEnd,
-          transition_minutes: parseInt(transitionMinutes) || 10,
+          transition_minutes: (() => { const p = parseInt(transitionMinutes); return isNaN(p) ? 10 : p })(),
           lunch_break: lunchEnabled ? { time: lunchTime, duration_minutes: parseInt(lunchDuration) || 60 } : null,
           phase_durations: Object.fromEntries(phases.map(ph => [ph.name, parseInt(phaseDurations[ph.name] ?? '90') || 90])),
           time_blocks:       timeBlocks,
@@ -1390,7 +1390,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
     let totalMin = (eh * 60 + em) - (sh * 60 + sm)
     if (isNaN(totalMin) || totalMin <= 0) return false
     if (lunchEnabled) totalMin -= (parseInt(lunchDuration) || 60)
-    const transMin = parseInt(transitionMinutes) || 10
+    const transMin = (() => { const p = parseInt(transitionMinutes); return isNaN(p) ? 10 : p })()
     const groupPhase = phases.find(p => p.name.toLowerCase().includes('grupo'))
     const matchDur = parseInt(groupPhase?.match_config.time_limit_minutes ?? '')
                    || parseInt(formatState.time_limit_minutes)
