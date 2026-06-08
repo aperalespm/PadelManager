@@ -77,7 +77,7 @@ export function ScheduleAgent({
       const result = await pollTournamentChanges(tournamentId)
       if (result.lastRegistrationAt) setLiveLastRegistrationAt(result.lastRegistrationAt)
       if (result.tournamentUpdatedAt) setLiveTournamentUpdatedAt(result.tournamentUpdatedAt)
-    }, 30_000)
+    }, 5 * 60_000)
     return () => clearInterval(interval)
   }, [tournamentId])
 
