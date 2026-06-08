@@ -187,6 +187,7 @@ const chatSchema = z.object({
   })),
   tournamentConfig: z.record(z.string(), z.unknown()),
   currentSchedule: z.unknown().optional(),
+  resetSchedule: z.boolean().optional(),
 })
 
 export async function chatWithScheduleAgent(input: unknown): Promise<
@@ -195,7 +196,10 @@ export async function chatWithScheduleAgent(input: unknown): Promise<
   const parsed = chatSchema.safeParse(input)
   if (!parsed.success) return { error: 'Datos inválidos' }
 
-  const { userMessage, conversationHistory, tournamentConfig, currentSchedule } = parsed.data
+  const { userMessage, conversationHistory, tournamentConfig, currentSchedule, resetSchedule } = parsed.data
+  // When resetSchedule=true, don't pass the existing schedule so the AI can't
+  // carry over invented names from previous generations.
+  const scheduleForContext = resetSchedule ? undefined : currentSchedule
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const basePrompt = await getSchedulePrompt()
@@ -229,16 +233,33 @@ Si el horario es matemáticamente imposible con estos parámetros:
   const modeLabel = tStatus === 'active' ? 'EN VIVO' : tStatus === 'open' ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
   const registeredPairs = tournamentConfig.registeredPairs as Array<{ category: string; pairs: string[] }> | undefined
   const totalPairs = registeredPairs?.reduce((s, c) => s + c.pairs.length, 0) ?? 0
+
+  // All categories configured in the tournament
+  const allConfiguredCats = (tournamentConfig.categories as Array<{ id: string; name: string }> | undefined ?? [])
+  const categoriesWithPairs = new Set(registeredPairs?.map(c => c.category) ?? [])
+  const categoriesWithoutPairs = allConfiguredCats
+    .map(c => c.name)
+    .filter(name => !categoriesWithPairs.has(name))
+
   const pairsBlock = registeredPairs && totalPairs > 0
     ? [
-        `\n## PAREJAS INSCRITAS — MODO ${modeLabel} (${totalPairs} parejas confirmadas)`,
-        'Usa estos nombres reales. No uses P1/P2 ni nombres genéricos.\n',
+        `\n## PAREJAS INSCRITAS — MODO ${modeLabel}`,
+        `En este torneo, SOLO las siguientes categorías tienen parejas inscritas reales:\n`,
         ...registeredPairs
           .filter(c => c.pairs.length > 0)
           .map(c =>
-            `### ${c.category || 'Sin categoría asignada'} (${c.pairs.length} parejas)\n` +
+            `### ✅ ${c.category || 'Sin categoría asignada'} — USA NOMBRES REALES (${c.pairs.length} parejas)\n` +
             c.pairs.map(p => `- ${p}`).join('\n')
           ),
+        categoriesWithoutPairs.length > 0
+          ? [
+              `\n### ❌ CATEGORÍAS SIN INSCRIPCIONES — USA SIEMPRE NOMBRES GENÉRICOS`,
+              `Las siguientes categorías NO tienen ninguna pareja inscrita: **${categoriesWithoutPairs.join(', ')}**`,
+              `Para estas categorías DEBES usar nombres genéricos (P1, P2, P3…).`,
+              `PROHIBIDO: copiar nombres de horarios anteriores, inventar nombres, usar nombres reales de otras categorías.`,
+              `Si el horario previo tenía nombres inventados para estas categorías, IGNÓRALOS y sustitúyelos por P1, P2…`,
+            ].join('\n')
+          : '',
       ].join('\n')
     : ''
 
@@ -251,8 +272,8 @@ Si el horario es matemáticamente imposible con estos parámetros:
     '```json',
     JSON.stringify(tournamentConfig, null, 2),
     '```',
-    currentSchedule
-      ? `\n## HORARIO ACTUALMENTE GENERADO\n\`\`\`json\n${JSON.stringify(currentSchedule, null, 2)}\n\`\`\``
+    scheduleForContext
+      ? `\n## HORARIO ACTUALMENTE GENERADO\n\`\`\`json\n${JSON.stringify(scheduleForContext, null, 2)}\n\`\`\``
       : '',
   ].join('\n')
 
