@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Clock, Send, Maximize2, X, ChevronDown } from 'lucide-react'
-import { chatWithScheduleAgent, saveSchedule, publishSchedule } from '@/lib/actions/schedule-agent'
+import { chatWithScheduleAgent, saveSchedule, publishSchedule, pollTournamentChanges } from '@/lib/actions/schedule-agent'
+import { RefreshCw } from 'lucide-react'
 import type { VersionSnapshot } from '@/lib/actions/schedule-agent'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
 import { cn } from '@/lib/utils'
@@ -45,6 +46,14 @@ export function ScheduleAgent({
   const [version, setVersion] = useState(initialVersion)
   const [versionHistory, setVersionHistory] = useState<VersionSnapshot[]>(initialVersionHistory)
   const [currentScheduleUpdatedAt, setCurrentScheduleUpdatedAt] = useState(scheduleUpdatedAt)
+  // Tracks the last time the AI successfully generated a schedule in this session.
+  // Used to dismiss the out-of-sync banner: after a successful generation, any
+  // registrations/config changes must be NEWER than this timestamp to re-trigger.
+  const [scheduleGeneratedAt, setScheduleGeneratedAt] = useState<string | null>(scheduleUpdatedAt ?? null)
+  // Live timestamps polled every 30 s to detect online registrations / config changes
+  const [liveLastRegistrationAt, setLiveLastRegistrationAt] = useState<string | null>(lastRegistrationAt ?? null)
+  const [liveTournamentUpdatedAt, setLiveTournamentUpdatedAt] = useState<string | null>(tournamentUpdatedAt ?? null)
+  const [isChecking, setIsChecking] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showRequests, setShowRequests] = useState(false)
@@ -57,16 +66,6 @@ export function ScheduleAgent({
   const requestsRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Disable parent scroll while this component is mounted so only the
-  // internal calendar area scrolls (avoids the double-scroll problem).
-  useEffect(() => {
-    const main = document.querySelector('main') as HTMLElement | null
-    if (!main) return
-    const prev = main.style.overflow
-    main.style.overflow = 'hidden'
-    return () => { main.style.overflow = prev }
-  }, [])
-
   // Auto-dismiss toast
   useEffect(() => {
     if (!toast) return
@@ -74,12 +73,20 @@ export function ScheduleAgent({
     return () => clearTimeout(t)
   }, [toast])
 
+  async function handleCheckChanges() {
+    setIsChecking(true)
+    const result = await pollTournamentChanges(tournamentId)
+    if (result.lastRegistrationAt) setLiveLastRegistrationAt(result.lastRegistrationAt)
+    if (result.tournamentUpdatedAt) setLiveTournamentUpdatedAt(result.tournamentUpdatedAt)
+    setIsChecking(false)
+  }
+
   useEffect(() => {
     if (!autoRegenerate) return
     const msg = isAssignment
       ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
       : 'Regenera el horario completo con la configuración actualizada del torneo, respetando los ajustes de sesiones anteriores si los hay.'
-    sendMessage(msg, true)
+    sendMessage(msg, true, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -104,14 +111,8 @@ export function ScheduleAgent({
   const isAssignment = tournamentStatus === 'open' || tournamentStatus === 'active'
 
   // ── Out-of-sync detection ───────────────────────────────────────────────────
-  const configChanged = !!(
-    schedule && currentScheduleUpdatedAt && tournamentUpdatedAt &&
-    new Date(tournamentUpdatedAt) > new Date(currentScheduleUpdatedAt)
-  )
-  const registrationsChanged = !!(
-    schedule && currentScheduleUpdatedAt && lastRegistrationAt &&
-    new Date(lastRegistrationAt) > new Date(currentScheduleUpdatedAt)
-  )
+  // All comparisons use scheduleGeneratedAt (set to now after every successful
+  // AI generation) so the banner dismisses reliably after clicking "Actualizar".
   const registeredPairs = tournamentConfig.registeredPairs as Array<{ category?: string; pairs: string[] }> | undefined
   const totalRealPairs = registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0
   const hasRealPairs = totalRealPairs >= 2
@@ -120,6 +121,19 @@ export function ScheduleAgent({
       c.pairs.flatMap(p => p.split(' / ').map(n => n.trim()).filter(Boolean))
     )
   )
+
+  // configChanged / registrationsChanged: compare against scheduleGeneratedAt,
+  // not currentScheduleUpdatedAt, so manual Guardar clicks don't reset the banner.
+  const configChanged = !!(
+    schedule && scheduleGeneratedAt && liveTournamentUpdatedAt &&
+    new Date(liveTournamentUpdatedAt) > new Date(scheduleGeneratedAt)
+  )
+  const registrationsChanged = !!(
+    schedule && scheduleGeneratedAt && liveLastRegistrationAt &&
+    new Date(liveLastRegistrationAt) > new Date(scheduleGeneratedAt)
+  )
+
+  // hasGenericNames: schedule was generated in planning mode (no real pairs assigned yet)
   const scheduleHasRealNames = hasRealPairs && !!(
     schedule?.matches.some(m => {
       const p1 = (m.pair1 ?? '').trim()
@@ -128,18 +142,9 @@ export function ScheduleAgent({
       return [...realPairNameSet].some(name => name.length > 2 && (m.matchLabel ?? '').includes(name))
     })
   )
-  const hasGenericNames = hasRealPairs && !!schedule && !scheduleHasRealNames
+  const hasGenericNames = hasRealPairs && !!schedule && !scheduleHasRealNames && !scheduleGeneratedAt
 
-  // Detect stale names: schedule has real-looking player names for categories
-  // that currently have zero confirmed registrations (e.g. old registrations were deleted).
-  const catsWithRegistrations = new Set((registeredPairs ?? []).map(c => c.category ?? '').filter(Boolean))
-  const isGenericName = (name: string) => !name || /^(P\d+|Pareja\s|Equipo\s|Team\s)/i.test(name.trim())
-  const scheduleHasStaleCategoryNames = !!(schedule?.matches.some(m => {
-    const catName = (m.categoryName ?? '').trim()
-    if (!catName || catsWithRegistrations.has(catName)) return false
-    return !isGenericName(m.pair1 ?? '') || !isGenericName(m.pair2 ?? '')
-  }))
-  const scheduleOutOfSync = configChanged || registrationsChanged || hasGenericNames || scheduleHasStaleCategoryNames
+  const scheduleOutOfSync = configChanged || registrationsChanged || hasGenericNames
   const outOfSyncReason = 'Hay cambios pendientes de implementar en el horario.'
 
   // ── Previous user instructions (for history dropdown) ──────────────────────
@@ -201,6 +206,9 @@ export function ScheduleAgent({
       if ('data' in result2 && newSchedule) {
         const savedAt = new Date().toISOString()
         setCurrentScheduleUpdatedAt(savedAt)
+        // Mark the schedule as freshly generated so the out-of-sync banner dismisses.
+        // Only set when the AI returned a new schedule (not on manual saves).
+        setScheduleGeneratedAt(savedAt)
         setVersion(result2.data.version)
         setVersionHistory(prev => [
           ...prev,
@@ -418,6 +426,15 @@ export function ScheduleAgent({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleCheckChanges}
+              disabled={isChecking || isGenerating}
+              title="Comprobar si hay nuevas inscripciones o cambios de configuración"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium rounded-[7px] border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+            >
+              <RefreshCw className={cn('w-3 h-3', isChecking && 'animate-spin')} />
+              Comprobar cambios
+            </button>
             <button
               onClick={() => setFullscreen(true)}
               disabled={!displayedSchedule}

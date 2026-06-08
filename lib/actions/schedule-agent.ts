@@ -23,11 +23,13 @@ Se activa automáticamente cuando el sistema te proporciona parejas inscritas re
 
 En este modo **debes**:
 1. **Asignar parejas a grupos**: distribuye las parejas de cada categoría en los grupos configurados (numGroups × teamsPerGroup). Si el número de parejas no encaja exactamente, reparte de forma equitativa — nunca cambies numGroups ni teamsPerGroup.
-2. **Usar nombres reales** en pair1, pair2 y matchLabel. Jamás uses P1/P2/Pareja A genéricos.
+2. **Nombres por categoría**:
+   - Categorías CON parejas en "PAREJAS INSCRITAS" → usa los nombres reales exactos tal como aparecen.
+   - Categorías SIN parejas en "PAREJAS INSCRITAS" → usa SIEMPRE nombres genéricos (P1, P2, P3…). Nunca nombres reales para estas categorías.
 3. **Format de matchLabel**: "[CategoríaNombre] Gr.[Letra] — [NombreP1] vs [NombreP2]"
 4. **Sin categoría asignada**: si las parejas no llevan categoría, distribúyelas equitativamente entre las categorías configuradas del torneo, o pregunta al organizador cómo hacerlo.
 5. **Generar el cuadro de grupos**: cada grupo tiene todas sus parejas y genera los partidos round-robin de la fase de grupos.
-6. El calendario con nombres reales sustituye a cualquier horario previo con nombres genéricos.
+6. El calendario actualizado sustituye a cualquier horario previo.
 
 ## REGLA ABSOLUTA — FUENTE DE VERDAD PARA NOMBRES DE PAREJAS
 
@@ -238,7 +240,8 @@ Si el horario es matemáticamente imposible con estos parámetros:
 
   // Registered pairs block — injected in Asignación and En vivo modes
   const tStatus = (tournamentConfig.tournamentStatus as string) ?? 'draft'
-  const modeLabel = tStatus === 'active' ? 'EN VIVO' : tStatus === 'open' ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
+  // Active tournaments use assignment mode (real pairs known, same as 'open')
+  const modeLabel = (tStatus === 'open' || tStatus === 'active') ? 'ASIGNACIÓN' : 'PLANIFICACIÓN'
   const registeredPairs = tournamentConfig.registeredPairs as Array<{ category: string; pairs: string[] }> | undefined
   const totalPairs = registeredPairs?.reduce((s, c) => s + c.pairs.length, 0) ?? 0
 
@@ -288,7 +291,7 @@ Si el horario es matemáticamente imposible con estos parámetros:
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 16000,
+      max_tokens: 32000,
       system: systemPrompt,
       messages: [
         ...conversationHistory.map(m => ({
@@ -302,18 +305,28 @@ Si el horario es matemáticamente imposible con estos parámetros:
       ],
     })
 
+    // Detect truncated responses (hit token limit before finishing JSON)
+    if (response.stop_reason === 'max_tokens') {
+      return { error: 'La respuesta fue demasiado larga. Prueba a pedir un horario con menos categorías o partidos.' }
+    }
+
     const fullText = response.content[0].type === 'text' ? response.content[0].text : ''
     const parts = fullText.split('===SCHEDULE_JSON===')
     const explanationText = parts[0].trim()
     let schedule: TournamentSchedule | null = null
+    let parseError: string | null = null
 
     if (parts[1]) {
       try {
         const jsonStr = parts[1].trim().replace(/```json|```/g, '').trim()
         schedule = JSON.parse(jsonStr) as TournamentSchedule
-      } catch {
-        // respuesta sin JSON válido — solo texto
+      } catch (e) {
+        parseError = `No se pudo leer el calendario generado (JSON inválido). ${String(e)}`
       }
+    }
+
+    if (parseError && !schedule) {
+      return { data: { message: explanationText + '\n\n⚠️ ' + parseError, schedule: null } }
     }
 
     return { data: { message: explanationText, schedule } }
@@ -489,5 +502,23 @@ export async function publishSchedule(tournamentId: string): Promise<{ data: { s
     return { data: { success: true } }
   } catch {
     return { error: 'Ha ocurrido un error publicando el horario.' }
+  }
+}
+
+// ── Poll for external changes ─────────────────────────────────────────────────
+// Called every 30 s from the client to detect new registrations or config
+// changes without a full page reload (e.g. a player registers online).
+
+export async function pollTournamentChanges(tournamentId: string): Promise<{
+  lastRegistrationAt: string | null
+  tournamentUpdatedAt: string | null
+}> {
+  const [regRows, tRows] = await Promise.all([
+    sql`SELECT MAX(updated_at) AS last_at FROM registrations WHERE tournament_id = ${tournamentId} AND status = 'confirmed'`,
+    sql`SELECT updated_at FROM tournaments WHERE id = ${tournamentId} LIMIT 1`,
+  ])
+  return {
+    lastRegistrationAt: regRows[0]?.last_at ? String(regRows[0].last_at) : null,
+    tournamentUpdatedAt: tRows[0]?.updated_at ? String(tRows[0].updated_at) : null,
   }
 }

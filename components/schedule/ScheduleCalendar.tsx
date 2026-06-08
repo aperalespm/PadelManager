@@ -173,7 +173,7 @@ export function ScheduleCalendar({ schedule }: ScheduleCalendarProps) {
       {courtsOrdered.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">No hay partidos para las categorías seleccionadas</p>
       ) : (
-        <div className="w-full overflow-x-auto overflow-y-auto max-h-[640px] rounded-lg border border-border">
+        <div className="w-full overflow-x-auto rounded-lg border border-border">
           <div className="flex" style={{ minWidth: `${courtsOrdered.length * 170 + 52}px` }}>
 
             {/* Time axis */}
