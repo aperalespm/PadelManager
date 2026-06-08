@@ -232,31 +232,28 @@ export function ScheduleCalendar({ schedule }: ScheduleCalendarProps) {
                     const height = (endMin - startMin) * PX_PER_MIN - 4
                     const colors = catColorMap[m.categoryId] ?? CATEGORY_COLORS[0]
                     const isPhase = m.phase !== 'groups'
+                    const tooltip = `${m.categoryName}${isPhase ? ` · ${m.phase}` : ''}\n${m.pair1} — ${m.pair2}\n${m.startTime}–${m.endTime}`
 
                     return (
                       <div
                         key={m.id}
+                        title={tooltip}
                         className={cn(
-                          'absolute left-1 right-1 rounded-[6px] border px-2 py-1 overflow-hidden flex flex-col',
+                          'absolute left-1 right-1 rounded-[6px] border px-2 py-1 overflow-hidden flex flex-col gap-0.5',
                           colors.bg, colors.border,
                           isPhase && 'border-t-2 border-t-foreground/30'
                         )}
                         style={{ top, height }}
                       >
                         <p className={cn('text-[10px] font-bold truncate leading-tight shrink-0', colors.text)}>
-                          {m.categoryName}
-                          {isPhase && <span className="ml-1 opacity-60">· {m.phase}</span>}
+                          {m.categoryName}{isPhase && <span className="ml-1 opacity-60">· {m.phase}</span>}
                         </p>
-                        {height >= 32 && (
-                          <p className="text-[11px] text-foreground/80 truncate leading-tight mt-0.5 shrink-0">
-                            {m.pair1} — {m.pair2}
-                          </p>
-                        )}
-                        {height >= 48 && (
-                          <p className="text-[10px] text-muted-foreground leading-tight mt-auto shrink-0">
-                            {m.startTime}–{m.endTime}
-                          </p>
-                        )}
+                        <p className="text-[11px] text-foreground/80 truncate leading-tight shrink-0">
+                          {m.pair1} — {m.pair2}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground leading-tight shrink-0 mt-auto">
+                          {m.startTime}–{m.endTime}
+                        </p>
                       </div>
                     )
                   })}
