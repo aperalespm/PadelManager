@@ -36,8 +36,31 @@ En este modo **debes**:
 3. **Sin solapamientos**: dos partidos no pueden ocupar la misma pista al mismo tiempo.
 4. **Respetar pausas**: ningún partido puede empezar ni terminar dentro de un bloque de pausa.
 5. **Respetar horario de pistas**: cada pista tiene availableFrom y availableUntil.
-6. **Transición**: si transitionMins > 0, deja ese tiempo libre entre partidos en la misma pista.
+6. **Transición**: si transitionMins > 0, deja exactamente ese tiempo libre entre partidos en la misma pista. Si transitionMins = 0, el siguiente partido empieza en el minuto exacto en que termina el anterior.
 7. **Duración máxima por fase**: nunca asignes más tiempo del indicado en maxDurationMins.
+8. **Sin huecos innecesarios**: NUNCA dejes una pista vacía entre partidos a menos que sea por una pausa configurada o porque no haya más partidos disponibles para esa pista. No redondees los horarios a horas en punto o medias horas si eso crea un hueco.
+
+## REGLA DE ORO — EMPAQUETADO DE PARTIDOS
+
+Cada partido en una pista comienza exactamente cuando termina el anterior más la transición:
+
+  startTime[n+1] = endTime[n] + transitionMins
+
+**Ejemplo** con partidos de 30 min y transitionMins = 10:
+- Partido 1: 10:00 → 10:30
+- Partido 2: 10:40 → 11:10  ← empieza a los 10 min de que termina el anterior
+- Partido 3: 11:20 → 11:50
+- Pausa almuerzo: 12:00 → 13:00
+- Partido 4: 13:00 → 13:30  ← primera pista libre tras la pausa
+
+**Ejemplo** con partidos de 30 min y transitionMins = 0:
+- Partido 1: 10:00 → 10:30
+- Partido 2: 10:30 → 11:00  ← inmediatamente después
+- Partido 3: 11:00 → 11:30
+
+Está **prohibido** hacer esto (hueco innecesario de 30 min):
+- Partido 1: 10:00 → 10:30
+- Partido 2: 11:00 → 11:30  ✗ ← hueco de 30 min sin justificación
 
 ## CÓMO CALCULAR EL CALENDARIO
 
