@@ -60,7 +60,8 @@ export function ScheduleAgent({
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [inputText, setInputText] = useState('')
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [lastError, setLastError] = useState<string | null>(null)
 
   const historyRef = useRef<HTMLDivElement>(null)
   const requestsRef = useRef<HTMLDivElement>(null)
@@ -69,7 +70,7 @@ export function ScheduleAgent({
   // Auto-dismiss toast
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(() => setToast(null), 3000)
+    const t = setTimeout(() => setToast(null), toast?.ok ? 3000 : 6000)
     return () => clearTimeout(t)
   }, [toast])
 
@@ -159,6 +160,7 @@ export function ScheduleAgent({
     setMessages(newMessages)
     setIsGenerating(true)
     setSaveError(null)
+    setLastError(null)
 
     const history = freshContext
       ? []
@@ -176,6 +178,8 @@ export function ScheduleAgent({
     if ('error' in result) {
       const errMsg: ChatMessage = { role: 'assistant', content: result.error, timestamp: new Date().toISOString() }
       setMessages(prev => [...prev, errMsg])
+      setLastError(result.error)
+      setToast({ msg: result.error, ok: false })
       setIsGenerating(false)
       return
     }
@@ -187,9 +191,17 @@ export function ScheduleAgent({
     }
     const updatedMessages = [...newMessages, assistantMsg]
     setMessages(updatedMessages)
+
+    // If the AI replied but didn't produce a schedule JSON, surface the explanation
+    if (!newSchedule && message) {
+      setLastError(message)
+      setToast({ msg: 'El agente respondió sin generar horario', ok: false })
+    }
+
     if (newSchedule) {
       setSchedule(newSchedule)
-      setToast('Horario actualizado')
+      setLastError(null)
+      setToast({ msg: 'Horario actualizado', ok: true })
     }
     setIsGenerating(false)
 
@@ -331,7 +343,7 @@ export function ScheduleAgent({
                     ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
                     : 'Genera el horario óptimo para este torneo.',
                   true,
-                  isAssignment  // resetSchedule: don't carry over invented names
+                  isAssignment
                 )}
                 disabled={isGenerating}
                 className="px-5 py-2.5 bg-accent text-white text-[13px] font-semibold rounded-[8px] hover:bg-accent/90 disabled:opacity-50 transition-opacity flex items-center gap-2"
@@ -340,6 +352,12 @@ export function ScheduleAgent({
                   ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generando...</>
                   : isAssignment ? 'Generar horario con parejas reales' : 'Generar horario'}
               </button>
+
+              {lastError && (
+                <div className="max-w-[360px] mt-1 px-3 py-2 rounded-[8px] bg-[var(--error-surface)] border border-[var(--error)]/30 text-[12px] text-[var(--error)] text-center whitespace-pre-wrap">
+                  {lastError}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -528,9 +546,14 @@ export function ScheduleAgent({
 
     {/* ── Toast notification ───────────────────────────────────────── */}
     {toast && (
-      <div className="fixed bottom-20 right-5 z-50 flex items-center gap-2 px-4 py-2.5 bg-[var(--success)] text-white text-[13px] font-semibold rounded-[10px] shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">
-        <span className="w-4 h-4 flex items-center justify-center rounded-full bg-white/20 text-[10px]">✓</span>
-        {toast}
+      <div className={cn(
+        'fixed bottom-20 right-5 z-50 flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold rounded-[10px] shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200 max-w-[320px]',
+        toast.ok ? 'bg-[var(--success)] text-white' : 'bg-[var(--error)] text-white'
+      )}>
+        <span className="w-4 h-4 flex items-center justify-center rounded-full bg-white/20 text-[10px] shrink-0">
+          {toast.ok ? '✓' : '✕'}
+        </span>
+        <span className="leading-snug">{toast.msg}</span>
       </div>
     )}
 
