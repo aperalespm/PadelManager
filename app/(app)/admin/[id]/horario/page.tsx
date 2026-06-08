@@ -32,8 +32,6 @@ export default async function HorarioPage({ params, searchParams }: { params: Pr
       id: String(i + 1),
       courtNumber: i + 1,
       name: c.name,
-      availableFrom: (schedule.start_time as string) ?? '10:00',
-      availableUntil: (schedule.end_time as string) ?? '21:00',
       breaks: timeBlocks
         .filter(b => b.courtName === c.name)
         .map(b => ({ start: b.from, end: b.to })),
