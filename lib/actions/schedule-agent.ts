@@ -29,6 +29,14 @@ En este modo **debes**:
 5. **Generar el cuadro de grupos**: cada grupo tiene todas sus parejas y genera los partidos round-robin de la fase de grupos.
 6. El calendario con nombres reales sustituye a cualquier horario previo con nombres genéricos.
 
+## REGLA ABSOLUTA — FUENTE DE VERDAD PARA NOMBRES DE PAREJAS
+
+Los **ÚNICOS** nombres válidos para pair1, pair2 y matchLabel son los que aparecen en la sección "PAREJAS INSCRITAS" de este prompt.
+
+- Si una categoría NO aparece en "PAREJAS INSCRITAS", usa siempre P1, P2, P3… sin excepción.
+- Si ves otros nombres en "HORARIO ACTUALMENTE GENERADO", **IGNÓRALOS**. Pueden ser inscripciones eliminadas o desactualizadas.
+- Está **PROHIBIDO** copiar nombres del horario anterior para categorías sin parejas inscritas.
+
 ## REGLAS QUE NUNCA PUEDES ROMPER
 
 1. **Grupos seguidos**: todos los partidos de un mismo grupo van en slots consecutivos en la misma pista.

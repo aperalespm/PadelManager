@@ -255,7 +255,9 @@ export function ScheduleAgent({
     const text = inputText.trim()
     if (!text || isGenerating) return
     setInputText('')
-    sendMessage(text)
+    // If registrations changed since last schedule generation, reset the schedule
+    // context so the AI can't copy stale names from the old saved schedule.
+    sendMessage(text, registrationsChanged, registrationsChanged)
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
