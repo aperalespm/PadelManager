@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Clock, Send, Maximize2, X, ChevronDown } from 'lucide-react'
 import { chatWithScheduleAgent, saveSchedule, publishSchedule, pollTournamentChanges } from '@/lib/actions/schedule-agent'
+import { RefreshCw } from 'lucide-react'
 import type { VersionSnapshot } from '@/lib/actions/schedule-agent'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
 import { cn } from '@/lib/utils'
@@ -52,6 +53,7 @@ export function ScheduleAgent({
   // Live timestamps polled every 30 s to detect online registrations / config changes
   const [liveLastRegistrationAt, setLiveLastRegistrationAt] = useState<string | null>(lastRegistrationAt ?? null)
   const [liveTournamentUpdatedAt, setLiveTournamentUpdatedAt] = useState<string | null>(tournamentUpdatedAt ?? null)
+  const [isChecking, setIsChecking] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [showRequests, setShowRequests] = useState(false)
@@ -71,15 +73,13 @@ export function ScheduleAgent({
     return () => clearTimeout(t)
   }, [toast])
 
-  // Poll every 30 s for external changes (online registrations, config saves)
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const result = await pollTournamentChanges(tournamentId)
-      if (result.lastRegistrationAt) setLiveLastRegistrationAt(result.lastRegistrationAt)
-      if (result.tournamentUpdatedAt) setLiveTournamentUpdatedAt(result.tournamentUpdatedAt)
-    }, 5 * 60_000)
-    return () => clearInterval(interval)
-  }, [tournamentId])
+  async function handleCheckChanges() {
+    setIsChecking(true)
+    const result = await pollTournamentChanges(tournamentId)
+    if (result.lastRegistrationAt) setLiveLastRegistrationAt(result.lastRegistrationAt)
+    if (result.tournamentUpdatedAt) setLiveTournamentUpdatedAt(result.tournamentUpdatedAt)
+    setIsChecking(false)
+  }
 
   useEffect(() => {
     if (!autoRegenerate) return
@@ -426,6 +426,15 @@ export function ScheduleAgent({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleCheckChanges}
+              disabled={isChecking || isGenerating}
+              title="Comprobar si hay nuevas inscripciones o cambios de configuración"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium rounded-[7px] border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+            >
+              <RefreshCw className={cn('w-3 h-3', isChecking && 'animate-spin')} />
+              Comprobar cambios
+            </button>
             <button
               onClick={() => setFullscreen(true)}
               disabled={!displayedSchedule}
