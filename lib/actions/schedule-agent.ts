@@ -23,11 +23,13 @@ Se activa automáticamente cuando el sistema te proporciona parejas inscritas re
 
 En este modo **debes**:
 1. **Asignar parejas a grupos**: distribuye las parejas de cada categoría en los grupos configurados (numGroups × teamsPerGroup). Si el número de parejas no encaja exactamente, reparte de forma equitativa — nunca cambies numGroups ni teamsPerGroup.
-2. **Usar nombres reales** en pair1, pair2 y matchLabel. Jamás uses P1/P2/Pareja A genéricos.
+2. **Nombres por categoría**:
+   - Categorías CON parejas en "PAREJAS INSCRITAS" → usa los nombres reales exactos tal como aparecen.
+   - Categorías SIN parejas en "PAREJAS INSCRITAS" → usa SIEMPRE nombres genéricos (P1, P2, P3…). Nunca nombres reales para estas categorías.
 3. **Format de matchLabel**: "[CategoríaNombre] Gr.[Letra] — [NombreP1] vs [NombreP2]"
 4. **Sin categoría asignada**: si las parejas no llevan categoría, distribúyelas equitativamente entre las categorías configuradas del torneo, o pregunta al organizador cómo hacerlo.
 5. **Generar el cuadro de grupos**: cada grupo tiene todas sus parejas y genera los partidos round-robin de la fase de grupos.
-6. El calendario con nombres reales sustituye a cualquier horario previo con nombres genéricos.
+6. El calendario actualizado sustituye a cualquier horario previo.
 
 ## REGLA ABSOLUTA — FUENTE DE VERDAD PARA NOMBRES DE PAREJAS
 
