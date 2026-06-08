@@ -119,9 +119,21 @@ export function ScheduleAgent({
     })
   )
   const hasGenericNames = hasRealPairs && !!schedule && !scheduleHasRealNames
-  const scheduleOutOfSync = configChanged || registrationsChanged || hasGenericNames
+
+  // Detect stale names: schedule has real-looking player names for categories
+  // that currently have zero confirmed registrations (e.g. old registrations were deleted).
+  const catsWithRegistrations = new Set((registeredPairs ?? []).map(c => c.category ?? '').filter(Boolean))
+  const isGenericName = (name: string) => !name || /^(P\d+|Pareja\s|Equipo\s|Team\s)/i.test(name.trim())
+  const scheduleHasStaleCategoryNames = !!(schedule?.matches.some(m => {
+    const catName = (m.categoryName ?? '').trim()
+    if (!catName || catsWithRegistrations.has(catName)) return false
+    return !isGenericName(m.pair1 ?? '') || !isGenericName(m.pair2 ?? '')
+  }))
+  const scheduleOutOfSync = configChanged || registrationsChanged || hasGenericNames || scheduleHasStaleCategoryNames
   const outOfSyncReason = hasGenericNames
     ? `El horario tiene nombres genéricos pero hay ${totalRealPairs} parejas confirmadas. Actualízalo para asignarlas a los grupos.`
+    : scheduleHasStaleCategoryNames
+    ? 'El horario tiene nombres de inscripciones eliminadas. Actualízalo para usar los datos actuales.'
     : registrationsChanged
     ? 'Hay nuevas parejas confirmadas desde la última generación del horario.'
     : 'La configuración del torneo ha cambiado desde que se generó este horario.'
