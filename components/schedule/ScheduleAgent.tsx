@@ -130,7 +130,9 @@ export function ScheduleAgent({
   const userRequests = messages.filter(m => m.role === 'user').map(m => m.content)
 
   // ── Core send ───────────────────────────────────────────────────────────────
-  async function sendMessage(text: string, freshContext = false) {
+  // freshContext: omit conversation history (avoids context overflow on regenerate)
+  // resetSchedule: omit current schedule so AI can't carry over invented names
+  async function sendMessage(text: string, freshContext = false, resetSchedule = false) {
     const userMsg: ChatMessage = { role: 'user', content: text, timestamp: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
@@ -146,7 +148,8 @@ export function ScheduleAgent({
       userMessage: text,
       conversationHistory: history,
       tournamentConfig,
-      currentSchedule: schedule ?? undefined,
+      currentSchedule: resetSchedule ? undefined : (schedule ?? undefined),
+      resetSchedule,
     })
 
     if ('error' in result) {
@@ -252,7 +255,9 @@ export function ScheduleAgent({
     const text = inputText.trim()
     if (!text || isGenerating) return
     setInputText('')
-    sendMessage(text)
+    // If registrations changed since last schedule generation, reset the schedule
+    // context so the AI can't copy stale names from the old saved schedule.
+    sendMessage(text, registrationsChanged, registrationsChanged)
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -301,7 +306,8 @@ export function ScheduleAgent({
                   isAssignment
                     ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
                     : 'Genera el horario óptimo para este torneo.',
-                  true
+                  true,
+                  isAssignment  // resetSchedule: don't carry over invented names
                 )}
                 disabled={isGenerating}
                 className="px-5 py-2.5 bg-accent text-white text-[13px] font-semibold rounded-[8px] hover:bg-accent/90 disabled:opacity-50 transition-opacity flex items-center gap-2"
@@ -438,9 +444,10 @@ export function ScheduleAgent({
             <button
               onClick={() => sendMessage(
                 hasRealPairs
-                  ? 'Regenera el horario completo. IMPORTANTE: usa los nombres reales SOLO para las categorías que tienen parejas en registeredPairs. Para las categorías sin parejas inscritas usa nombres genéricos (P1, P2…). No copies ni reutilices nombres de horarios anteriores para categorías sin inscripciones confirmadas.'
+                  ? 'Regenera el horario completo. Usa nombres reales solo para las categorías con parejas inscritas. Para las demás usa P1, P2, P3…'
                   : 'Regenera el horario completo con la configuración actualizada del torneo.',
-                true
+                true,
+                true  // resetSchedule: don't carry over invented names
               )}
               disabled={isGenerating}
               className="shrink-0 text-[11px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-2.5 py-1 rounded-[6px] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
@@ -452,8 +459,14 @@ export function ScheduleAgent({
       </div>
 
       {/* ── Calendar ────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 relative">
         {calendarContent}
+        {isGenerating && (
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-20">
+            <span className="w-9 h-9 border-[3px] border-accent/20 border-t-accent rounded-full animate-spin" />
+            <p className="text-[13px] font-medium text-muted-foreground">Generando horario…</p>
+          </div>
+        )}
       </div>
 
       {/* ── Bottom input bar ─────────────────────────────────────────── */}
@@ -465,7 +478,7 @@ export function ScheduleAgent({
             onChange={e => setInputText(e.target.value)}
             placeholder={isGenerating ? 'Generando horario…' : 'Pide un ajuste… (ej: "finales a las 20:00", "pausa de 15 min entre partidos")'}
             disabled={isGenerating}
-            className="flex-1 text-[13px] bg-muted border border-border rounded-[8px] px-3 py-2 outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors placeholder:text-muted-foreground/60 disabled:opacity-60"
+            className="flex-1 text-[13px] bg-background border border-border rounded-[8px] px-3 py-2 outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors placeholder:text-muted-foreground/60 disabled:opacity-60"
           />
           <button
             type="submit"
