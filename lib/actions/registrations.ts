@@ -167,7 +167,7 @@ export async function getConfirmedPairsForSchedule(tournamentId: string): Promis
     SELECT
       COALESCE(up1.display_name, r.player1_name, '?') AS p1_name,
       COALESCE(up2.display_name, r.player2_name)       AS p2_name,
-      COALESCE((r.form_data->>'category')::text, '')   AS category
+      COALESCE(r.category, (r.form_data->>'category')::text, '') AS category
     FROM registrations r
     LEFT JOIN user_profiles up1 ON up1.user_id = r.player1_id
     LEFT JOIN user_profiles up2 ON up2.user_id = r.player2_id

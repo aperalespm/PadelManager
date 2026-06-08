@@ -45,6 +45,7 @@ export function ScheduleAgent({
   const [isPublished, setIsPublished] = useState(initialIsPublished)
   const [version, setVersion] = useState(initialVersion)
   const [versionHistory, setVersionHistory] = useState<VersionSnapshot[]>(initialVersionHistory)
+  const [currentScheduleUpdatedAt, setCurrentScheduleUpdatedAt] = useState(scheduleUpdatedAt)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
@@ -111,10 +112,12 @@ export function ScheduleAgent({
       versionLabel: `Restaurado v${v.version}`,
     })
     if ('data' in result) {
+      const savedAt = new Date().toISOString()
+      setCurrentScheduleUpdatedAt(savedAt)
       setVersion(result.data.version)
       setVersionHistory(prev => [
         ...prev,
-        { version: result.data.version, savedAt: new Date().toISOString(), label: `Restaurado v${v.version}`, schedule: v.schedule },
+        { version: result.data.version, savedAt, label: `Restaurado v${v.version}`, schedule: v.schedule },
       ].slice(-25))
     }
     setIsSaving(false)
@@ -130,32 +133,30 @@ export function ScheduleAgent({
 
   // Config changed after last schedule save
   const configChanged = !!(
-    schedule && scheduleUpdatedAt && tournamentUpdatedAt &&
-    new Date(tournamentUpdatedAt) > new Date(scheduleUpdatedAt)
+    schedule && currentScheduleUpdatedAt && tournamentUpdatedAt &&
+    new Date(tournamentUpdatedAt) > new Date(currentScheduleUpdatedAt)
   )
   // New confirmed registrations confirmed/updated since last schedule save
   const registrationsChanged = !!(
-    schedule && scheduleUpdatedAt && lastRegistrationAt &&
-    new Date(lastRegistrationAt) > new Date(scheduleUpdatedAt)
+    schedule && currentScheduleUpdatedAt && lastRegistrationAt &&
+    new Date(lastRegistrationAt) > new Date(currentScheduleUpdatedAt)
   )
-  // Real pair names are NOT present in the schedule (robust check — avoids
-  // fragile regex guessing of what pattern the AI used for generic names)
-  const registeredPairs = tournamentConfig.registeredPairs as Array<{ pairs: string[] }> | undefined
+  // Real pair names are NOT present in the schedule.
+  // registeredPairs uses "p1 / p2" combined format — split to individual names for matching
+  const registeredPairs = tournamentConfig.registeredPairs as Array<{ category?: string; pairs: string[] }> | undefined
   const totalRealPairs = registeredPairs?.reduce((n, c) => n + c.pairs.length, 0) ?? 0
   const hasRealPairs = totalRealPairs >= 2
   const realPairNameSet = new Set(
-    (registeredPairs ?? []).flatMap(c => c.pairs.map(p => p.trim()))
+    (registeredPairs ?? []).flatMap(c =>
+      c.pairs.flatMap(p => p.split(' / ').map(n => n.trim()).filter(Boolean))
+    )
   )
-  // Check if any of the first matches reference a known real pair name
-  // (also check matchLabel as fallback when pair1/pair2 may differ in format)
   const scheduleHasRealNames = hasRealPairs && !!(
-    schedule?.matches.slice(0, 6).some(m => {
+    schedule?.matches.some(m => {
       const p1 = (m.pair1 ?? '').trim()
       const p2 = (m.pair2 ?? '').trim()
-      const lbl = m.matchLabel ?? ''
       if (realPairNameSet.has(p1) || realPairNameSet.has(p2)) return true
-      // Fallback: check if the label contains any known name
-      return [...realPairNameSet].some(name => name.length > 2 && lbl.includes(name))
+      return [...realPairNameSet].some(name => name.length > 2 && (m.matchLabel ?? '').includes(name))
     })
   )
   const hasGenericNames = hasRealPairs && !!schedule && !scheduleHasRealNames
@@ -218,9 +219,11 @@ export function ScheduleAgent({
       })
       if ('data' in result2 && newSchedule) {
         setVersion(result2.data.version)
+        const savedAt = new Date().toISOString()
+        setCurrentScheduleUpdatedAt(savedAt)
         setVersionHistory(prev => [
           ...prev,
-          { version: result2.data.version, savedAt: new Date().toISOString(), label, schedule: newSchedule },
+          { version: result2.data.version, savedAt, label, schedule: newSchedule },
         ].slice(-25))
       }
       setIsSaving(false)
@@ -240,10 +243,12 @@ export function ScheduleAgent({
     if ('error' in result) {
       setSaveError(result.error)
     } else {
+      const savedAt = new Date().toISOString()
+      setCurrentScheduleUpdatedAt(savedAt)
       setVersion(result.data.version)
       setVersionHistory(prev => [
         ...prev,
-        { version: result.data.version, savedAt: new Date().toISOString(), label: 'Guardado manual', schedule },
+        { version: result.data.version, savedAt, label: 'Guardado manual', schedule },
       ].slice(-25))
     }
     setIsSaving(false)
@@ -423,7 +428,7 @@ export function ScheduleAgent({
               <button
                 onClick={() => sendMessage(
                   hasRealPairs
-                    ? 'Regenera el horario completo usando las parejas inscritas actuales y la configuración actualizada del torneo.'
+                    ? 'Regenera el horario completo. IMPORTANTE: usa los nombres reales SOLO para las categorías que tienen parejas en registeredPairs. Para las categorías sin parejas inscritas usa nombres genéricos (P1, P2…). No copies ni reutilices nombres de horarios anteriores para categorías sin inscripciones confirmadas.'
                     : 'Regenera el horario completo con la configuración actualizada del torneo.',
                   true
                 )}
