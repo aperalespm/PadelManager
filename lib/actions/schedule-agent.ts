@@ -281,9 +281,9 @@ Si el horario es matemáticamente imposible con estos parámetros:
         : '',
     ].join('\n')
 
-    const response = await client.messages.create({
+    const response = await client.messages.stream({
       model: 'claude-sonnet-4-6',
-      max_tokens: 32000,
+      max_tokens: 16000,
       system: systemPrompt,
       messages: [
         ...conversationHistory.map(m => ({
@@ -292,7 +292,7 @@ Si el horario es matemáticamente imposible con estos parámetros:
         })),
         { role: 'user' as const, content: userMessage },
       ],
-    })
+    }).finalMessage()
 
     if (response.stop_reason === 'max_tokens') {
       return { error: 'La respuesta fue demasiado larga. Prueba a pedir un horario con menos categorías o partidos.' }

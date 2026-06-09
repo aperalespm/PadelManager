@@ -5,6 +5,7 @@ import { ScheduleAgent } from '@/components/schedule/ScheduleAgent'
 import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export default async function HorarioPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params
