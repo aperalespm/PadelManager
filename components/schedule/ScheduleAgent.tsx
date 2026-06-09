@@ -356,7 +356,7 @@ export function ScheduleAgent({
         </div>
       )}
 
-      <div className="p-5 pb-24">
+      <div className="p-5 pb-6">
         {displayedSchedule ? (
           <div className="bg-card border border-border rounded-[10px] overflow-hidden">
             <ScheduleCalendar schedule={displayedSchedule} />
@@ -419,10 +419,10 @@ export function ScheduleAgent({
 
   return (
     <>
-    <div className="bg-background flex flex-col h-full">
+    <div className="h-full overflow-y-auto bg-background">
 
       {/* ── Top bar ─────────────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-border">
+      <div className="sticky top-0 z-10 bg-background border-b border-border">
         <div className="px-5 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
@@ -562,7 +562,7 @@ export function ScheduleAgent({
       </div>
 
       {/* ── Calendar ────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto min-h-0 relative">
+      <div className="relative">
         {calendarContent}
         {(isGenerating || isAutoGenerating) && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-20">
@@ -575,7 +575,7 @@ export function ScheduleAgent({
       </div>
 
       {/* ── Bottom input bar ─────────────────────────────────────────── */}
-      <div className="shrink-0 border-t border-border bg-background px-5 py-3">
+      <div className="sticky bottom-0 border-t border-border bg-background px-5 py-3">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <input
             ref={inputRef as unknown as React.RefObject<HTMLInputElement>}
