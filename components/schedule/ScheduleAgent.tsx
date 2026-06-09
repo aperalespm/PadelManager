@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Clock, Send, Maximize2, X, ChevronDown } from 'lucide-react'
-import { chatWithScheduleAgent, saveSchedule, publishSchedule, pollTournamentChanges } from '@/lib/actions/schedule-agent'
+import { chatWithScheduleAgent, saveSchedule, publishSchedule, pollTournamentChanges, generateDeterministicSchedule } from '@/lib/actions/schedule-agent'
 import { RefreshCw } from 'lucide-react'
 import type { VersionSnapshot } from '@/lib/actions/schedule-agent'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
@@ -41,6 +41,7 @@ export function ScheduleAgent({
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [schedule, setSchedule] = useState<TournamentSchedule | null>(initialSchedule)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isPublished, setIsPublished] = useState(initialIsPublished)
   const [version, setVersion] = useState(initialVersion)
@@ -73,6 +74,43 @@ export function ScheduleAgent({
     const t = setTimeout(() => setToast(null), toast?.ok ? 3000 : 6000)
     return () => clearTimeout(t)
   }, [toast])
+
+  async function handleAutoGenerate() {
+    setIsAutoGenerating(true)
+    setLastError(null)
+    const result = await generateDeterministicSchedule(tournamentId)
+    if ('error' in result) {
+      setLastError(result.error)
+      setToast({ msg: result.error, ok: false })
+      setIsAutoGenerating(false)
+      return
+    }
+    const { schedule: newSchedule, warnings } = result.data
+    if (warnings.length > 0) setToast({ msg: warnings[0], ok: false })
+    setSchedule(newSchedule)
+    setToast({ msg: 'Horario generado automáticamente', ok: true })
+    setIsAutoGenerating(false)
+
+    // Auto-save
+    setIsSaving(true)
+    const saveResult = await saveSchedule({
+      tournamentId,
+      scheduleData: newSchedule as unknown as Record<string, unknown>,
+      messages: messages as unknown as Record<string, unknown>[],
+      versionLabel: 'Auto-generado',
+    })
+    if ('data' in saveResult) {
+      const savedAt = new Date().toISOString()
+      setCurrentScheduleUpdatedAt(savedAt)
+      setScheduleGeneratedAt(savedAt)
+      setVersion(saveResult.data.version)
+      setVersionHistory(prev => [
+        ...prev,
+        { version: saveResult.data.version, savedAt, label: 'Auto-generado', schedule: newSchedule },
+      ].slice(-25))
+    }
+    setIsSaving(false)
+  }
 
   async function handleCheckChanges() {
     setIsChecking(true)
@@ -337,21 +375,35 @@ export function ScheduleAgent({
                     : 'Escribe una instrucción abajo o pulsa el botón para generar el horario óptimo.'}
                 </p>
               </div>
-              <button
-                onClick={() => sendMessage(
-                  isAssignment
-                    ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
-                    : 'Genera el horario óptimo para este torneo.',
-                  true,
-                  isAssignment
-                )}
-                disabled={isGenerating}
-                className="px-5 py-2.5 bg-accent text-white text-[13px] font-semibold rounded-[8px] hover:bg-accent/90 disabled:opacity-50 transition-opacity flex items-center gap-2"
-              >
-                {isGenerating
-                  ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generando...</>
-                  : isAssignment ? 'Generar horario con parejas reales' : 'Generar horario'}
-              </button>
+              <div className="flex flex-col items-center gap-2 w-full max-w-[320px]">
+                {/* Primary: deterministic auto-generate */}
+                <button
+                  onClick={handleAutoGenerate}
+                  disabled={isAutoGenerating || isGenerating}
+                  className="w-full px-5 py-2.5 bg-accent text-white text-[13px] font-semibold rounded-[8px] hover:bg-accent/90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
+                >
+                  {isAutoGenerating
+                    ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Calculando...</>
+                    : 'Generar horario'}
+                </button>
+
+                {/* Secondary: AI agent */}
+                <button
+                  onClick={() => sendMessage(
+                    isAssignment
+                      ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
+                      : 'Genera el horario óptimo para este torneo.',
+                    true,
+                    isAssignment
+                  )}
+                  disabled={isGenerating || isAutoGenerating}
+                  className="w-full px-5 py-2 border border-border text-muted-foreground text-[12px] font-medium rounded-[8px] hover:bg-muted hover:text-foreground disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  {isGenerating
+                    ? <><span className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />Generando con IA...</>
+                    : 'Generar con IA'}
+                </button>
+              </div>
 
               {lastError && (
                 <div className="max-w-[360px] mt-1 px-3 py-2 rounded-[8px] bg-[var(--error-surface)] border border-[var(--error)]/30 text-[12px] text-[var(--error)] text-center whitespace-pre-wrap">
@@ -512,10 +564,12 @@ export function ScheduleAgent({
       {/* ── Calendar ────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto min-h-0 relative">
         {calendarContent}
-        {isGenerating && (
+        {(isGenerating || isAutoGenerating) && (
           <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-20">
             <span className="w-9 h-9 border-[3px] border-accent/20 border-t-accent rounded-full animate-spin" />
-            <p className="text-[13px] font-medium text-muted-foreground">Generando horario…</p>
+            <p className="text-[13px] font-medium text-muted-foreground">
+              {isAutoGenerating ? 'Calculando horario…' : 'Generando con IA…'}
+            </p>
           </div>
         )}
       </div>

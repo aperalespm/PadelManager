@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sql } from '@/lib/db'
 import { z } from 'zod'
 import type { TournamentSchedule, ChatMessage } from '@/lib/types/schedule'
+import { generateSchedule, type GeneratorConfig, type OptimalFormat } from '@/lib/schedule/generator'
 
 const DEMO_ORGANIZER_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -510,5 +511,92 @@ export async function pollTournamentChanges(tournamentId: string): Promise<{
   return {
     lastRegistrationAt: regRows[0]?.last_at ? String(regRows[0].last_at) : null,
     tournamentUpdatedAt: tRows[0]?.updated_at ? String(tRows[0].updated_at) : null,
+  }
+}
+
+// ── Deterministic schedule generator ─────────────────────────────────────────
+// Reads tournament config from DB and runs the pure scheduling algorithm.
+// No AI involved — instant, reproducible results.
+
+export async function generateDeterministicSchedule(tournamentId: string): Promise<
+  { data: { schedule: TournamentSchedule; format: OptimalFormat; warnings: string[] } } | { error: string }
+> {
+  try {
+    const [tRows, regRows] = await Promise.all([
+      sql`SELECT venue_details, status FROM tournaments WHERE id = ${tournamentId} LIMIT 1`,
+      sql`
+        SELECT
+          COALESCE(up1.display_name, r.player1_name, '?') AS p1_name,
+          COALESCE(up2.display_name, r.player2_name)       AS p2_name,
+          COALESCE(r.category, (r.form_data->>'category')::text, '') AS category
+        FROM registrations r
+        LEFT JOIN user_profiles up1 ON up1.user_id = r.player1_id
+        LEFT JOIN user_profiles up2 ON up2.user_id = r.player2_id
+        WHERE r.tournament_id = ${tournamentId} AND r.status = 'confirmed'
+        ORDER BY r.created_at ASC
+      `,
+    ])
+
+    if (!tRows[0]) return { error: 'Torneo no encontrado' }
+
+    const vd     = (tRows[0].venue_details as Record<string, unknown>) ?? {}
+    const sched  = (vd.schedule as Record<string, unknown>) ?? {}
+    const rawCourts  = (vd.courts  as Array<{ name: string }>) ?? []
+    const rawCats    = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
+    const rawPhases  = (vd.phases  as Array<{ name: string; match_config?: Record<string, unknown> }>) ?? []
+    const timeBlocks = (sched.time_blocks as Array<{ courtName: string; from: string; to: string }>) ?? []
+    const parsedTrans = parseInt(String(sched.transition_minutes ?? ''))
+
+    const config: GeneratorConfig = {
+      courts: rawCourts.map((c, i) => ({
+        name: c.name,
+        courtNumber: i + 1,
+        breaks: timeBlocks
+          .filter(b => b.courtName === c.name)
+          .map(b => ({ start: b.from, end: b.to })),
+      })),
+      schedule: {
+        startTime:     (sched.start_time as string) ?? '10:00',
+        endTime:       (sched.end_time   as string) ?? '21:00',
+        transitionMins: isNaN(parsedTrans) ? 0 : parsedTrans,
+        lunchBreak:    (sched.lunch_break as { time: string; duration_minutes: number } | null) ?? null,
+      },
+      categories: rawCats.flatMap(c => {
+        const genders = (c.genders as string[]) ?? []
+        if (genders.length === 0) return [{ id: c.name, name: c.name }]
+        return genders.map(g => ({
+          id: `${c.name}_${g}`,
+          name: `${c.name} ${g === 'M' ? 'Masculino' : g === 'F' ? 'Femenino' : 'Mixto'}`,
+        }))
+      }),
+      phases: rawPhases.map(p => ({
+        name: p.name,
+        maxDurationMins: (p.match_config?.time_limit_minutes as number) ?? 60,
+      })),
+      format: {
+        minGroups:         (vd.num_groups               as number) ?? 2,
+        minTeamsPerGroup:  (vd.teams_per_group           as number) ?? 3,
+        teamsAdvancePerGroup: (vd.teams_advance_per_group as number) ?? 2,
+        minMatchesPerTeam: (vd.min_matches_per_team      as number) ?? 2,
+      },
+      registeredPairs: (() => {
+        const byCat: Record<string, string[]> = {}
+        for (const r of regRows) {
+          const cat = (r.category as string) || ''
+          if (!byCat[cat]) byCat[cat] = []
+          const name = r.p2_name
+            ? `${r.p1_name} / ${r.p2_name}`
+            : (r.p1_name as string)
+          byCat[cat].push(name)
+        }
+        return Object.entries(byCat).map(([category, pairs]) => ({ category, pairs }))
+      })(),
+    }
+
+    const result = generateSchedule(config)
+    return { data: { schedule: result.schedule, format: result.optimalFormat, warnings: result.warnings } }
+  } catch (e) {
+    console.error('[generateDeterministicSchedule]', e)
+    return { error: `Error generando el horario: ${e instanceof Error ? e.message : String(e)}` }
   }
 }
