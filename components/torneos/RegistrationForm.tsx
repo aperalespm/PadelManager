@@ -58,6 +58,15 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
     ? { ...DEFAULT_CONFIG, ...rawConfig, system_fields: { ...DEFAULT_CONFIG.system_fields, ...(rawConfig.system_fields ?? {}) } }
     : DEFAULT_CONFIG
 
+  // Build selectable category options from venue_details (same expansion as horario page)
+  const vd = (t.venue_details as Record<string, unknown>) ?? {}
+  const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
+  const categoryOptions: string[] = rawCats.flatMap(c => {
+    const genders = c.genders ?? []
+    if (genders.length === 0) return [c.name]
+    return genders.map(g => `${c.name} ${g === 'M' ? 'Masculino' : g === 'F' ? 'Femenino' : 'Mixto'}`)
+  })
+
   const hasPair       = config.registration_types.includes('pair')
   const hasIndividual = config.registration_types.includes('individual')
   const bothEnabled   = hasPair && hasIndividual
@@ -82,6 +91,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
   const setField = (key: string, value: string) => setFields(f => ({ ...f, [key]: value }))
 
   function validate(): string | null {
+    if (categoryOptions.length > 0 && !fields.category) return 'Selecciona una categoría'
     if (sf.name      && !fields.name?.trim())         return 'El nombre es obligatorio'
     if (sf.email     && !fields.email?.trim())        return 'El email es obligatorio'
     if (sf.phone     && !fields.phone?.trim())        return 'El teléfono es obligatorio'
@@ -162,6 +172,30 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
               className={cn('flex-1 py-2.5 border-l border-border transition-colors', !isPair ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}>
               Individual
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Categoría ────────────────────────────────────────── */}
+      {categoryOptions.length > 0 && (
+        <div>
+          <FieldLabel required>Categoría</FieldLabel>
+          <div className="flex flex-wrap gap-2">
+            {categoryOptions.map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setField('category', cat)}
+                className={cn(
+                  'px-4 py-2 rounded-[8px] border text-[13px] font-medium transition-colors',
+                  fields.category === cat
+                    ? 'bg-accent text-white border-accent'
+                    : 'border-border text-foreground hover:bg-muted'
+                )}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
         </div>
       )}

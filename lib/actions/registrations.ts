@@ -120,10 +120,13 @@ export async function registerForTournament(input: unknown) {
 
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS registration_type TEXT DEFAULT 'pair'`
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS form_data JSONB DEFAULT '{}'`
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS category TEXT`
+
+  const category = (form_data as Record<string, unknown>)?.category as string | null ?? null
 
   const rows = await sql`
-    INSERT INTO registrations (tournament_id, player1_id, player2_id, player2_name, registration_type, form_data, status, waitlist_position)
-    VALUES (${tournament_id}, ${session.user.id}, ${player2_id ?? null}, ${player2_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(form_data ?? {})}, ${status}, ${waitlistPosition})
+    INSERT INTO registrations (tournament_id, player1_id, player2_id, player2_name, registration_type, form_data, category, status, waitlist_position)
+    VALUES (${tournament_id}, ${session.user.id}, ${player2_id ?? null}, ${player2_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(form_data ?? {})}, ${category}, ${status}, ${waitlistPosition})
     RETURNING *
   `
   return { data: rows[0] }
