@@ -29,7 +29,7 @@ function buildBlocked(
   return result.sort((a, b) => a.start - b.start)
 }
 
-// Push start forward until [start, start+duration) doesn't overlap any block
+// Push start forward until [start, start+duration) doesn't overlap any blocked interval
 function skipBlocked(start: number, duration: number, blocked: Interval[]): number {
   let cur = start
   let changed = true
@@ -46,16 +46,14 @@ function skipBlocked(start: number, duration: number, blocked: Interval[]): numb
   return cur
 }
 
-// ── Round-robin pairs (all combinations, ordered by round for court flow) ────
+// ── Round-robin pairs ────────────────────────────────────────────────────────
 
 function roundRobinPairs(n: number): Array<[number, number]> {
-  // Circle algorithm: fix position 0, rotate the rest N-1 times
-  const size = n % 2 === 0 ? n : n + 1  // pad to even
+  const size = n % 2 === 0 ? n : n + 1
   const seats = Array.from({ length: size - 1 }, (_, i) => i + 1)
   const pairs: Array<[number, number]> = []
 
   for (let r = 0; r < size - 1; r++) {
-    // Match seat[0] (fixed=0) vs rotated position
     const rotated = r === 0 ? seats : [...seats.slice(r), ...seats.slice(0, r)]
     const opp = rotated[0]
     if (opp < n) pairs.push([0, opp])
@@ -66,7 +64,6 @@ function roundRobinPairs(n: number): Array<[number, number]> {
     }
   }
 
-  // Deduplicate (should be clean but safety check)
   const seen = new Set<string>()
   return pairs.filter(([a, b]) => {
     const k = `${a}-${b}`
@@ -76,7 +73,7 @@ function roundRobinPairs(n: number): Array<[number, number]> {
   })
 }
 
-// ── Knockout bracket labels ───────────────────────────────────────────────────
+// ── Knockout bracket ─────────────────────────────────────────────────────────
 
 function knockoutRoundName(teamsLeft: number): string {
   if (teamsLeft === 2) return 'Final'
@@ -86,7 +83,7 @@ function knockoutRoundName(teamsLeft: number): string {
   return `Ronda ${teamsLeft}`
 }
 
-// ── Optimal format finder ─────────────────────────────────────────────────────
+// ── Exported types ───────────────────────────────────────────────────────────
 
 export interface OptimalFormat {
   numGroups: number
@@ -112,6 +109,8 @@ function durationForRound(roundName: string, pd: PhaseDurations): number {
   return pd.final
 }
 
+// ── Legacy format finder (kept for external use) ─────────────────────────────
+
 function matchesInGroups(g: number, t: number): number {
   return g * (t * (t - 1) / 2)
 }
@@ -129,7 +128,7 @@ export function findOptimalFormat(
   minMatchesPerTeam: number,
   numCategories: number
 ): OptimalFormat {
-  const base: OptimalFormat = {
+  let best: OptimalFormat = {
     numGroups: minGroups,
     teamsPerGroup: minTeamsPerGroup,
     maxPairsPerCategory: minGroups * minTeamsPerGroup,
@@ -137,16 +136,11 @@ export function findOptimalFormat(
     totalSlots,
   }
 
-  let best = base
-
   for (let g = minGroups; g <= 20; g++) {
     for (let t = minTeamsPerGroup; t <= 10; t++) {
-      // Minimum matches per pair constraint: round-robin gives t-1 matches per pair
       if (t - 1 < minMatchesPerTeam) continue
-
       const total = (matchesInGroups(g, t) + matchesInKnockout(g, teamsAdvance)) * numCategories
-      if (total > totalSlots) break  // increasing t only makes it worse for this g
-
+      if (total > totalSlots) break
       const pairs = g * t
       if (pairs > best.maxPairsPerCategory) {
         best = { numGroups: g, teamsPerGroup: t, maxPairsPerCategory: pairs, totalMatches: total, totalSlots }
@@ -155,6 +149,82 @@ export function findOptimalFormat(
   }
 
   return best
+}
+
+// ── Category prestige ordering ────────────────────────────────────────────────
+// "4ª" → 4, "1ª Mixto" → 1, "Abierta" → null
+// Lower prestige (higher number, or no number) comes first (gets earlier time slots)
+
+function parsePrestige(name: string): number {
+  const m = name.match(/^(\d+)/)
+  return m ? parseInt(m[1], 10) : Infinity  // no number = treated as lowest prestige
+}
+
+function sortByPrestige<T extends { name: string }>(cats: T[]): T[] {
+  return [...cats].sort((a, b) => parsePrestige(b.name) - parsePrestige(a.name))
+}
+
+// ── Knockout time calculator ──────────────────────────────────────────────────
+// Total minutes needed for knockout phase given numCourts dedicated to one category
+
+function knockoutTimeMins(
+  knockTeams: number,
+  numCourts: number,
+  pd: PhaseDurations,
+  trans: number
+): number {
+  if (knockTeams < 2) return 0
+  let time = 0
+  let remaining = knockTeams
+  while (remaining >= 2) {
+    const roundName = knockoutRoundName(remaining)
+    const roundDuration = durationForRound(roundName, pd)
+    const matchesInRound = Math.floor(remaining / 2)
+    const slots = Math.ceil(matchesInRound / numCourts)
+    time += slots * (roundDuration + trans)
+    remaining = Math.ceil(remaining / 2)
+  }
+  return time
+}
+
+// ── Per-category format optimizer ─────────────────────────────────────────────
+// Finds (numGroups, teamsPerGroup) that maximises pairs within availableMins
+// Correctly accounts for knockout time (groups + knockout must both fit)
+
+function findCategoryFormat(
+  numCourts: number,
+  availableMins: number,
+  trans: number,
+  pd: PhaseDurations,
+  minGroups: number,
+  minTeamsPerGroup: number,
+  teamsAdvance: number,
+  minMatchesPerTeam: number
+): { numGroups: number; teamsPerGroup: number } {
+  let bestG = minGroups
+  let bestT = minTeamsPerGroup
+
+  for (let g = minGroups; g <= 20; g++) {
+    for (let t = minTeamsPerGroup; t <= 10; t++) {
+      if (t - 1 < minMatchesPerTeam) continue
+
+      const groupMatches = matchesInGroups(g, t)
+      const groupSlots = Math.ceil(groupMatches / numCourts)
+      const groupTime = groupSlots * (pd.groups + trans)
+
+      const knockTeams = g * teamsAdvance
+      const koTime = knockoutTimeMins(knockTeams, numCourts, pd, trans)
+
+      if (groupTime + koTime > availableMins) break  // more t → more time, exit inner loop
+
+      if (g * t > bestG * bestT) {
+        bestG = g
+        bestT = t
+      }
+    }
+  }
+
+  return { numGroups: bestG, teamsPerGroup: bestT }
 }
 
 // ── Public config / result types ─────────────────────────────────────────────
@@ -193,7 +263,7 @@ export interface GeneratorResult {
 
 export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   const warnings: string[] = []
-  const { courts, schedule: sched, categories, phases, format, registeredPairs } = config
+  const { courts, schedule: sched, categories, format, registeredPairs } = config
 
   if (courts.length === 0) {
     warnings.push('No hay pistas configuradas.')
@@ -204,192 +274,230 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
     return emptyResult(sched.endTime, format, warnings)
   }
 
-  const startMins = toMins(sched.startTime)
-  const endMins   = toMins(sched.endTime)
-  const trans     = sched.transitionMins
-
-  // Match durations: groups use first phase (or phaseDurations.groups), knockout per-round
-  const groupDuration    = config.phaseDurations?.groups ?? phases[0]?.maxDurationMins ?? 60
-  const knockoutDuration = phases.length > 1 ? (phases[phases.length - 1]?.maxDurationMins ?? groupDuration) : groupDuration
-
-  // Available minutes per court (deduct lunch)
+  const startMins    = toMins(sched.startTime)
+  const endMins      = toMins(sched.endTime)
+  const trans        = sched.transitionMins
   const lunchMins    = sched.lunchBreak?.duration_minutes ?? 0
   const availableMins = endMins - startMins - lunchMins
 
-  // Slots for capacity calculation (use group duration as base unit)
-  const slotDuration = groupDuration + trans
-  const slotsPerCourt = Math.floor(availableMins / slotDuration)
-  const totalSlots    = slotsPerCourt * courts.length
-
-  // Find optimal format
-  const optimal = findOptimalFormat(
-    totalSlots,
-    format.minGroups,
-    format.minTeamsPerGroup,
-    format.teamsAdvancePerGroup,
-    format.minMatchesPerTeam,
-    categories.length
-  )
-
-  const { numGroups, teamsPerGroup } = optimal
-  const teamsAdvance = format.teamsAdvancePerGroup
-
-  // Build pair lists per category
-  const pairsMap: Record<string, string[]> = {}
-  for (const cat of categories) {
-    const reg = registeredPairs?.find(r => r.category === cat.name || r.category === cat.id)
-    const needed = numGroups * teamsPerGroup
-    const base   = reg?.pairs.slice(0, needed) ?? []
-    while (base.length < needed) base.push(`P${base.length + 1}`)
-    pairsMap[cat.id] = base
+  const pd: PhaseDurations = config.phaseDurations ?? {
+    groups:       config.phases[0]?.maxDurationMins ?? 60,
+    roundOf16:    config.phases[0]?.maxDurationMins ?? 60,
+    quarterFinal: config.phases[0]?.maxDurationMins ?? 60,
+    semiFinal:    config.phases[0]?.maxDurationMins ?? 60,
+    final:        config.phases[config.phases.length - 1]?.maxDurationMins ?? 60,
   }
 
-  // ── Build match list (groups then knockout) ────────────────────────────────
+  // Sort categories: lower prestige (higher number, "4ª") gets earlier time slots
+  const sortedCats = sortByPrestige(categories)
+  const numCats   = sortedCats.length
+  const numCourts = courts.length
 
-  interface RawMatch {
-    id: string
-    categoryId: string
-    categoryName: string
-    groupId: string | null
-    phase: string
-    pair1: string
-    pair2: string
-    matchLabel: string
-    duration: number
-    sortKey: number   // for ordering: group index * 1000 + match index
+  // ── Assign courts to categories ───────────────────────────────────────────
+  //
+  // cats ≤ courts → one wave, distribute courts proportionally
+  //   first (courts % cats) categories get (floor + 1) courts each
+  //
+  // cats > courts → multiple waves of `numCourts` categories each
+  //   each category in a wave gets exactly 1 court (courts are reused per wave)
+
+  interface CatAssignment {
+    cat: typeof sortedCats[0]
+    courtIndices: number[]
+    wave: number
   }
 
-  const rawMatches: RawMatch[] = []
+  const assignments: CatAssignment[] = []
 
-  for (let ci = 0; ci < categories.length; ci++) {
-    const cat = categories[ci]
-    const pairs = pairsMap[cat.id]
-
-    // Groups phase
-    for (let g = 0; g < numGroups; g++) {
-      const gl = String.fromCharCode(65 + g)
-      const groupId = `${cat.id}_G${gl}`
-      const slot = pairs.slice(g * teamsPerGroup, (g + 1) * teamsPerGroup)
-      const rrPairs = roundRobinPairs(slot.length)
-
-      rrPairs.forEach(([i, j], mi) => {
-        const p1 = slot[i] ?? `P${i + 1}`
-        const p2 = slot[j] ?? `P${j + 1}`
-        rawMatches.push({
-          id: `${cat.id}_G${gl}_m${mi + 1}`,
-          categoryId: cat.id,
-          categoryName: cat.name,
-          groupId,
-          phase: 'groups',
-          pair1: p1,
-          pair2: p2,
-          matchLabel: `${cat.name} Gr.${gl} — ${p1} vs ${p2}`,
-          duration: groupDuration,
-          sortKey: ci * 10000 + g * 1000 + mi,
-        })
+  if (numCats <= numCourts) {
+    const base  = Math.floor(numCourts / numCats)
+    const extra = numCourts % numCats
+    let ci = 0
+    for (let i = 0; i < numCats; i++) {
+      const assigned = base + (i < extra ? 1 : 0)
+      assignments.push({
+        cat: sortedCats[i],
+        courtIndices: Array.from({ length: assigned }, (_, j) => ci + j),
+        wave: 0,
+      })
+      ci += assigned
+    }
+  } else {
+    for (let i = 0; i < numCats; i++) {
+      assignments.push({
+        cat: sortedCats[i],
+        courtIndices: [i % numCourts],
+        wave: Math.floor(i / numCourts),
       })
     }
-
-    // Knockout phase
-    const knockTeams = numGroups * teamsAdvance
-    if (knockTeams >= 2) {
-      let remaining = knockTeams
-      let roundIdx  = 0
-      while (remaining >= 2) {
-        const roundName = knockoutRoundName(remaining)
-        const numMatches = Math.floor(remaining / 2)
-        for (let mi = 0; mi < numMatches; mi++) {
-          rawMatches.push({
-            id: `${cat.id}_KO_r${roundIdx}_m${mi + 1}`,
-            categoryId: cat.id,
-            categoryName: cat.name,
-            groupId: null,
-            phase: roundName,
-            pair1: `1° Gr.${String.fromCharCode(65 + mi * 2)}`,
-            pair2: `2° Gr.${String.fromCharCode(65 + mi * 2 + 1)}`,
-            matchLabel: `${cat.name} ${roundName} (${mi + 1})`,
-            duration: config.phaseDurations ? durationForRound(roundName, config.phaseDurations) : knockoutDuration,
-            sortKey: ci * 10000 + 9000 + roundIdx * 100 + mi,
-          })
-        }
-        remaining = Math.ceil(remaining / 2)
-        roundIdx++
-      }
-    }
   }
 
-  // ── Court assignment ──────────────────────────────────────────────────────
-  // Assign each group to a court slot using round-robin.
-  // Groups → each group is assigned to one court for the whole group phase.
-  // After all groups are done, knockout matches are scheduled on whichever
-  // court is free earliest.
+  const numWaves = assignments[assignments.length - 1].wave + 1
 
-  const courtState = courts.map(c => ({
-    ...c,
+  // ── Compute optimal format per category ───────────────────────────────────
+
+  const catFormats: Record<string, { numGroups: number; teamsPerGroup: number }> = {}
+  for (const a of assignments) {
+    catFormats[a.cat.id] = findCategoryFormat(
+      a.courtIndices.length,
+      availableMins,
+      trans,
+      pd,
+      format.minGroups,
+      format.minTeamsPerGroup,
+      format.teamsAdvancePerGroup,
+      format.minMatchesPerTeam
+    )
+  }
+
+  // ── Court state ───────────────────────────────────────────────────────────
+
+  interface CourtState {
+    name: string
+    courtNumber: number
+    cursor: number
+    blocked: Interval[]
+  }
+
+  const courtStates: CourtState[] = courts.map(c => ({
+    name: c.name,
+    courtNumber: c.courtNumber,
     cursor: startMins,
     blocked: buildBlocked(c.breaks, sched.lunchBreak),
   }))
 
-  // Group phase: map groupId → courtIndex
-  const groupCourtMap: Record<string, number> = {}
-  let assignIdx = 0
-  for (const cat of categories) {
-    for (let g = 0; g < numGroups; g++) {
-      const gl = String.fromCharCode(65 + g)
-      groupCourtMap[`${cat.id}_G${gl}`] = assignIdx % courts.length
-      assignIdx++
-    }
-  }
-
   const scheduledMatches: ScheduleMatch[] = []
+  let waveStartTime = startMins
 
-  // Sort raw matches: groups first (by category × group × match), knockout after
-  const groups   = rawMatches.filter(m => m.phase === 'groups').sort((a, b) => a.sortKey - b.sortKey)
-  const knockout = rawMatches.filter(m => m.phase !== 'groups').sort((a, b) => a.sortKey - b.sortKey)
+  // ── Schedule waves ────────────────────────────────────────────────────────
 
-  function scheduleMatch(m: RawMatch, courtIdx: number): boolean {
-    const cs = courtState[courtIdx]
-    const start = skipBlocked(cs.cursor, m.duration, cs.blocked)
-    if (start + m.duration > endMins) {
-      warnings.push(`Sin tiempo para: ${m.matchLabel}`)
-      return false
+  for (let wave = 0; wave < numWaves; wave++) {
+    const waveAssignments = assignments.filter(a => a.wave === wave)
+
+    // Reset each court's cursor to wave start
+    for (const a of waveAssignments) {
+      for (const ci of a.courtIndices) {
+        courtStates[ci].cursor = waveStartTime
+      }
     }
-    scheduledMatches.push({
-      id: m.id,
-      courtNumber: cs.courtNumber,
-      courtName: cs.name,
-      startTime: toTime(start),
-      endTime: toTime(start + m.duration),
-      categoryId: m.categoryId,
-      categoryName: m.categoryName,
-      groupId: m.groupId,
-      phase: m.phase,
-      pair1: m.pair1,
-      pair2: m.pair2,
-      matchLabel: m.matchLabel,
-      status: 'scheduled',
-    })
-    cs.cursor = start + m.duration + trans
-    return true
+
+    // Schedule all categories in this wave (they run in parallel on their own courts)
+    for (const a of waveAssignments) {
+      const { numGroups, teamsPerGroup } = catFormats[a.cat.id]
+      const teamsAdvance = format.teamsAdvancePerGroup
+      const cat = a.cat
+      const catCourts = a.courtIndices.map(i => courtStates[i])
+
+      // Build pair list
+      const reg = registeredPairs?.find(r => r.category === cat.name || r.category === cat.id)
+      const needed = numGroups * teamsPerGroup
+      const pairList = reg ? [...reg.pairs.slice(0, needed)] : []
+      while (pairList.length < needed) pairList.push(`P${pairList.length + 1}`)
+
+      // ── Group phase ───────────────────────────────────────────────────────
+      // Each group is assigned to one of the category's courts (round-robin)
+      for (let g = 0; g < numGroups; g++) {
+        const gl = String.fromCharCode(65 + g)
+        const groupCourt = catCourts[g % catCourts.length]
+        const slot = pairList.slice(g * teamsPerGroup, (g + 1) * teamsPerGroup)
+        const rrPairs = roundRobinPairs(slot.length)
+
+        for (let mi = 0; mi < rrPairs.length; mi++) {
+          const [i, j] = rrPairs[mi]
+          const p1 = slot[i] ?? `P${i + 1}`
+          const p2 = slot[j] ?? `P${j + 1}`
+          const start = skipBlocked(groupCourt.cursor, pd.groups, groupCourt.blocked)
+          if (start + pd.groups > endMins) {
+            warnings.push(`Sin tiempo para grupo ${gl} de ${cat.name}`)
+            break
+          }
+          scheduledMatches.push({
+            id: `${cat.id}_G${gl}_m${mi + 1}`,
+            courtNumber: groupCourt.courtNumber,
+            courtName: groupCourt.name,
+            startTime: toTime(start),
+            endTime: toTime(start + pd.groups),
+            categoryId: cat.id,
+            categoryName: cat.name,
+            groupId: `${cat.id}_G${gl}`,
+            phase: 'groups',
+            pair1: p1,
+            pair2: p2,
+            matchLabel: `${cat.name} Gr.${gl} — ${p1} vs ${p2}`,
+            status: 'scheduled',
+          })
+          groupCourt.cursor = start + pd.groups + trans
+        }
+      }
+
+      // Barrier: sync all category courts after group phase ends
+      const groupEnd = Math.max(...catCourts.map(c => c.cursor))
+      catCourts.forEach(c => { c.cursor = groupEnd })
+
+      // ── Knockout phase ────────────────────────────────────────────────────
+      // Each round must complete before the next round starts (barrier per round)
+      const knockTeams = numGroups * teamsAdvance
+      if (knockTeams >= 2) {
+        let remaining = knockTeams
+        let roundIdx = 0
+
+        while (remaining >= 2) {
+          const roundName = knockoutRoundName(remaining)
+          const roundDuration = durationForRound(roundName, pd)
+          const numMatches = Math.floor(remaining / 2)
+
+          for (let mi = 0; mi < numMatches; mi++) {
+            // Assign to earliest-free court within this category's courts
+            const courtForMatch = catCourts.reduce((best, cs) =>
+              cs.cursor < best.cursor ? cs : best
+            )
+            const start = skipBlocked(courtForMatch.cursor, roundDuration, courtForMatch.blocked)
+            if (start + roundDuration > endMins) {
+              warnings.push(`Sin tiempo para ${roundName} de ${cat.name}`)
+              break
+            }
+
+            const p1Label = roundIdx === 0
+              ? `1° Gr.${String.fromCharCode(65 + mi * 2)}`
+              : `G${mi * 2 + 1}`
+            const p2Label = roundIdx === 0
+              ? `2° Gr.${String.fromCharCode(65 + mi * 2 + 1)}`
+              : `G${mi * 2 + 2}`
+
+            scheduledMatches.push({
+              id: `${cat.id}_KO_r${roundIdx}_m${mi + 1}`,
+              courtNumber: courtForMatch.courtNumber,
+              courtName: courtForMatch.name,
+              startTime: toTime(start),
+              endTime: toTime(start + roundDuration),
+              categoryId: cat.id,
+              categoryName: cat.name,
+              groupId: null,
+              phase: roundName,
+              pair1: p1Label,
+              pair2: p2Label,
+              matchLabel: `${cat.name} · ${roundName}`,
+              status: 'scheduled',
+            })
+            courtForMatch.cursor = start + roundDuration + trans
+          }
+
+          // Barrier: all category courts must reach end of this round before next round
+          const roundEnd = Math.max(...catCourts.map(c => c.cursor))
+          catCourts.forEach(c => { c.cursor = roundEnd })
+
+          remaining = Math.ceil(remaining / 2)
+          roundIdx++
+        }
+      }
+    }
+
+    // Advance wave start to max cursor across all courts used in this wave
+    const waveCourtStates = waveAssignments.flatMap(a => a.courtIndices.map(i => courtStates[i]))
+    waveStartTime = Math.max(...waveCourtStates.map(c => c.cursor))
   }
 
-  // Schedule groups
-  for (const m of groups) {
-    const ci = groupCourtMap[m.groupId ?? ''] ?? 0
-    scheduleMatch(m, ci)
-  }
-
-  // Knockout: after all group matches, use earliest-free court each time
-  const maxGroupCursor = Math.max(...courtState.map(c => c.cursor))
-  courtState.forEach(c => { if (c.cursor < maxGroupCursor) c.cursor = maxGroupCursor })
-
-  for (const m of knockout) {
-    // Pick the court that will be free soonest
-    const ci = courtState.reduce((best, cs, i) => cs.cursor < courtState[best].cursor ? i : best, 0)
-    scheduleMatch(m, ci)
-  }
-
-  // ── Summary ────────────────────────────────────────────────────────────────
+  // ── Summary ───────────────────────────────────────────────────────────────
 
   const matchesPerCategory: Record<string, number> = {}
   const finalTimes: Record<string, string> = {}
@@ -409,6 +517,8 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
 
   const courtsUsed = new Set(scheduledMatches.map(m => m.courtNumber)).size
 
+  const firstFmt = catFormats[sortedCats[0]?.id ?? ''] ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
+
   const summary: ScheduleSummary = {
     totalMatches: scheduledMatches.length,
     estimatedEndTime,
@@ -419,14 +529,20 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   }
 
   const explanation = [
-    `${numGroups} grupos de ${teamsPerGroup} parejas por categoría.`,
-    `Capacidad máxima: ${optimal.maxPairsPerCategory} parejas/categoría.`,
+    `${firstFmt.numGroups} grupos de ${firstFmt.teamsPerGroup} parejas por categoría.`,
+    `Capacidad: ${firstFmt.numGroups * firstFmt.teamsPerGroup} parejas/categoría.`,
     `${scheduledMatches.length} partidos · fin estimado ${estimatedEndTime}.`,
   ].join(' ')
 
   return {
     schedule: { matches: scheduledMatches, summary, rawExplanation: explanation },
-    optimalFormat: optimal,
+    optimalFormat: {
+      numGroups: firstFmt.numGroups,
+      teamsPerGroup: firstFmt.teamsPerGroup,
+      maxPairsPerCategory: firstFmt.numGroups * firstFmt.teamsPerGroup,
+      totalMatches: scheduledMatches.length,
+      totalSlots: 0,
+    },
     warnings,
   }
 }
