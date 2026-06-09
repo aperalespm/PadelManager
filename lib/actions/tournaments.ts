@@ -1,7 +1,9 @@
 'use server'
 
 import { sql } from '@/lib/db'
+import { z } from 'zod'
 import { createTournamentSchema, updateTournamentSchema } from '@/lib/validations'
+import { generateSchedule, type GeneratorConfig, type PhaseDurations } from '@/lib/schedule/generator'
 
 const DEMO_ORGANIZER_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -204,6 +206,150 @@ export async function saveTournamentPhases(tournamentId: string, phases: Array<{
   }
 
   return { data: true }
+}
+
+// ── Tournament creation wizard ────────────────────────────────────────────────
+
+const wizardSchema = z.object({
+  name: z.string().min(1, 'El nombre es obligatorio'),
+  startDate: z.string().min(1, 'La fecha de inicio es obligatoria'),
+  endDate: z.string().optional(),
+  courts: z.array(z.object({ name: z.string().min(1) })).min(1, 'Al menos una pista'),
+  startTime: z.string(),
+  endTime: z.string(),
+  transitionMins: z.number().int().min(0).max(120),
+  hasLunch: z.boolean(),
+  lunchTime: z.string().optional(),
+  lunchDuration: z.number().int().min(0).max(480).optional(),
+  categories: z.array(z.object({
+    name: z.string().min(1),
+    genders: z.array(z.string()),
+  })).min(1, 'Al menos una categoría'),
+  phaseDurations: z.object({
+    groups: z.number().int().min(10).max(300),
+    roundOf16: z.number().int().min(10).max(300),
+    quarterFinal: z.number().int().min(10).max(300),
+    semiFinal: z.number().int().min(10).max(300),
+    final: z.number().int().min(10).max(300),
+  }),
+  minGroups: z.number().int().min(1).max(20),
+  minTeamsPerGroup: z.number().int().min(2).max(10),
+  teamsAdvancePerGroup: z.number().int().min(1).max(10),
+  minMatchesPerTeam: z.number().int().min(1).max(10),
+})
+
+export async function createTournamentFromWizard(input: unknown): Promise<
+  { data: { tournamentId: string } } | { error: string }
+> {
+  const parsed = wizardSchema.safeParse(input)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+
+  const d = parsed.data
+  const slug = generateSlug(d.name)
+
+  const lunchBreak = d.hasLunch && d.lunchTime && d.lunchDuration
+    ? { time: d.lunchTime, duration_minutes: d.lunchDuration }
+    : null
+
+  const expandedCategories = d.categories.flatMap(c =>
+    c.genders.length === 0
+      ? [{ id: c.name, name: c.name }]
+      : c.genders.map(g => ({
+          id: `${c.name}_${g}`,
+          name: `${c.name} ${g === 'M' ? 'Masculino' : g === 'F' ? 'Femenino' : g}`,
+        }))
+  )
+
+  const pd: PhaseDurations = d.phaseDurations
+  const generatorConfig: GeneratorConfig = {
+    courts: d.courts.map((c, i) => ({ name: c.name, courtNumber: i + 1, breaks: [] })),
+    schedule: {
+      startTime: d.startTime,
+      endTime: d.endTime,
+      transitionMins: d.transitionMins,
+      lunchBreak,
+    },
+    categories: expandedCategories,
+    phases: [{ name: 'Grupos', maxDurationMins: pd.groups }],
+    phaseDurations: pd,
+    format: {
+      minGroups: d.minGroups,
+      minTeamsPerGroup: d.minTeamsPerGroup,
+      teamsAdvancePerGroup: d.teamsAdvancePerGroup,
+      minMatchesPerTeam: d.minMatchesPerTeam,
+    },
+  }
+
+  const { schedule: generatedSchedule } = generateSchedule(generatorConfig)
+
+  const venueDetails = {
+    courts: d.courts,
+    schedule: {
+      start_time: d.startTime,
+      end_time: d.endTime,
+      transition_minutes: d.transitionMins,
+      lunch_break: lunchBreak,
+      time_blocks: [],
+    },
+    categories: d.categories,
+    phase_durations: pd,
+    phases: [
+      { name: 'Grupos', match_config: { time_limit_minutes: pd.groups } },
+      { name: 'Eliminatoria', match_config: { time_limit_minutes: pd.final } },
+    ],
+    num_groups: d.minGroups,
+    teams_per_group: d.minTeamsPerGroup,
+    teams_advance_per_group: d.teamsAdvancePerGroup,
+    min_matches_per_team: d.minMatchesPerTeam,
+  }
+
+  const categoryLabel = d.categories.length === 1 ? d.categories[0].name : 'Múltiple'
+
+  try {
+    const tRows = await sql`
+      INSERT INTO tournaments
+        (organizer_id, name, venue_name, venue_address, venue_details, category, format, registration_type, max_players, start_date, end_date, share_slug, status)
+      VALUES (
+        ${DEMO_ORGANIZER_ID}, ${d.name}, 'Por confirmar', 'Por confirmar',
+        ${JSON.stringify(venueDetails)}::jsonb,
+        ${categoryLabel}, 'groups-knockout', 'pair',
+        ${d.minGroups * d.minTeamsPerGroup * expandedCategories.length * 2},
+        ${d.startDate}, ${d.endDate ?? null}, ${slug}, 'draft'
+      )
+      RETURNING id
+    `
+    const tournamentId = (tRows[0] as { id: string }).id
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS tournament_schedules (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id         TEXT NOT NULL,
+        tournament_id   UUID NOT NULL UNIQUE,
+        schedule_data   JSONB NOT NULL,
+        version         INTEGER DEFAULT 1,
+        is_published    BOOLEAN DEFAULT false,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `
+    await sql`ALTER TABLE tournament_schedules ADD COLUMN IF NOT EXISTS version_history JSONB DEFAULT '[]'`
+
+    const historyEntry = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      label: 'Generado automáticamente',
+      schedule: generatedSchedule,
+    }
+    await sql`
+      INSERT INTO tournament_schedules (user_id, tournament_id, schedule_data, version_history, version)
+      VALUES (${DEMO_ORGANIZER_ID}, ${tournamentId}, ${JSON.stringify(generatedSchedule)}, ${JSON.stringify([historyEntry])}, 1)
+    `
+
+    return { data: { tournamentId } }
+  } catch (e) {
+    console.error('[createTournamentFromWizard]', e)
+    return { error: `Error creando el torneo: ${e instanceof Error ? e.message : String(e)}` }
+  }
 }
 
 export async function updateRegistrationConfig(id: string, config: unknown) {

@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sql } from '@/lib/db'
 import { z } from 'zod'
 import type { TournamentSchedule, ChatMessage } from '@/lib/types/schedule'
-import { generateSchedule, type GeneratorConfig, type OptimalFormat } from '@/lib/schedule/generator'
+import { generateSchedule, type GeneratorConfig, type OptimalFormat, type PhaseDurations } from '@/lib/schedule/generator'
 
 const DEMO_ORGANIZER_ID = '00000000-0000-0000-0000-000000000000'
 
@@ -546,6 +546,7 @@ export async function generateDeterministicSchedule(tournamentId: string): Promi
     const rawPhases  = (vd.phases  as Array<{ name: string; match_config?: Record<string, unknown> }>) ?? []
     const timeBlocks = (sched.time_blocks as Array<{ courtName: string; from: string; to: string }>) ?? []
     const parsedTrans = parseInt(String(sched.transition_minutes ?? ''))
+    const rawPhaseDurations = vd.phase_durations as PhaseDurations | undefined
 
     const config: GeneratorConfig = {
       courts: rawCourts.map((c, i) => ({
@@ -573,6 +574,7 @@ export async function generateDeterministicSchedule(tournamentId: string): Promi
         name: p.name,
         maxDurationMins: (p.match_config?.time_limit_minutes as number) ?? 60,
       })),
+      phaseDurations: rawPhaseDurations,
       format: {
         minGroups:         (vd.num_groups               as number) ?? 2,
         minTeamsPerGroup:  (vd.teams_per_group           as number) ?? 3,
