@@ -58,6 +58,15 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
     ? { ...DEFAULT_CONFIG, ...rawConfig, system_fields: { ...DEFAULT_CONFIG.system_fields, ...(rawConfig.system_fields ?? {}) } }
     : DEFAULT_CONFIG
 
+  // Build selectable category options from venue_details (same expansion as horario page)
+  const vd = (t.venue_details as Record<string, unknown>) ?? {}
+  const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
+  const categoryOptions: string[] = rawCats.flatMap(c => {
+    const genders = c.genders ?? []
+    if (genders.length === 0) return [c.name]
+    return genders.map(g => `${c.name} ${g === 'M' ? 'Masculino' : g === 'F' ? 'Femenino' : 'Mixto'}`)
+  })
+
   const hasPair       = config.registration_types.includes('pair')
   const hasIndividual = config.registration_types.includes('individual')
   const bothEnabled   = hasPair && hasIndividual
@@ -82,15 +91,18 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
   const setField = (key: string, value: string) => setFields(f => ({ ...f, [key]: value }))
 
   function validate(): string | null {
+    if (categoryOptions.length > 0 && !fields.category) return 'Selecciona una categoría'
     if (sf.name      && !fields.name?.trim())         return 'El nombre es obligatorio'
     if (sf.email     && !fields.email?.trim())        return 'El email es obligatorio'
     if (sf.phone     && !fields.phone?.trim())        return 'El teléfono es obligatorio'
     if (sf.level     && !fields.level?.trim())        return 'El nivel es obligatorio'
+    if (!fields.side) return 'Indica el lado en pista del jugador 1'
     if (isPair) {
       if (sf.partner_name  && !fields.partner_name?.trim())  return 'El nombre de tu pareja es obligatorio'
       if (sf.partner_email && !fields.partner_email?.trim()) return 'El email de tu pareja es obligatorio'
       if (sf.partner_phone && !fields.partner_phone?.trim()) return 'El teléfono de tu pareja es obligatorio'
       if (sf.partner_level && !fields.partner_level?.trim()) return 'El nivel de tu pareja es obligatorio'
+      if (!fields.partner_side) return 'Indica el lado en pista del jugador 2'
     }
     for (const cf of config.custom_fields) {
       const active = cf.applies_to === 'all' || (isPair && cf.applies_to === 'pair') || (!isPair && cf.applies_to === 'individual')
@@ -164,6 +176,30 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
         </div>
       )}
 
+      {/* ── Categoría ────────────────────────────────────────── */}
+      {categoryOptions.length > 0 && (
+        <div>
+          <FieldLabel required>Categoría</FieldLabel>
+          <div className="flex flex-wrap gap-2">
+            {categoryOptions.map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setField('category', cat)}
+                className={cn(
+                  'px-4 py-2 rounded-[8px] border text-[13px] font-medium transition-colors',
+                  fields.category === cat
+                    ? 'bg-accent text-white border-accent'
+                    : 'border-border text-foreground hover:bg-muted'
+                )}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Jugador 1 ─────────────────────────────────────────── */}
       <section>
         <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-3">Jugador 1 — tus datos</p>
@@ -183,6 +219,19 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
           <div>
             <FieldLabel required={sf.level}>Nivel</FieldLabel>
             <input type="number" className={numberCls} value={fields.level ?? ''} onChange={e => setField('level', e.target.value)} placeholder="1-10" min="1" max="10" />
+          </div>
+          <div>
+            <FieldLabel required>Lado en pista</FieldLabel>
+            <div className="flex rounded-[8px] border border-border overflow-hidden w-fit">
+              {(['Derecha', 'Reves'] as const).map(side => (
+                <button key={side} type="button"
+                  onClick={() => setField('side', side)}
+                  className={cn('px-5 py-2.5 text-[13px] font-semibold transition-colors',
+                    fields.side === side ? 'bg-accent text-white' : 'bg-background text-muted-foreground hover:text-foreground'
+                  )}
+                >{side}</button>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -207,6 +256,19 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
             <div>
               <FieldLabel required={sf.partner_level}>Nivel</FieldLabel>
               <input type="number" className={cn(numberCls, 'border-accent/30 focus:border-accent')} value={fields.partner_level ?? ''} onChange={e => setField('partner_level', e.target.value)} placeholder="1-10" min="1" max="10" />
+            </div>
+            <div>
+              <FieldLabel required>Lado en pista</FieldLabel>
+              <div className="flex rounded-[8px] border border-accent/30 overflow-hidden w-fit">
+                {(['Derecha', 'Reves'] as const).map(side => (
+                  <button key={side} type="button"
+                    onClick={() => setField('partner_side', side)}
+                    className={cn('px-5 py-2.5 text-[13px] font-semibold transition-colors',
+                      fields.partner_side === side ? 'bg-accent text-white' : 'bg-background text-muted-foreground hover:text-foreground'
+                    )}
+                  >{side}</button>
+                ))}
+              </div>
             </div>
           </div>
         </section>

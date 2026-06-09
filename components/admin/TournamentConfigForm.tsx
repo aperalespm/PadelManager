@@ -462,10 +462,10 @@ function FormatConfigPanel({ format, state, onChange }: {
       <div className="bg-[var(--muted)] border border-border rounded-[10px] p-[18px] mt-1 flex flex-col gap-4">
         <SectionLabel>Configuración de grupos + eliminatoria</SectionLabel>
         <div className="grid grid-cols-2 gap-4">
-          <FieldRow label="Número de grupos" req note="Cualquier número ≥ 1">
+          <FieldRow label="Mínimo de grupos por categoría" req note="El sistema puede crear más si hay más parejas">
             <SI type="number" value={state.num_groups} onChange={v => set('num_groups', v)} min="1" max="32" placeholder="3" />
           </FieldRow>
-          <FieldRow label="Equipos por grupo" req>
+          <FieldRow label="Mínimo de parejas por grupo" req>
             <SI type="number" value={state.teams_per_group} onChange={v => set('teams_per_group', v)} min="2" max="10" placeholder="4" />
           </FieldRow>
           <FieldRow label="Equipos que pasan por grupo" req>
@@ -1403,8 +1403,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
     return neededSlots > availableSlots
   })()
 
-  const pricePerPair = parseFloat(priceInfo.replace(',', '.').replace(/[^0-9.]/g, '')) || 0
-  const estimatedRevenue = capacityEstimate * pricePerPair
+  const pricePerPerson = parseFloat(priceInfo.replace(',', '.').replace(/[^0-9.]/g, '')) || 0
+  const estimatedRevenue = capacityEstimate * pricePerPerson * 2
 
   return (
     <div className="flex flex-col gap-5">
@@ -1520,15 +1520,15 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
             <p className="text-[11px] text-muted-foreground mt-1">{numBrackets} bracket{numBrackets !== 1 ? 's' : ''} · {_tg} grupos · {_gs} eq/grupo</p>
           </div>
           <div className="flex-1 px-5 py-3 border-r border-border">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Precio por pareja</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Precio por persona</p>
             <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-foreground">
-              {pricePerPair > 0 ? `${pricePerPair}€` : <span className="text-[13px] font-normal text-muted-foreground italic">Sin precio</span>}
+              {pricePerPerson > 0 ? `${pricePerPerson}€` : <span className="text-[13px] font-normal text-muted-foreground italic">Sin precio</span>}
             </p>
           </div>
           <div className="flex-1 px-5 py-3 bg-[var(--success-surface)]">
             <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--success)] mb-0.5">Facturación estimada</p>
             <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-[var(--success)]">
-              {pricePerPair > 0 ? `${estimatedRevenue.toLocaleString('es-ES')}€` : <span className="text-[13px] font-normal italic">—</span>}
+              {pricePerPerson > 0 ? `${estimatedRevenue.toLocaleString('es-ES')}€` : <span className="text-[13px] font-normal italic">—</span>}
             </p>
           </div>
         </div>
@@ -1566,7 +1566,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
               <p className="text-[11px] text-light mt-1">PNG, JPG, SVG · máx. 8 MB</p>
             </div>
           </FieldRow>
-          <FieldRow label="Precio (informativo)"><SI value={priceInfo} onChange={setPrice} placeholder="15 €" /></FieldRow>
+          <FieldRow label="Precio por persona" note="El precio se muestra por persona; la facturación se calcula por pareja (×2)"><SI value={priceInfo} onChange={setPrice} placeholder="15 €" /></FieldRow>
           <FieldRow label="Fecha límite de cancelación" note="Después de esta fecha solo el organizador puede cancelar">
             <SI type="date" value={cancelDl} onChange={setCancel} />
           </FieldRow>
