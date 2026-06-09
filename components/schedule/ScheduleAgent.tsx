@@ -419,7 +419,7 @@ export function ScheduleAgent({
 
   return (
     <>
-    <div className="bg-background flex flex-col" style={{ height: '100vh' }}>
+    <div className="bg-background flex flex-col h-full">
 
       {/* ── Top bar ─────────────────────────────────────────────────── */}
       <div className="shrink-0 border-b border-border">

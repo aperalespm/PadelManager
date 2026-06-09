@@ -36,7 +36,7 @@ export default async function InscritosPage({ params }: { params: Promise<{ id: 
   const categoryOptions = expandCategoryNames(rawCats)
 
   return (
-    <div className="px-9 py-8">
+    <div className="h-full overflow-y-auto px-9 py-8">
       <RegistrationTable
         tournamentId={id}
         tournament={tournament as Record<string, unknown>}

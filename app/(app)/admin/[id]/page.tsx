@@ -46,7 +46,7 @@ export default async function AdminPanelPage({ params }: { params: Promise<{ id:
   }
 
   return (
-    <div className="px-9 py-8 flex flex-col gap-7">
+    <div className="h-full overflow-y-auto px-9 py-8 flex flex-col gap-7">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
