@@ -109,6 +109,34 @@ function durationForRound(roundName: string, pd: PhaseDurations): number {
   return pd.final
 }
 
+// ── Phase duration builder ────────────────────────────────────────────────────
+// Derives PhaseDurations from the named phases array stored in venue_details.
+// Matches by Spanish keyword so order in the array doesn't matter.
+
+export function buildPhaseDurations(
+  phases: Array<{ name: string; maxDurationMins: number }>
+): PhaseDurations {
+  if (phases.length === 0) return { groups: 60, roundOf16: 60, quarterFinal: 60, semiFinal: 60, final: 60 }
+
+  const find = (kw: string, exclude: string[] = []): number | undefined => {
+    const p = phases.find(p => {
+      const n = p.name.toLowerCase()
+      return n.includes(kw) && !exclude.some(ex => n.includes(ex))
+    })
+    return p?.maxDurationMins
+  }
+
+  const defaultDur = phases[phases.length - 1]?.maxDurationMins ?? 60
+
+  return {
+    groups:       find('grupo') ?? find('fase') ?? phases[0].maxDurationMins,
+    roundOf16:    find('octavo') ?? phases[0].maxDurationMins,
+    quarterFinal: find('cuarto') ?? phases[0].maxDurationMins,
+    semiFinal:    find('semi') ?? defaultDur,
+    final:        find('final', ['semi', 'octavo', 'cuarto']) ?? defaultDur,
+  }
+}
+
 // ── Legacy format finder (kept for external use) ─────────────────────────────
 
 function matchesInGroups(g: number, t: number): number {
@@ -280,13 +308,7 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   const lunchMins    = sched.lunchBreak?.duration_minutes ?? 0
   const availableMins = endMins - startMins - lunchMins
 
-  const pd: PhaseDurations = config.phaseDurations ?? {
-    groups:       config.phases[0]?.maxDurationMins ?? 60,
-    roundOf16:    config.phases[0]?.maxDurationMins ?? 60,
-    quarterFinal: config.phases[0]?.maxDurationMins ?? 60,
-    semiFinal:    config.phases[0]?.maxDurationMins ?? 60,
-    final:        config.phases[config.phases.length - 1]?.maxDurationMins ?? 60,
-  }
+  const pd: PhaseDurations = config.phaseDurations ?? buildPhaseDurations(config.phases)
 
   // Sort categories: lower prestige (higher number, "4ª") gets earlier time slots
   const sortedCats = sortByPrestige(categories)
@@ -420,10 +442,10 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
             categoryId: cat.id,
             categoryName: cat.name,
             groupId: `${cat.id}_G${gl}`,
-            phase: 'groups',
+            phase: `Grupo ${gl}`,
             pair1: p1,
             pair2: p2,
-            matchLabel: `${cat.name} Gr.${gl} — ${p1} vs ${p2}`,
+            matchLabel: `${cat.name} · Grupo ${gl}`,
             status: 'scheduled',
           })
           groupCourt.cursor = start + pd.groups + trans
@@ -458,11 +480,11 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
             }
 
             const p1Label = roundIdx === 0
-              ? `1° Gr.${String.fromCharCode(65 + mi * 2)}`
-              : `G${mi * 2 + 1}`
+              ? `1° Gr.${String.fromCharCode(65 + mi)}`
+              : `Gan. P${mi * 2 + 1}`
             const p2Label = roundIdx === 0
-              ? `2° Gr.${String.fromCharCode(65 + mi * 2 + 1)}`
-              : `G${mi * 2 + 2}`
+              ? `2° Gr.${String.fromCharCode(65 + (mi + 1) % numGroups)}`
+              : `Gan. P${mi * 2 + 2}`
 
             scheduledMatches.push({
               id: `${cat.id}_KO_r${roundIdx}_m${mi + 1}`,
