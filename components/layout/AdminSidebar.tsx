@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useTransition, useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { createDraftTournament } from '@/lib/actions/tournaments'
 
 interface Tournament {
   id: string
@@ -75,11 +74,7 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
   }
 
   function handleCreate() {
-    startCreate(async () => {
-      const result = await createDraftTournament()
-      if (!result.data) return
-      router.push(`/admin/${result.data.id}/config`)
-    })
+    router.push('/admin/nuevo')
   }
 
   return (
