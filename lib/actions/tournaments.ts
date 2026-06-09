@@ -312,7 +312,7 @@ export async function createTournamentFromWizard(input: unknown): Promise<
       VALUES (
         ${DEMO_ORGANIZER_ID}, ${d.name}, 'Por confirmar', 'Por confirmar',
         ${JSON.stringify(venueDetails)}::jsonb,
-        ${categoryLabel}, 'groups-knockout', 'pair',
+        ${categoryLabel}, 'groups_elimination', 'pair',
         ${d.minGroups * d.minTeamsPerGroup * expandedCategories.length * 2},
         ${d.startDate}, ${d.endDate ?? null}, ${slug}, 'draft'
       )
