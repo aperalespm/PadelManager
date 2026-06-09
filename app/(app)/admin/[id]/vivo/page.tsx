@@ -37,7 +37,7 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div className="px-9 py-8 flex flex-col gap-6">
+    <div className="h-full overflow-y-auto px-9 py-8 flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>

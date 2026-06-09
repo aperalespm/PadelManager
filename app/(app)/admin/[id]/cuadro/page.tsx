@@ -82,7 +82,7 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
   const totalCapacity  = fillData.reduce((s, c) => s + c.capacity, 0)
 
   return (
-    <div className="px-9 py-8 flex flex-col gap-4">
+    <div className="h-full overflow-y-auto px-9 py-8 flex flex-col gap-4">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
