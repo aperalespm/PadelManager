@@ -358,7 +358,7 @@ export function ScheduleAgent({
 
       <div className="p-5 pb-6">
         {displayedSchedule ? (
-          <div className="bg-card border border-border rounded-[10px] overflow-hidden">
+          <div className="bg-card border border-border rounded-[10px]" style={{ overflow: 'clip' }}>
             <ScheduleCalendar schedule={displayedSchedule} />
           </div>
         ) : (
@@ -419,7 +419,7 @@ export function ScheduleAgent({
 
   return (
     <>
-    <div className="h-full overflow-y-auto bg-background">
+    <div className="h-full overflow-y-auto overflow-x-hidden bg-background">
 
       {/* ── Top bar ─────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 bg-background border-b border-border">
@@ -629,8 +629,8 @@ export function ScheduleAgent({
             Cerrar
           </button>
         </div>
-        <div className="overflow-y-auto p-6">
-          <div className="bg-card border border-border rounded-[10px] overflow-hidden">
+        <div className="overflow-y-auto overflow-x-hidden p-6">
+          <div className="bg-card border border-border rounded-[10px]" style={{ overflow: 'clip' }}>
             <ScheduleCalendar schedule={displayedSchedule} />
           </div>
         </div>
