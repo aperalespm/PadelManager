@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 
 interface WizardData {
@@ -127,6 +128,17 @@ export function TournamentWizard() {
       return { ...prev, categories }
     })
   }
+  function bulkToggleGender(g: string) {
+    const all = data.categories.every(c => c.genders.includes(g))
+    setData(prev => ({
+      ...prev,
+      categories: prev.categories.map(c => ({
+        ...c,
+        genders: all ? c.genders.filter(x => x !== g) : c.genders.includes(g) ? c.genders : [...c.genders, g],
+      })),
+    }))
+  }
+
   function updatePhaseDuration(key: keyof PhaseDurations, val: number) {
     setData(prev => ({ ...prev, phaseDurations: { ...prev.phaseDurations, [key]: isNaN(val) ? 0 : val } }))
   }
@@ -286,6 +298,7 @@ export function TournamentWizard() {
 
         {step === 2 && (
           <>
+            {/* ── Categorías ── */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-sm font-medium">Categorías</Label>
@@ -293,44 +306,65 @@ export function TournamentWizard() {
                   + Añadir categoría
                 </button>
               </div>
-              <div className="space-y-2">
+
+              {/* Column headers */}
+              <div className="grid items-center mb-1 px-3 gap-x-3" style={{ gridTemplateColumns: '1fr 80px 80px 72px 28px' }}>
+                <span />
+                {GENDERS.map(g => (
+                  <span key={g.key} className="text-[11px] font-medium text-muted-foreground text-center">{g.label}</span>
+                ))}
+                <span />
+              </div>
+
+              {/* Bulk row */}
+              <div className="grid items-center px-3 py-2 bg-muted/40 rounded-lg mb-2 gap-x-3" style={{ gridTemplateColumns: '1fr 80px 80px 72px 28px' }}>
+                <span className="text-[12px] text-muted-foreground">Para todas</span>
+                {GENDERS.map(g => {
+                  const all = data.categories.every(c => c.genders.includes(g.key))
+                  const some = data.categories.some(c => c.genders.includes(g.key))
+                  return (
+                    <div key={g.key} className="flex justify-center">
+                      <Checkbox
+                        checked={all ? true : some ? 'indeterminate' : false}
+                        onCheckedChange={() => bulkToggleGender(g.key)}
+                      />
+                    </div>
+                  )
+                })}
+                <span />
+              </div>
+
+              {/* Category rows */}
+              <div className="space-y-1.5">
                 {data.categories.map((cat, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 border border-border rounded-lg">
+                  <div key={i} className="grid items-center px-3 py-2.5 border border-border rounded-lg gap-x-3" style={{ gridTemplateColumns: '1fr 80px 80px 72px 28px' }}>
                     <Input
                       value={cat.name}
                       onChange={e => updateCategoryName(i, e.target.value)}
                       placeholder="Ej: 1ª, 2ª…"
-                      className="w-28 shrink-0"
+                      className="h-8 text-[13px]"
                     />
-                    <div className="flex items-center gap-1.5 flex-1">
-                      {GENDERS.map(g => (
-                        <button
-                          key={g.key}
-                          onClick={() => toggleGender(i, g.key)}
-                          className={cn(
-                            'px-2.5 py-1 text-[11px] font-medium rounded-full border transition-colors',
-                            cat.genders.includes(g.key)
-                              ? 'bg-accent text-white border-accent'
-                              : 'text-muted-foreground border-border hover:border-accent/50 hover:text-foreground'
-                          )}
-                        >
-                          {g.label}
+                    {GENDERS.map(g => (
+                      <div key={g.key} className="flex justify-center">
+                        <Checkbox
+                          checked={cat.genders.includes(g.key)}
+                          onCheckedChange={() => toggleGender(i, g.key)}
+                        />
+                      </div>
+                    ))}
+                    <div className="flex justify-center">
+                      {data.categories.length > 1 && (
+                        <button onClick={() => removeCategory(i)} className="w-6 h-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-base leading-none">
+                          ×
                         </button>
-                      ))}
-                      {cat.genders.length === 0 && (
-                        <span className="text-[11px] text-muted-foreground italic">Open (sin división)</span>
                       )}
                     </div>
-                    {data.categories.length > 1 && (
-                      <button onClick={() => removeCategory(i)} className="w-7 h-7 flex items-center justify-center rounded-[6px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 text-lg">
-                        ×
-                      </button>
-                    )}
                   </div>
                 ))}
               </div>
             </div>
 
+            {/* ── Duración por ronda ── */}
             <div>
               <Label className="text-sm font-medium">Duración de partidos por ronda (minutos)</Label>
               <div className="mt-3 space-y-2">
@@ -338,9 +372,15 @@ export function TournamentWizard() {
                   <div key={key} className="flex items-center gap-4">
                     <span className="text-[13px] text-muted-foreground w-44 shrink-0">{label}</span>
                     <Input
-                      type="number" min={10} max={300}
-                      value={data.phaseDurations[key]}
-                      onChange={e => updatePhaseDuration(key, parseInt(e.target.value))}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={data.phaseDurations[key] || ''}
+                      onFocus={e => e.currentTarget.select()}
+                      onChange={e => {
+                        const v = parseInt(e.target.value.replace(/\D/g, ''), 10)
+                        updatePhaseDuration(key, isNaN(v) ? 0 : v)
+                      }}
                       className="w-24"
                     />
                     <span className="text-[12px] text-muted-foreground">min</span>
@@ -349,30 +389,28 @@ export function TournamentWizard() {
               </div>
             </div>
 
-            <details className="border border-border rounded-lg overflow-hidden">
-              <summary className="px-4 py-3 text-[13px] font-medium cursor-pointer hover:bg-muted/50 select-none list-none flex items-center justify-between">
-                <span>Ajustes avanzados de formato</span>
-                <span className="text-muted-foreground text-[11px]">opcional</span>
-              </summary>
-              <div className="px-4 pb-4 pt-2 border-t border-border bg-muted/20 grid grid-cols-2 gap-4">
+            {/* ── Formato ── */}
+            <div>
+              <Label className="text-sm font-medium mb-3">Formato</Label>
+              <div className="mt-3 grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-[12px] text-muted-foreground">Mín. grupos por categoría</Label>
-                  <Input type="number" min={1} max={20} value={data.minGroups} onChange={e => update('minGroups', parseInt(e.target.value) || 1)} className="mt-1" />
+                  <Input type="text" inputMode="numeric" pattern="[0-9]*" value={data.minGroups || ''} onFocus={e => e.currentTarget.select()} onChange={e => update('minGroups', parseInt(e.target.value.replace(/\D/g, ''), 10) || 1)} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-[12px] text-muted-foreground">Mín. parejas por grupo</Label>
-                  <Input type="number" min={2} max={10} value={data.minTeamsPerGroup} onChange={e => update('minTeamsPerGroup', parseInt(e.target.value) || 2)} className="mt-1" />
+                  <Input type="text" inputMode="numeric" pattern="[0-9]*" value={data.minTeamsPerGroup || ''} onFocus={e => e.currentTarget.select()} onChange={e => update('minTeamsPerGroup', parseInt(e.target.value.replace(/\D/g, ''), 10) || 2)} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-[12px] text-muted-foreground">Parejas que pasan por grupo</Label>
-                  <Input type="number" min={1} max={10} value={data.teamsAdvancePerGroup} onChange={e => update('teamsAdvancePerGroup', parseInt(e.target.value) || 1)} className="mt-1" />
+                  <Input type="text" inputMode="numeric" pattern="[0-9]*" value={data.teamsAdvancePerGroup || ''} onFocus={e => e.currentTarget.select()} onChange={e => update('teamsAdvancePerGroup', parseInt(e.target.value.replace(/\D/g, ''), 10) || 1)} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-[12px] text-muted-foreground">Mín. partidos por pareja</Label>
-                  <Input type="number" min={1} max={10} value={data.minMatchesPerTeam} onChange={e => update('minMatchesPerTeam', parseInt(e.target.value) || 1)} className="mt-1" />
+                  <Input type="text" inputMode="numeric" pattern="[0-9]*" value={data.minMatchesPerTeam || ''} onFocus={e => e.currentTarget.select()} onChange={e => update('minMatchesPerTeam', parseInt(e.target.value.replace(/\D/g, ''), 10) || 1)} className="mt-1" />
                 </div>
               </div>
-            </details>
+            </div>
           </>
         )}
 
