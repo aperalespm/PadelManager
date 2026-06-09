@@ -96,6 +96,22 @@ export interface OptimalFormat {
   totalSlots: number
 }
 
+export interface PhaseDurations {
+  groups: number
+  roundOf16: number
+  quarterFinal: number
+  semiFinal: number
+  final: number
+}
+
+function durationForRound(roundName: string, pd: PhaseDurations): number {
+  if (roundName === 'Final') return pd.final
+  if (roundName === 'Semifinal') return pd.semiFinal
+  if (roundName === 'Cuartos de final') return pd.quarterFinal
+  if (roundName === 'Octavos de final') return pd.roundOf16
+  return pd.final
+}
+
 function matchesInGroups(g: number, t: number): number {
   return g * (t * (t - 1) / 2)
 }
@@ -163,6 +179,7 @@ export interface GeneratorConfig {
     teamsAdvancePerGroup: number
     minMatchesPerTeam: number
   }
+  phaseDurations?: PhaseDurations
   registeredPairs?: Array<{ category: string; pairs: string[] }>
 }
 
@@ -191,8 +208,8 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   const endMins   = toMins(sched.endTime)
   const trans     = sched.transitionMins
 
-  // Match durations: groups use first phase, knockout uses last phase
-  const groupDuration    = phases[0]?.maxDurationMins ?? 60
+  // Match durations: groups use first phase (or phaseDurations.groups), knockout per-round
+  const groupDuration    = config.phaseDurations?.groups ?? phases[0]?.maxDurationMins ?? 60
   const knockoutDuration = phases.length > 1 ? (phases[phases.length - 1]?.maxDurationMins ?? groupDuration) : groupDuration
 
   // Available minutes per court (deduct lunch)
@@ -291,7 +308,7 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
             pair1: `1° Gr.${String.fromCharCode(65 + mi * 2)}`,
             pair2: `2° Gr.${String.fromCharCode(65 + mi * 2 + 1)}`,
             matchLabel: `${cat.name} ${roundName} (${mi + 1})`,
-            duration: knockoutDuration,
+            duration: config.phaseDurations ? durationForRound(roundName, config.phaseDurations) : knockoutDuration,
             sortKey: ci * 10000 + 9000 + roundIdx * 100 + mi,
           })
         }
