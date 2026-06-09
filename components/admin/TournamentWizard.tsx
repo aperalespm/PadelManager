@@ -3,13 +3,14 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTournamentFromWizard } from '@/lib/actions/tournaments'
-import { findOptimalFormat, type PhaseDurations } from '@/lib/schedule/generator'
+import { type PhaseDurations } from '@/lib/schedule/generator'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { NumberStepper } from '@/components/ui/number-stepper'
 import { cn } from '@/lib/utils'
 
 interface WizardData {
@@ -150,19 +151,6 @@ export function TournamentWizard() {
         : c.genders.map(g => `${c.name || '?'} ${g === 'M' ? 'Masc.' : g === 'F' ? 'Fem.' : g}`)
     ), [data.categories])
 
-  const preview = useMemo(() => {
-    const startM = toMins(data.startTime)
-    const endM = toMins(data.endTime)
-    const lunchM = data.hasLunch ? data.lunchDuration : 0
-    const availableM = Math.max(0, endM - startM - lunchM)
-    const groupSlot = (data.phaseDurations.groups || 60) + data.transitionMins
-    const slotsPerCourt = groupSlot > 0 ? Math.floor(availableM / groupSlot) : 0
-    const totalSlots = slotsPerCourt * Math.max(1, data.courts.length)
-    const numCats = Math.max(1, expandedCats.length)
-    const opt = findOptimalFormat(totalSlots, data.minGroups, data.minTeamsPerGroup, data.teamsAdvancePerGroup, data.minMatchesPerTeam, numCats)
-    const knockTeams = opt.numGroups * data.teamsAdvancePerGroup
-    return { ...opt, slotsPerCourt, knockPhases: knockoutPhaseList(knockTeams) }
-  }, [data, expandedCats])
 
   function canGoNext() {
     if (step === 0) return data.name.trim().length > 0 && data.startDate.length > 0
@@ -268,7 +256,7 @@ export function TournamentWizard() {
               </div>
               <div>
                 <Label className="text-sm font-medium">Transición (min)</Label>
-                <Input type="number" min={0} max={60} value={data.transitionMins} onChange={e => update('transitionMins', parseInt(e.target.value) || 0)} className="mt-1.5" />
+                <NumberStepper min={0} max={60} value={data.transitionMins} onChange={v => update('transitionMins', v)} className="mt-1.5" />
               </div>
             </div>
 
@@ -288,7 +276,7 @@ export function TournamentWizard() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Duración (min)</Label>
-                    <Input type="number" min={15} value={data.lunchDuration} onChange={e => update('lunchDuration', parseInt(e.target.value) || 60)} className="mt-1" />
+                    <NumberStepper min={15} max={480} step={15} value={data.lunchDuration} onChange={v => update('lunchDuration', v)} className="mt-1" />
                   </div>
                 </div>
               )}
@@ -371,17 +359,13 @@ export function TournamentWizard() {
                 {PHASE_ROWS.map(([key, label]) => (
                   <div key={key} className="flex items-center gap-4">
                     <span className="text-[13px] text-muted-foreground w-44 shrink-0">{label}</span>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={data.phaseDurations[key] || ''}
-                      onFocus={e => e.currentTarget.select()}
-                      onChange={e => {
-                        const v = parseInt(e.target.value.replace(/\D/g, ''), 10)
-                        updatePhaseDuration(key, isNaN(v) ? 0 : v)
-                      }}
-                      className="w-24"
+                    <NumberStepper
+                      min={10}
+                      max={300}
+                      step={5}
+                      value={data.phaseDurations[key]}
+                      onChange={v => updatePhaseDuration(key, v)}
+                      className="w-36"
                     />
                     <span className="text-[12px] text-muted-foreground">min</span>
                   </div>
@@ -395,19 +379,19 @@ export function TournamentWizard() {
               <div className="mt-3 grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-[12px] text-muted-foreground">Mín. grupos por categoría</Label>
-                  <Input type="text" inputMode="numeric" pattern="[0-9]*" value={data.minGroups || ''} onFocus={e => e.currentTarget.select()} onChange={e => update('minGroups', parseInt(e.target.value.replace(/\D/g, ''), 10) || 1)} className="mt-1" />
+                  <NumberStepper min={1} max={20} value={data.minGroups} onChange={v => update('minGroups', v)} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-[12px] text-muted-foreground">Mín. parejas por grupo</Label>
-                  <Input type="text" inputMode="numeric" pattern="[0-9]*" value={data.minTeamsPerGroup || ''} onFocus={e => e.currentTarget.select()} onChange={e => update('minTeamsPerGroup', parseInt(e.target.value.replace(/\D/g, ''), 10) || 2)} className="mt-1" />
+                  <NumberStepper min={2} max={10} value={data.minTeamsPerGroup} onChange={v => update('minTeamsPerGroup', v)} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-[12px] text-muted-foreground">Parejas que pasan por grupo</Label>
-                  <Input type="text" inputMode="numeric" pattern="[0-9]*" value={data.teamsAdvancePerGroup || ''} onFocus={e => e.currentTarget.select()} onChange={e => update('teamsAdvancePerGroup', parseInt(e.target.value.replace(/\D/g, ''), 10) || 1)} className="mt-1" />
+                  <NumberStepper min={1} max={10} value={data.teamsAdvancePerGroup} onChange={v => update('teamsAdvancePerGroup', v)} className="mt-1" />
                 </div>
                 <div>
                   <Label className="text-[12px] text-muted-foreground">Mín. partidos por pareja</Label>
-                  <Input type="text" inputMode="numeric" pattern="[0-9]*" value={data.minMatchesPerTeam || ''} onFocus={e => e.currentTarget.select()} onChange={e => update('minMatchesPerTeam', parseInt(e.target.value.replace(/\D/g, ''), 10) || 1)} className="mt-1" />
+                  <NumberStepper min={1} max={10} value={data.minMatchesPerTeam} onChange={v => update('minMatchesPerTeam', v)} className="mt-1" />
                 </div>
               </div>
             </div>
@@ -427,8 +411,8 @@ export function TournamentWizard() {
             <div className="grid grid-cols-3 gap-3">
               {([
                 { label: 'Pistas', value: data.courts.length },
-                { label: 'Parejas / categoría', value: preview.maxPairsPerCategory || '—' },
-                { label: 'Partidos totales', value: preview.totalMatches },
+                { label: 'Categorías', value: expandedCats.length },
+                { label: 'Mín. parejas/cat.', value: data.minGroups * data.minTeamsPerGroup },
               ] as { label: string; value: number | string }[]).map(({ label, value }) => (
                 <div key={label} className="bg-[var(--accent-surface)] border border-accent/20 rounded-lg p-3 text-center">
                   <p className="text-2xl font-bold text-accent">{value}</p>
@@ -440,12 +424,12 @@ export function TournamentWizard() {
             {/* Format summary */}
             <div className="p-4 bg-muted/40 rounded-lg space-y-2 text-[13px]">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Formato</span>
-                <span className="font-medium">{preview.numGroups} grupos × {preview.teamsPerGroup} parejas</span>
+                <span className="text-muted-foreground">Formato mínimo</span>
+                <span className="font-medium">≥ {data.minGroups} grupo{data.minGroups !== 1 ? 's' : ''} × {data.minTeamsPerGroup} parejas</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Categorías</span>
-                <span className="font-medium">{expandedCats.length}</span>
+                <span className="text-muted-foreground">Pasan por grupo</span>
+                <span className="font-medium">{data.teamsAdvancePerGroup} pareja{data.teamsAdvancePerGroup !== 1 ? 's' : ''}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Horario</span>
@@ -459,17 +443,18 @@ export function TournamentWizard() {
 
             {/* Phases */}
             <div>
-              <p className="text-[12px] font-medium text-muted-foreground mb-2">Fases generadas</p>
+              <p className="text-[12px] font-medium text-muted-foreground mb-2">Fases (mínimo configurado)</p>
               <div className="flex flex-wrap gap-2">
                 <span className="px-2.5 py-1 text-[11px] font-medium rounded-full bg-[var(--accent-surface)] text-accent border border-accent/20">
                   Fase de grupos
                 </span>
-                {preview.knockPhases.map(p => (
+                {knockoutPhaseList(data.minGroups * data.teamsAdvancePerGroup).map(p => (
                   <span key={p} className="px-2.5 py-1 text-[11px] font-medium rounded-full bg-muted text-foreground border border-border">
                     {p}
                   </span>
                 ))}
               </div>
+              <p className="text-[11px] text-muted-foreground mt-2">El generador puede crear más grupos si el tiempo disponible lo permite.</p>
             </div>
 
             {/* Category list */}
