@@ -42,6 +42,7 @@ export default async function HorarioPage({ params, searchParams }: { params: Pr
       endTime: (schedule.end_time as string) ?? '21:00',
       transitionMins: (schedule.transition_minutes as number) ?? 0,
       lunchBreak: schedule.lunch_break ?? null,
+      distribution: schedule.distribution ?? null,
     },
     categories: categories.flatMap(c => {
       const genders = (c.genders as string[]) ?? []

@@ -3,7 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { sql } from '@/lib/db'
 import { z } from 'zod'
-import type { TournamentSchedule, ChatMessage } from '@/lib/types/schedule'
+import type { TournamentSchedule, ChatMessage, ScheduleDistribution } from '@/lib/types/schedule'
 import { generateSchedule, type GeneratorConfig, type OptimalFormat, type PhaseDurations } from '@/lib/schedule/generator'
 
 const DEMO_ORGANIZER_ID = '00000000-0000-0000-0000-000000000000'
@@ -548,6 +548,8 @@ export async function generateDeterministicSchedule(tournamentId: string): Promi
     const parsedTrans = parseInt(String(sched.transition_minutes ?? ''))
     const rawPhaseDurations = vd.phase_durations as PhaseDurations | undefined
 
+    const rawDistribution = sched.distribution as ScheduleDistribution | undefined
+
     const config: GeneratorConfig = {
       courts: rawCourts.map((c, i) => ({
         name: c.name,
@@ -575,6 +577,7 @@ export async function generateDeterministicSchedule(tournamentId: string): Promi
         maxDurationMins: (p.match_config?.time_limit_minutes as number) ?? 60,
       })),
       phaseDurations: rawPhaseDurations,
+      distribution: rawDistribution,
       format: {
         minGroups:         (vd.num_groups               as number) ?? 2,
         minTeamsPerGroup:  (vd.teams_per_group           as number) ?? 3,
@@ -600,5 +603,29 @@ export async function generateDeterministicSchedule(tournamentId: string): Promi
   } catch (e) {
     console.error('[generateDeterministicSchedule]', e)
     return { error: `Error generando el horario: ${e instanceof Error ? e.message : String(e)}` }
+  }
+}
+
+// ── Save distribution to venue_details.schedule.distribution ─────────────────
+
+export async function saveDistribution(
+  tournamentId: string,
+  distribution: ScheduleDistribution
+): Promise<{ data: { success: true } } | { error: string }> {
+  try {
+    await sql`
+      UPDATE tournaments
+      SET venue_details = COALESCE(venue_details, '{}'::jsonb) ||
+        jsonb_build_object(
+          'schedule', COALESCE(venue_details->'schedule', '{}'::jsonb) ||
+            jsonb_build_object('distribution', ${JSON.stringify(distribution)}::jsonb)
+        ),
+        updated_at = NOW()
+      WHERE id = ${tournamentId}
+    `
+    return { data: { success: true } }
+  } catch (e) {
+    console.error('[saveDistribution]', e)
+    return { error: 'No se pudo guardar la distribución.' }
   }
 }
