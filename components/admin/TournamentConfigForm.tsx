@@ -1048,6 +1048,18 @@ const STATUS_CHIP: Record<string, string> = {
 }
 const ALL_STATUSES = ['draft', 'open', 'active', 'finished'] as const
 
+// ── Phase duration key mapper ─────────────────────────────────────────────────
+// Maps Spanish phase names → PhaseDurations camelCase keys (same logic as generator's buildPhaseDurations)
+function nameToPhaseKey(name: string): 'groups' | 'roundOf16' | 'quarterFinal' | 'semiFinal' | 'final' | null {
+  const n = name.toLowerCase()
+  if (n.includes('grupo') || (n.includes('fase') && !n.includes('semi'))) return 'groups'
+  if (n.includes('octavo'))  return 'roundOf16'
+  if (n.includes('cuarto'))  return 'quarterFinal'
+  if (n.includes('semi'))    return 'semiFinal'
+  if (n.includes('final'))   return 'final'
+  return null
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function TournamentConfigForm({ tournament: t, otherTournaments, hasExistingMatches }: TournamentConfigFormProps) {
@@ -1158,11 +1170,25 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
 
   const savedPhaseDurs = sched.phase_durations as Record<string, number> | undefined
   const [phaseDurations, setPhaseDurations] = useState<Record<string, string>>(() => {
+    const savedPhases = vd.phases as Array<{ name: string; match_config?: { time_limit_minutes?: number } }> | undefined
     if (savedPhaseDurs) {
+      // New canonical format: PhaseDurations camelCase keys (groups, roundOf16, …)
+      if ('groups' in savedPhaseDurs && Array.isArray(savedPhases) && savedPhases.length > 0) {
+        const result: Record<string, string> = {}
+        for (const p of savedPhases) {
+          const key = nameToPhaseKey(p.name)
+          result[p.name] = String(
+            key !== null && savedPhaseDurs[key] !== undefined
+              ? savedPhaseDurs[key]
+              : (p.match_config?.time_limit_minutes ?? 90)
+          )
+        }
+        if (Object.keys(result).length > 0) return result
+      }
+      // Legacy format: Spanish phase name keys — use directly
       return Object.fromEntries(Object.entries(savedPhaseDurs).map(([k, v]) => [k, String(v)]))
     }
     // Fall back to time_limit_minutes stored in each phase (set by wizard)
-    const savedPhases = vd.phases as Array<{ name: string; match_config?: { time_limit_minutes?: number } }> | undefined
     if (Array.isArray(savedPhases) && savedPhases.length > 0) {
       return Object.fromEntries(savedPhases.map(p => [p.name, String(p.match_config?.time_limit_minutes ?? 90)]))
     }
@@ -1370,14 +1396,27 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
         group_points_win:        parseInt(formatState.group_points_win) || 3,
         group_points_draw:       parseInt(formatState.group_points_draw) || 1,
         group_points_loss:       parseInt(formatState.group_points_loss) || 0,
-        phases: phases.map(p => ({ name: p.name, match_config: p.match_config })),
+        phases: phases.map(p => ({
+          name: p.name,
+          match_config: {
+            ...p.match_config,
+            time_limit_minutes: parseInt(phaseDurations[p.name] ?? '') || (p.match_config?.time_limit_minutes as unknown as number) || 90,
+          },
+        })),
         courts: namedCourts,
         schedule: {
           start_time:  schedStart,
           end_time:    schedEnd,
-          transition_minutes: (() => { const p = parseInt(transitionMinutes); return isNaN(p) ? 10 : p })(),
+          transition_minutes: (() => { const p = parseInt(transitionMinutes); return isNaN(p) ? 0 : p })(),
           lunch_break: lunchEnabled ? { time: lunchTime, duration_minutes: parseInt(lunchDuration) || 60 } : null,
-          phase_durations: Object.fromEntries(phases.map(ph => [ph.name, parseInt(phaseDurations[ph.name] ?? '90') || 90])),
+          phase_durations: (() => {
+            const pd: Record<string, number> = {}
+            for (const ph of phases) {
+              const key = nameToPhaseKey(ph.name)
+              if (key) pd[key] = parseInt(phaseDurations[ph.name] ?? '') || (ph.match_config?.time_limit_minutes as unknown as number) || 90
+            }
+            return pd
+          })(),
           time_blocks:       timeBlocks,
           court_assignments: courtAssignEnabled ? courtAssignments : null,
         },

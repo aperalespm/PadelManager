@@ -300,9 +300,9 @@ export async function createTournamentFromWizard(input: unknown): Promise<
       transition_minutes: d.transitionMins,
       lunch_break: lunchBreak,
       time_blocks: [],
+      phase_durations: pd,
     },
     categories: d.categories,
-    phase_durations: pd,
     phases: [
       { name: 'Grupos',           match_config: { time_limit_minutes: pd.groups } },
       { name: 'Octavos de final', match_config: { time_limit_minutes: pd.roundOf16 } },

@@ -39,7 +39,7 @@ const DEFAULT: WizardData = {
   courts: [{ name: 'Pista 1' }, { name: 'Pista 2' }],
   startTime: '10:00',
   endTime: '21:00',
-  transitionMins: 10,
+  transitionMins: 0,
   hasLunch: false,
   lunchTime: '14:00',
   lunchDuration: 60,
