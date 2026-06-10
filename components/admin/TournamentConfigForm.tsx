@@ -1755,7 +1755,10 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
                   </button>
                 </div>
               ))}
-              <button onClick={() => setCategories(cs => [...cs, { name: `${cs.length + 1}ª`, minScore: '', maxScore: '', genders: [] }])}
+              <button onClick={() => setCategories(cs => {
+                const maxN = cs.reduce((m, c) => { const n = c.name.match(/^(\d+)/); return n ? Math.max(m, parseInt(n[1])) : m }, 0)
+                return [...cs, { name: `${maxN + 1}ª`, minScore: '', maxScore: '', genders: [] }]
+              })}
                 className="self-start px-3 py-[5px] border border-border rounded-[7px] bg-white text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">
                 + Añadir categoría
               </button>
