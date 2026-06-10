@@ -60,7 +60,7 @@ export default async function HorarioPage({ params, searchParams }: { params: Pr
     })),
     format: {
       numGroups: (vd.num_groups as number) ?? 3,
-      teamsPerGroup: (vd.teams_per_group as number) ?? 4,
+      teamsPerGroup: (vd.teams_per_group as number) ?? 3,
       teamsAdvancePerGroup: (vd.teams_advance_per_group as number) ?? 2,
       minMatchesPerTeam: (vd.min_matches_per_team as number) ?? 3,
     },

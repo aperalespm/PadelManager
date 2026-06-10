@@ -759,7 +759,7 @@ function CompetitionSchemaPreview({
 
       {(() => {
         const numGroups   = Math.max(1, parseInt(formatState.num_groups) || 1)
-        const teamsPerGrp = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+        const teamsPerGrp = Math.max(2, parseInt(formatState.teams_per_group) || 3)
         const teamsAdv    = Math.max(1, Math.min(parseInt(formatState.teams_advance_per_group) || 2, teamsPerGrp - 1))
         const bracketN    = parseInt(formatState.bracket_size) || parseInt(maxPlayers) || 16
 
@@ -1125,7 +1125,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
     seeding_method:          (vd.seeding_method as string) ?? 'RANDOM',
     has_third_place_match:   Boolean(vd.has_third_place_match ?? false),
     num_groups:              String(vd.num_groups ?? '3'),
-    teams_per_group:         String(vd.teams_per_group ?? '4'),
+    teams_per_group:         String(vd.teams_per_group ?? '3'),
     teams_advance_per_group: String(vd.teams_advance_per_group ?? '2'),
     group_scoring:           (vd.scoring_system as string) ?? 'WIN_LOSS',
     tiebreak_criteria:       (vd.tiebreak_criteria as string[]) ?? DEFAULT_TIEBREAK_CRITERIA,
@@ -1204,7 +1204,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
       seeding_method:          (vd.seeding_method as string) ?? 'RANDOM',
       has_third_place_match:   Boolean(vd.has_third_place_match ?? false),
       num_groups:              String(vd.num_groups ?? '3'),
-      teams_per_group:         String(vd.teams_per_group ?? '4'),
+      teams_per_group:         String(vd.teams_per_group ?? '3'),
       teams_advance_per_group: String(vd.teams_advance_per_group ?? '2'),
       group_scoring:           (vd.scoring_system as string) ?? 'WIN_LOSS',
       tiebreak_criteria:       (vd.tiebreak_criteria as string[]) ?? DEFAULT_TIEBREAK_CRITERIA,
@@ -1446,7 +1446,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
   // ── Capacity = brackets × groups × teams/group ───────────────────────────
   // Courts/schedule are a scheduling constraint, not a registration cap.
   const numBrackets = expandedCategories.length || 1
-  const _gs  = Math.max(2, parseInt(formatState.teams_per_group) || 4)
+  const _gs  = Math.max(2, parseInt(formatState.teams_per_group) || 3)
   const _tg  = Math.max(1, parseInt(formatState.num_groups) || 3)
   const capacityEstimate = _tg * _gs * numBrackets
 

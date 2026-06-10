@@ -37,7 +37,7 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
 
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
   const numGroups = Math.max(1, parseInt(String(vd.num_groups ?? '3')) || 3)
-  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '4')) || 4)
+  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '3')) || 3)
   const teamsAdvancePerGroup = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
   const capacityPerCategory = numGroups * teamsPerGroup
 

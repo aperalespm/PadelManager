@@ -46,7 +46,7 @@ const DEFAULT: WizardData = {
   categories: [{ name: '1ª', genders: ['M', 'F'] }],
   phaseDurations: { groups: 30, roundOf16: 30, quarterFinal: 30, semiFinal: 45, final: 60 },
   minGroups: 2,
-  minTeamsPerGroup: 4,
+  minTeamsPerGroup: 3,
   teamsAdvancePerGroup: 2,
   minMatchesPerTeam: 2,
 }
