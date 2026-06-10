@@ -293,7 +293,7 @@ export async function updateGroupBracket(tournamentId: string) {
   const groupsPhase = phases[0]
 
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
-  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '4')) || 4)
+  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '3')) || 3)
   const groupLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
   // All confirmed registrations
@@ -397,7 +397,7 @@ export async function getGroupBracketDraftData(tournamentId: string) {
 
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
   const numGroups = Math.max(1, parseInt(String(vd.num_groups ?? '3')) || 3)
-  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '4')) || 4)
+  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '3')) || 3)
   const groupLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
   // Expand configured categories (same logic as the page)
