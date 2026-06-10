@@ -107,7 +107,10 @@ export function TournamentWizard() {
   }
 
   function addCategory() {
-    setData(prev => ({ ...prev, categories: [...prev.categories, { name: '', genders: ['M', 'F'] }] }))
+    setData(prev => {
+      const maxN = prev.categories.reduce((m, c) => { const n = c.name.match(/^(\d+)/); return n ? Math.max(m, parseInt(n[1])) : m }, 0)
+      return { ...prev, categories: [...prev.categories, { name: `${maxN + 1}ª`, genders: ['M', 'F'] }] }
+    })
   }
   function removeCategory(i: number) {
     setData(prev => ({ ...prev, categories: prev.categories.filter((_, j) => j !== i) }))
