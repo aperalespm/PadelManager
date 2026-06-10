@@ -1030,14 +1030,7 @@ const STATUS_CHIP: Record<string, string> = {
   active:   'bg-[var(--warning-surface,#fff7ed)] text-[var(--warning)] border-[var(--warning)]/30',
   finished: 'bg-[var(--success-surface,#f0fdf4)] text-[var(--success)] border-[var(--success)]/30',
 }
-const STATUS_TRANSITIONS: Record<string, Array<{ status: string; label: string; desc: string }>> = {
-  draft:    [{ status: 'open',     label: 'Publicar',              desc: 'Abre las inscripciones para los jugadores' }],
-  open:     [{ status: 'active',   label: 'Iniciar torneo',         desc: 'Cierra inscripciones e inicia la competición' },
-             { status: 'draft',    label: 'Volver a borrador',      desc: 'Oculta el torneo de la lista pública' }],
-  active:   [{ status: 'finished', label: 'Finalizar torneo',       desc: 'Marca el torneo como completado' },
-             { status: 'open',     label: 'Reabrir inscripciones',  desc: 'Permite nuevas inscripciones' }],
-  finished: [{ status: 'draft',    label: 'Reabrir como borrador',  desc: 'Permite editar y volver a publicar' }],
-}
+const ALL_STATUSES = ['draft', 'open', 'active', 'finished'] as const
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -1545,18 +1538,21 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
               <span className={cn('text-[13px] ml-0.5 shrink-0 transition-transform duration-150', statusDropdownOpen && 'rotate-180')}>▾</span>
             </button>
 
-            {statusDropdownOpen && (STATUS_TRANSITIONS[currentStatus]?.length ?? 0) > 0 && (
-              <div className="absolute top-full right-0 mt-1.5 z-30 bg-white border border-border rounded-[10px] shadow-xl p-1.5 min-w-[260px]">
-                {STATUS_TRANSITIONS[currentStatus].map(({ status, label, desc }) => (
+            {statusDropdownOpen && (
+              <div className="absolute top-full right-0 mt-1.5 z-30 bg-white border border-border rounded-[10px] shadow-xl p-1.5 min-w-[180px]">
+                {ALL_STATUSES.map(s => (
                   <button
-                    key={status}
-                    onClick={() => handleStatusChange(status)}
-                    className="w-full flex flex-col items-start gap-0.5 px-3 py-[10px] rounded-[7px] text-left hover:bg-muted transition-colors"
+                    key={s}
+                    onClick={() => s !== currentStatus && handleStatusChange(s)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-[9px] rounded-[7px] text-[13px] font-semibold transition-colors',
+                      s === currentStatus
+                        ? cn(STATUS_CHIP[s], 'cursor-default')
+                        : 'text-foreground hover:bg-muted'
+                    )}
                   >
-                    <span className={cn('text-[13px] font-semibold', STATUS_CHIP[status]?.split(' ').find(c => c.startsWith('text-')))}>
-                      {label}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">{desc}</span>
+                    {s === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)] shrink-0" />}
+                    {STATUS_LABELS[s]}
                   </button>
                 ))}
               </div>
