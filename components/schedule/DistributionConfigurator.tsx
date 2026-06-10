@@ -31,12 +31,6 @@ function normalise(dist: ScheduleDistribution | null, cats: Category[]): Distrib
   ]
 }
 
-// Redistribute all categories as evenly as possible across existing bin IDs
-function redistribute(cats: Category[], binIds: string[]): DistributionBin[] {
-  const bins: DistributionBin[] = binIds.map(id => ({ id, categoryIds: [] }))
-  cats.forEach((cat, i) => { bins[i % bins.length].categoryIds.push(cat.id) })
-  return bins
-}
 
 export function DistributionConfigurator({ categories, distribution, onChange, disabled }: Props) {
   const bins  = normalise(distribution, categories)
@@ -50,28 +44,30 @@ export function DistributionConfigurator({ categories, distribution, onChange, d
   }
 
   function addBin() {
-    const newId   = `bin_${Date.now()}`
-    const newBins = redistribute(categories, [...bins.map(b => b.id), newId])
-    emit(newBins)
+    // Add empty bin — don't touch existing assignments
+    emit([...bins, { id: `bin_${Date.now()}`, categoryIds: [] }])
   }
 
   function removeBin(binId: string) {
     if (bins.length <= 1) return
+    // Move any cats from the removed bin to the first surviving bin
+    const removed   = bins.find(b => b.id === binId)
     const remaining = bins.filter(b => b.id !== binId)
-    const newBins   = redistribute(categories, remaining.map(b => b.id))
-    emit(newBins)
+    if (removed && removed.categoryIds.length > 0) {
+      remaining[0] = { ...remaining[0], categoryIds: [...remaining[0].categoryIds, ...removed.categoryIds] }
+    }
+    emit(remaining)
   }
 
   function moveCat(catId: string, toBinId: string) {
+    // Remove from every bin, add to target — empty bins are allowed
     const newBins = bins.map(b => ({
       ...b,
       categoryIds: b.id === toBinId
         ? b.categoryIds.includes(catId) ? b.categoryIds : [...b.categoryIds, catId]
         : b.categoryIds.filter(id => id !== catId),
     }))
-    // Remove empty bins (except if only 1 left)
-    const nonEmpty = newBins.filter(b => b.categoryIds.length > 0)
-    emit(nonEmpty.length > 0 ? nonEmpty : newBins)
+    emit(newBins)
   }
 
   return (

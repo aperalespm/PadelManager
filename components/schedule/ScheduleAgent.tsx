@@ -411,7 +411,9 @@ export function ScheduleAgent({
 
   return (
     <>
-    <div className="h-full overflow-y-auto overflow-x-hidden bg-background">
+    {/* ── Outer flex row: main content + distribution panel ──── */}
+    <div className="h-full flex overflow-hidden">
+    <div className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden bg-background">
 
       {/* ── Top bar ─────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 bg-background border-b border-border">
@@ -598,6 +600,41 @@ export function ScheduleAgent({
       </div>
     </div>
 
+    {/* ── Distribution side panel — inline, pushes calendar ────── */}
+    <div className={cn(
+      'shrink-0 border-l border-border bg-background overflow-hidden transition-[width] duration-200 ease-in-out',
+      showDistribution ? 'w-[300px]' : 'w-0'
+    )}>
+      {/* Inner fixed-width div prevents content reflow during animation */}
+      <div className="w-[300px] h-full flex flex-col">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <LayoutGrid className="w-4 h-4 text-accent" />
+            <span className="text-[13px] font-semibold text-foreground">Distribución</span>
+          </div>
+          <button
+            onClick={() => setShowDistribution(false)}
+            className="text-muted-foreground hover:text-foreground p-1 rounded-[5px] hover:bg-muted transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-4 flex-1 overflow-y-auto">
+          <p className="text-[12px] text-muted-foreground mb-4 leading-relaxed">
+            Agrupa las categorías en bloques. Un bloque usa todas las pistas; los bloques se juegan en secuencia.
+          </p>
+          <DistributionConfigurator
+            categories={(tournamentConfig.categories as Array<{ id: string; name: string }>) ?? []}
+            distribution={distribution}
+            onChange={handleDistributionChange}
+            disabled={isAutoGenerating || isGenerating}
+          />
+        </div>
+      </div>
+    </div>
+
+    </div>{/* end outer flex row */}
+
     {/* ── Toast notification ───────────────────────────────────────── */}
     {toast && (
       <div className={cn(
@@ -609,41 +646,6 @@ export function ScheduleAgent({
         </span>
         <span className="leading-snug">{toast.msg}</span>
       </div>
-    )}
-
-    {/* ── Distribution drawer ──────────────────────────────────── */}
-    {showDistribution && (
-      <>
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setShowDistribution(false)}
-        />
-        <div className="fixed right-0 top-0 bottom-0 z-50 w-[340px] bg-background border-l border-border shadow-2xl flex flex-col">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <LayoutGrid className="w-4 h-4 text-accent" />
-              <span className="text-[13px] font-semibold text-foreground">Distribución de pistas</span>
-            </div>
-            <button
-              onClick={() => setShowDistribution(false)}
-              className="text-muted-foreground hover:text-foreground p-1 rounded-[5px] hover:bg-muted transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="p-4 flex-1 overflow-y-auto">
-            <p className="text-[12px] text-muted-foreground mb-4 leading-relaxed">
-              Agrupa las categorías en bloques. Las categorías de un mismo bloque juegan en paralelo; los bloques se juegan en secuencia.
-            </p>
-            <DistributionConfigurator
-              categories={(tournamentConfig.categories as Array<{ id: string; name: string }>) ?? []}
-              distribution={distribution}
-              onChange={handleDistributionChange}
-              disabled={isAutoGenerating || isGenerating}
-            />
-          </div>
-        </div>
-      </>
     )}
 
     {/* ── Fullscreen overlay ─────────────────────────────────────── */}
