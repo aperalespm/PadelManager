@@ -114,7 +114,7 @@ export function DistributionConfigurator({ categories, distribution, onChange, d
       )}
 
       {/* Bins */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-col gap-2">
         {bins.map((bin, binIdx) => {
           const binCats = bin.categoryIds
             .map(id => categories.find(c => c.id === id))
@@ -128,7 +128,7 @@ export function DistributionConfigurator({ categories, distribution, onChange, d
                 if (dragCat.current) moveCat(dragCat.current, bin.id)
                 dragCat.current = null
               }}
-              className="flex-1 min-w-[140px] border border-border rounded-[8px] p-2.5 bg-card space-y-2"
+              className="border border-border rounded-[8px] p-2.5 bg-card space-y-2"
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
