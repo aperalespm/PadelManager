@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament, updateRegistrationConfig, setTournamentStatus } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface TournamentConfigFormProps {
   tournament: Record<string, unknown>
@@ -97,6 +98,12 @@ const DEFAULT_SERVICES = [
   { key: 'tienda',     label: 'Tienda' },
   { key: 'duchas',     label: 'Duchas' },
   { key: 'piscina',    label: 'Piscina' },
+]
+
+const CAT_GENDERS = [
+  { key: 'masculino' as const, label: 'M', title: 'Masculino' },
+  { key: 'femenino'  as const, label: 'F', title: 'Femenino'  },
+  { key: 'mixto'     as const, label: 'X', title: 'Mixto'     },
 ]
 
 const TIEBREAK_CRITERIA_OPTIONS = [
@@ -1709,62 +1716,107 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
                 <span className="ml-1 text-accent font-medium">· {expandedCategories.length} categorías activas</span>
               )}
             </p>
-            <div className="flex flex-col gap-2">
-              {categories.map((cat, i) => (
-                <div key={i} className="flex items-center gap-2 flex-wrap">
-                  <input value={cat.name}
-                    onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, name: e.target.value } : c))}
-                    placeholder="Nombre"
-                    className="w-[120px] px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                  <input value={cat.minScore}
-                    onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, minScore: e.target.value } : c))}
-                    placeholder="3.5"
-                    className="w-14 px-2 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground text-center focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                  <span className="text-[12px] text-muted-foreground">—</span>
-                  <input value={cat.maxScore}
-                    onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, maxScore: e.target.value } : c))}
-                    placeholder="4.25"
-                    className="w-14 px-2 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground text-center focus:outline-none focus:ring-1 focus:ring-accent"
-                  />
-                  {/* Gender toggles */}
-                  <div className="flex gap-1 shrink-0">
-                    {(['masculino', 'femenino', 'mixto'] as const).map(g => {
-                      const gLabel = g === 'masculino' ? 'M' : g === 'femenino' ? 'F' : 'X'
-                      const gTitle = g === 'masculino' ? 'Masculino' : g === 'femenino' ? 'Femenino' : 'Mixto'
-                      const active = cat.genders.includes(g)
+            {/* Grid: name | minScore | — | maxScore | M | F | X | del */}
+            {(() => {
+              const cols = '1fr 56px 12px 56px 36px 36px 36px 28px'
+              return (
+                <div>
+                  {/* Column headers */}
+                  <div className="grid items-center mb-1 px-3 gap-x-2 text-[11px] text-muted-foreground" style={{ gridTemplateColumns: cols }}>
+                    <span>Categoría</span>
+                    <span className="text-center">Nivel mín</span>
+                    <span />
+                    <span className="text-center">Nivel máx</span>
+                    {CAT_GENDERS.map(g => <span key={g.key} className="text-center font-medium">{g.label}</span>)}
+                    <span />
+                  </div>
+
+                  {/* Bulk row */}
+                  <div className="grid items-center px-3 py-2 bg-muted/40 rounded-lg mb-2 gap-x-2" style={{ gridTemplateColumns: cols }}>
+                    <span className="text-[12px] text-muted-foreground">Para todas</span>
+                    <span /><span /><span />
+                    {CAT_GENDERS.map(g => {
+                      const all  = categories.every(c => c.genders.includes(g.key))
+                      const some = categories.some(c => c.genders.includes(g.key))
                       return (
-                        <button key={g} type="button" title={gTitle}
-                          onClick={() => setCategories(cs => cs.map((c, j) => j === i ? {
-                            ...c,
-                            genders: active ? c.genders.filter(x => x !== g) : [...c.genders, g],
-                          } : c))}
-                          className={cn(
-                            'w-7 h-7 rounded-[5px] border text-[11px] font-bold transition-colors',
-                            active ? 'bg-accent border-accent text-white' : 'bg-white border-border text-muted-foreground hover:border-accent/40'
-                          )}>
-                          {gLabel}
-                        </button>
+                        <div key={g.key} className="flex justify-center">
+                          <Checkbox
+                            checked={all ? true : some ? 'indeterminate' : false}
+                            onCheckedChange={() => {
+                              const isAll = categories.every(c => c.genders.includes(g.key))
+                              setCategories(cs => cs.map(c => ({
+                                ...c,
+                                genders: isAll
+                                  ? c.genders.filter(x => x !== g.key)
+                                  : c.genders.includes(g.key) ? c.genders : [...c.genders, g.key],
+                              })))
+                            }}
+                          />
+                        </div>
                       )
                     })}
+                    <span />
                   </div>
-                  <button onClick={() => setPendingDelete({ kind: 'category', idx: i, label: cat.name || `Categoría ${i + 1}` })}
-                    className="w-7 h-7 bg-[var(--error)] text-white rounded-[5px] text-xs font-bold flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity">
-                    ✕
+
+                  {/* Category rows */}
+                  <div className="space-y-1.5">
+                    {categories.map((cat, i) => (
+                      <div key={i} className="grid items-center px-3 py-2.5 border border-border rounded-lg gap-x-2" style={{ gridTemplateColumns: cols }}>
+                        <input value={cat.name}
+                          onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, name: e.target.value } : c))}
+                          placeholder="Nombre"
+                          className="w-full px-2 py-1.5 border border-border rounded-[5px] text-[13px] bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                        <input value={cat.minScore}
+                          onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, minScore: e.target.value } : c))}
+                          placeholder="3.5"
+                          className="w-full px-1 py-1.5 border border-border rounded-[5px] text-[13px] bg-white text-center focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                        <span className="text-[12px] text-muted-foreground text-center">—</span>
+                        <input value={cat.maxScore}
+                          onChange={e => setCategories(cs => cs.map((c, j) => j === i ? { ...c, maxScore: e.target.value } : c))}
+                          placeholder="4.25"
+                          className="w-full px-1 py-1.5 border border-border rounded-[5px] text-[13px] bg-white text-center focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                        {CAT_GENDERS.map(g => (
+                          <div key={g.key} className="flex justify-center">
+                            <Checkbox
+                              checked={cat.genders.includes(g.key)}
+                              onCheckedChange={() => setCategories(cs => cs.map((c, j) => j === i ? {
+                                ...c,
+                                genders: c.genders.includes(g.key)
+                                  ? c.genders.filter(x => x !== g.key)
+                                  : [...c.genders, g.key],
+                              } : c))}
+                            />
+                          </div>
+                        ))}
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() => setPendingDelete({ kind: 'category', idx: i, label: cat.name || `Categoría ${i + 1}` })}
+                            className="w-6 h-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-base leading-none"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setCategories(cs => {
+                      const maxN = cs.reduce((m, c) => { const n = c.name.match(/^(\d+)/); return n ? Math.max(m, parseInt(n[1])) : m }, 0)
+                      return [...cs, { name: `${maxN + 1}ª`, minScore: '', maxScore: '', genders: [] }]
+                    })}
+                    className="mt-2 text-[12px] font-medium text-accent hover:underline"
+                  >
+                    + Añadir categoría
                   </button>
                 </div>
-              ))}
-              <button onClick={() => setCategories(cs => {
-                const maxN = cs.reduce((m, c) => { const n = c.name.match(/^(\d+)/); return n ? Math.max(m, parseInt(n[1])) : m }, 0)
-                return [...cs, { name: `${maxN + 1}ª`, minScore: '', maxScore: '', genders: [] }]
-              })}
-                className="self-start px-3 py-[5px] border border-border rounded-[7px] bg-white text-[12px] font-semibold text-foreground hover:bg-[#f8fafc] transition-colors">
-                + Añadir categoría
-              </button>
-            </div>
+              )
+            })()}
             <p className="text-[11px] text-muted-foreground mt-2">
-              M = Masculino · F = Femenino · X = Mixto · Mín. partidos garantizados por fase de grupos · Parejas que pasan por grupo (target)
+              M = Masculino · F = Femenino · X = Mixto
             </p>
           </div>
 
