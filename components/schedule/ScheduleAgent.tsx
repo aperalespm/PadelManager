@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Calendar, Clock, Send, Maximize2, X, ChevronDown } from 'lucide-react'
-import { chatWithScheduleAgent, saveSchedule, publishSchedule, pollTournamentChanges, generateDeterministicSchedule } from '@/lib/actions/schedule-agent'
+import { chatWithScheduleAgent, saveSchedule, publishSchedule, pollTournamentChanges, generateDeterministicSchedule, saveDistribution } from '@/lib/actions/schedule-agent'
 import { RefreshCw } from 'lucide-react'
 import type { VersionSnapshot } from '@/lib/actions/schedule-agent'
 import { ScheduleCalendar } from '@/components/schedule/ScheduleCalendar'
+import { DistributionConfigurator } from '@/components/schedule/DistributionConfigurator'
 import { cn } from '@/lib/utils'
-import type { ChatMessage, TournamentSchedule } from '@/lib/types/schedule'
+import type { ChatMessage, TournamentSchedule, ScheduleDistribution } from '@/lib/types/schedule'
 
 interface ScheduleAgentProps {
   tournamentId: string
@@ -63,6 +64,9 @@ export function ScheduleAgent({
   const [inputText, setInputText] = useState('')
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
+  const [distribution, setDistribution] = useState<ScheduleDistribution | null>(
+    () => (tournamentConfig.schedule as Record<string, unknown>)?.distribution as ScheduleDistribution ?? null
+  )
 
   const historyRef = useRef<HTMLDivElement>(null)
   const requestsRef = useRef<HTMLDivElement>(null)
@@ -326,9 +330,13 @@ export function ScheduleAgent({
     const text = inputText.trim()
     if (!text || isGenerating) return
     setInputText('')
-    // If registrations changed since last schedule generation, reset the schedule
-    // context so the AI can't copy stale names from the old saved schedule.
     sendMessage(text, registrationsChanged, registrationsChanged)
+  }
+
+  async function handleDistributionChange(newDist: ScheduleDistribution) {
+    setDistribution(newDist)
+    await saveDistribution(tournamentId, newDist)
+    handleAutoGenerate()
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -354,6 +362,25 @@ export function ScheduleAgent({
       )}
 
       <div className="p-5 pb-6">
+        {/* Distribution configurator */}
+        {(() => {
+          const cats = (tournamentConfig.categories as Array<{ id: string; name: string }>) ?? []
+          if (cats.length <= 1) return null
+          return (
+            <div className="mb-4 bg-card border border-border rounded-[10px] p-4">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-3">
+                Distribución de pistas
+              </p>
+              <DistributionConfigurator
+                categories={cats}
+                distribution={distribution}
+                onChange={handleDistributionChange}
+                disabled={isAutoGenerating || isGenerating}
+              />
+            </div>
+          )
+        })()}
+
         {displayedSchedule ? (
           <div className="bg-card border border-border rounded-[10px]" style={{ overflow: 'clip' }}>
             <div className="overflow-x-auto">

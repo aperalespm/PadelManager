@@ -35,3 +35,13 @@ export type ChatMessage = {
   schedule?: TournamentSchedule
   timestamp: string
 }
+
+export type DistributionBin = {
+  id: string
+  categoryIds: string[]
+}
+
+export type ScheduleDistribution = {
+  bins: DistributionBin[]
+  mode: 'complete' | 'by_phase'
+}
