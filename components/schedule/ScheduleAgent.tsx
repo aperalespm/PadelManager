@@ -122,10 +122,7 @@ export function ScheduleAgent({
 
   useEffect(() => {
     if (!autoRegenerate) return
-    const msg = isAssignment
-      ? 'Regenera el horario completo usando las parejas inscritas actuales, respetando los ajustes de sesiones anteriores si los hay.'
-      : 'Regenera el horario completo con la configuración actualizada del torneo, respetando los ajustes de sesiones anteriores si los hay.'
-    sendMessage(msg, true, true)
+    handleAutoGenerate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -1122,11 +1122,17 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
   const [transitionMinutes, setTransitionMinutes] = useState(String((sched.transition_minutes as number) ?? '10'))
 
   const savedPhaseDurs = sched.phase_durations as Record<string, number> | undefined
-  const [phaseDurations, setPhaseDurations] = useState<Record<string, string>>(
-    savedPhaseDurs
-      ? Object.fromEntries(Object.entries(savedPhaseDurs).map(([k, v]) => [k, String(v)]))
-      : {}
-  )
+  const [phaseDurations, setPhaseDurations] = useState<Record<string, string>>(() => {
+    if (savedPhaseDurs) {
+      return Object.fromEntries(Object.entries(savedPhaseDurs).map(([k, v]) => [k, String(v)]))
+    }
+    // Fall back to time_limit_minutes stored in each phase (set by wizard)
+    const savedPhases = vd.phases as Array<{ name: string; match_config?: { time_limit_minutes?: number } }> | undefined
+    if (Array.isArray(savedPhases) && savedPhases.length > 0) {
+      return Object.fromEntries(savedPhases.map(p => [p.name, String(p.match_config?.time_limit_minutes ?? 90)]))
+    }
+    return {}
+  })
 
   const savedBlocks = sched.time_blocks as TimeBlock[] | undefined
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>(
