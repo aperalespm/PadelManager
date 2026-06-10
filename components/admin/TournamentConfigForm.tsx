@@ -106,6 +106,15 @@ const CAT_GENDERS = [
   { key: 'mixto'     as const, label: 'X', title: 'Mixto'     },
 ]
 
+// Normalise gender keys saved by the wizard ('M','F','Mixto') to config-form format
+function normalizeGender(g: string): Gender | null {
+  const l = g.toLowerCase()
+  if (l === 'masculino' || l === 'm') return 'masculino'
+  if (l === 'femenino'  || l === 'f') return 'femenino'
+  if (l === 'mixto'     || l === 'x') return 'mixto'
+  return null
+}
+
 const TIEBREAK_CRITERIA_OPTIONS = [
   { value: 'HEAD_TO_HEAD',      label: 'Enfrentamiento directo' },
   { value: 'SET_DIFFERENCE',    label: 'Diferencia de sets' },
@@ -1103,7 +1112,9 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
           name: (c.name as string) || '',
           minScore: (c.minScore as string) || '',
           maxScore: (c.maxScore as string) || '',
-          genders: Array.isArray(c.genders) ? (c.genders as Gender[]) : [],
+          genders: Array.isArray(c.genders)
+            ? (c.genders as string[]).map(normalizeGender).filter((x): x is Gender => x !== null)
+            : [],
         }))
       : ['PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA'].map(n => ({ name: n, minScore: '', maxScore: '', genders: [] as Gender[] }))
   )
