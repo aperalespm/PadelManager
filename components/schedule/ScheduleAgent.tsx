@@ -386,22 +386,6 @@ export function ScheduleAgent({
                     : 'Generar horario'}
                 </button>
 
-                {/* Secondary: AI agent */}
-                <button
-                  onClick={() => sendMessage(
-                    isAssignment
-                      ? 'Asigna las parejas inscritas a los grupos y genera el horario completo con sus nombres reales.'
-                      : 'Genera el horario óptimo para este torneo.',
-                    true,
-                    isAssignment
-                  )}
-                  disabled={isGenerating || isAutoGenerating}
-                  className="w-full px-5 py-2 border border-border text-muted-foreground text-[12px] font-medium rounded-[8px] hover:bg-muted hover:text-foreground disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  {isGenerating
-                    ? <><span className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />Generando con IA...</>
-                    : 'Generar con IA'}
-                </button>
               </div>
 
               {lastError && (
@@ -544,14 +528,8 @@ export function ScheduleAgent({
           <div className="px-5 py-2.5 bg-[var(--warning-surface)] border-t border-[var(--warning)]/30 flex items-center justify-between gap-3">
             <p className="text-[12px] text-[var(--warning)] font-medium">⚠️ {outOfSyncReason}</p>
             <button
-              onClick={() => sendMessage(
-                hasRealPairs
-                  ? 'Regenera el horario completo. Usa nombres reales solo para las categorías con parejas inscritas. Para las demás usa P1, P2, P3…'
-                  : 'Regenera el horario completo con la configuración actualizada del torneo.',
-                true,
-                true  // resetSchedule: don't carry over invented names
-              )}
-              disabled={isGenerating}
+              onClick={handleAutoGenerate}
+              disabled={isGenerating || isAutoGenerating}
               className="shrink-0 text-[11px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-2.5 py-1 rounded-[6px] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
             >
               Actualizar horario
