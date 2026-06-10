@@ -546,7 +546,7 @@ export async function generateDeterministicSchedule(tournamentId: string): Promi
     const rawPhases  = (vd.phases  as Array<{ name: string; match_config?: Record<string, unknown> }>) ?? []
     const timeBlocks = (sched.time_blocks as Array<{ courtName: string; from: string; to: string }>) ?? []
     const parsedTrans = parseInt(String(sched.transition_minutes ?? ''))
-    const rawPhaseDurations = vd.phase_durations as PhaseDurations | undefined
+    const rawPhaseDurations = (sched.phase_durations ?? vd.phase_durations) as PhaseDurations | undefined
 
     const rawDistribution = sched.distribution as ScheduleDistribution | undefined
 
