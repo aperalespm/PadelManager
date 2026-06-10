@@ -44,7 +44,7 @@ const DEFAULT: WizardData = {
   lunchTime: '14:00',
   lunchDuration: 60,
   categories: [{ name: '1ª', genders: ['M', 'F'] }],
-  phaseDurations: { groups: 60, roundOf16: 75, quarterFinal: 75, semiFinal: 90, final: 90 },
+  phaseDurations: { groups: 30, roundOf16: 30, quarterFinal: 30, semiFinal: 45, final: 60 },
   minGroups: 2,
   minTeamsPerGroup: 4,
   teamsAdvancePerGroup: 2,
