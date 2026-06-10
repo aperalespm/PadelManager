@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Calendar, Clock, Send, Maximize2, X, ChevronDown } from 'lucide-react'
+import { Calendar, Clock, Send, Maximize2, X, ChevronDown, LayoutGrid } from 'lucide-react'
 import { chatWithScheduleAgent, saveSchedule, publishSchedule, pollTournamentChanges, generateDeterministicSchedule, saveDistribution } from '@/lib/actions/schedule-agent'
 import { RefreshCw } from 'lucide-react'
 import type { VersionSnapshot } from '@/lib/actions/schedule-agent'
@@ -67,6 +67,7 @@ export function ScheduleAgent({
   const [distribution, setDistribution] = useState<ScheduleDistribution | null>(
     () => (tournamentConfig.schedule as Record<string, unknown>)?.distribution as ScheduleDistribution ?? null
   )
+  const [showDistribution, setShowDistribution] = useState(false)
 
   const historyRef = useRef<HTMLDivElement>(null)
   const requestsRef = useRef<HTMLDivElement>(null)
@@ -362,25 +363,6 @@ export function ScheduleAgent({
       )}
 
       <div className="p-5 pb-6">
-        {/* Distribution configurator */}
-        {(() => {
-          const cats = (tournamentConfig.categories as Array<{ id: string; name: string }>) ?? []
-          if (cats.length <= 1) return null
-          return (
-            <div className="mb-4 bg-card border border-border rounded-[10px] p-4">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-3">
-                Distribución de pistas
-              </p>
-              <DistributionConfigurator
-                categories={cats}
-                distribution={distribution}
-                onChange={handleDistributionChange}
-                disabled={isAutoGenerating || isGenerating}
-              />
-            </div>
-          )
-        })()}
-
         {displayedSchedule ? (
           <div className="bg-card border border-border rounded-[10px]" style={{ overflow: 'clip' }}>
             <div className="overflow-x-auto">
@@ -506,6 +488,20 @@ export function ScheduleAgent({
           </div>
 
           <div className="flex items-center gap-2">
+            {(tournamentConfig.categories as Array<unknown>)?.length > 1 && (
+              <button
+                onClick={() => setShowDistribution(s => !s)}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium rounded-[7px] border transition-colors',
+                  showDistribution
+                    ? 'bg-accent text-white border-accent'
+                    : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Distribución
+              </button>
+            )}
             <button
               onClick={handleCheckChanges}
               disabled={isChecking || isGenerating}
@@ -613,6 +609,41 @@ export function ScheduleAgent({
         </span>
         <span className="leading-snug">{toast.msg}</span>
       </div>
+    )}
+
+    {/* ── Distribution drawer ──────────────────────────────────── */}
+    {showDistribution && (
+      <>
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowDistribution(false)}
+        />
+        <div className="fixed right-0 top-0 bottom-0 z-50 w-[340px] bg-background border-l border-border shadow-2xl flex flex-col">
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <LayoutGrid className="w-4 h-4 text-accent" />
+              <span className="text-[13px] font-semibold text-foreground">Distribución de pistas</span>
+            </div>
+            <button
+              onClick={() => setShowDistribution(false)}
+              className="text-muted-foreground hover:text-foreground p-1 rounded-[5px] hover:bg-muted transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-4 flex-1 overflow-y-auto">
+            <p className="text-[12px] text-muted-foreground mb-4 leading-relaxed">
+              Agrupa las categorías en bloques. Las categorías de un mismo bloque juegan en paralelo; los bloques se juegan en secuencia.
+            </p>
+            <DistributionConfigurator
+              categories={(tournamentConfig.categories as Array<{ id: string; name: string }>) ?? []}
+              distribution={distribution}
+              onChange={handleDistributionChange}
+              disabled={isAutoGenerating || isGenerating}
+            />
+          </div>
+        </div>
+      </>
     )}
 
     {/* ── Fullscreen overlay ─────────────────────────────────────── */}
