@@ -134,6 +134,16 @@ export async function publishTournament(id: string) {
   return { data: rows[0] }
 }
 
+export async function setTournamentStatus(id: string, status: 'draft' | 'open' | 'active' | 'finished') {
+  const rows = await sql`
+    UPDATE tournaments SET status = ${status}, updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  `
+  if (!rows[0]) return { error: 'No se pudo cambiar el estado' }
+  return { data: rows[0] }
+}
+
 export async function closeTournamentRegistrations(id: string) {
   const rows = await sql`
     UPDATE tournaments SET status = 'active', updated_at = NOW()
@@ -294,8 +304,11 @@ export async function createTournamentFromWizard(input: unknown): Promise<
     categories: d.categories,
     phase_durations: pd,
     phases: [
-      { name: 'Grupos', match_config: { time_limit_minutes: pd.groups } },
-      { name: 'Eliminatoria', match_config: { time_limit_minutes: pd.final } },
+      { name: 'Grupos',           match_config: { time_limit_minutes: pd.groups } },
+      { name: 'Octavos de final', match_config: { time_limit_minutes: pd.roundOf16 } },
+      { name: 'Cuartos de final', match_config: { time_limit_minutes: pd.quarterFinal } },
+      { name: 'Semifinal',        match_config: { time_limit_minutes: pd.semiFinal } },
+      { name: 'Final',            match_config: { time_limit_minutes: pd.final } },
     ],
     num_groups: d.minGroups,
     teams_per_group: d.minTeamsPerGroup,

@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef, useEffect, Children, isValidElement } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament, updateRegistrationConfig } from '@/lib/actions/tournaments'
+import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament, updateRegistrationConfig, setTournamentStatus } from '@/lib/actions/tournaments'
 import { cn } from '@/lib/utils'
 
 interface TournamentConfigFormProps {
@@ -1019,6 +1019,19 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
   )
 }
 
+// ── Status chip constants ─────────────────────────────────────────────────────
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Borrador', open: 'Abierto', active: 'En curso', finished: 'Finalizado',
+}
+const STATUS_CHIP: Record<string, string> = {
+  draft:    'bg-muted text-muted-foreground border-border',
+  open:     'bg-[var(--accent-surface)] text-accent border-accent/30',
+  active:   'bg-[var(--warning-surface,#fff7ed)] text-[var(--warning)] border-[var(--warning)]/30',
+  finished: 'bg-[var(--success-surface,#f0fdf4)] text-[var(--success)] border-[var(--success)]/30',
+}
+const ALL_STATUSES = ['draft', 'open', 'active', 'finished'] as const
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export function TournamentConfigForm({ tournament: t, otherTournaments, hasExistingMatches }: TournamentConfigFormProps) {
@@ -1026,10 +1039,14 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
   const [isDeleting, startDelete] = useTransition()
   const [isDuplicating, startDuplicate] = useTransition()
   const [isPublishing, startPublish] = useTransition()
+  const [isChangingStatus, startStatusChange] = useTransition()
   const [tab, setTab] = useState('datos')
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmDuplicate, setConfirmDuplicate] = useState(false)
+  const [currentStatus, setCurrentStatus] = useState((t.status as string) ?? 'draft')
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+  const statusDropdownRef = useRef<HTMLDivElement>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1122,11 +1139,17 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
   const [transitionMinutes, setTransitionMinutes] = useState(String((sched.transition_minutes as number) ?? '10'))
 
   const savedPhaseDurs = sched.phase_durations as Record<string, number> | undefined
-  const [phaseDurations, setPhaseDurations] = useState<Record<string, string>>(
-    savedPhaseDurs
-      ? Object.fromEntries(Object.entries(savedPhaseDurs).map(([k, v]) => [k, String(v)]))
-      : {}
-  )
+  const [phaseDurations, setPhaseDurations] = useState<Record<string, string>>(() => {
+    if (savedPhaseDurs) {
+      return Object.fromEntries(Object.entries(savedPhaseDurs).map(([k, v]) => [k, String(v)]))
+    }
+    // Fall back to time_limit_minutes stored in each phase (set by wizard)
+    const savedPhases = vd.phases as Array<{ name: string; match_config?: { time_limit_minutes?: number } }> | undefined
+    if (Array.isArray(savedPhases) && savedPhases.length > 0) {
+      return Object.fromEntries(savedPhases.map(p => [p.name, String(p.match_config?.time_limit_minutes ?? 90)]))
+    }
+    return {}
+  })
 
   const savedBlocks = sched.time_blocks as TimeBlock[] | undefined
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>(
@@ -1271,6 +1294,33 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
       router.push(`/admin/${t.id as string}`)
     })
   }
+
+  function handleStatusChange(newStatus: string) {
+    setStatusDropdownOpen(false)
+    if (newStatus === 'open' && (!name.trim() || name.trim() === 'Nuevo torneo')) {
+      setError('Debes asignar un nombre al torneo antes de publicar')
+      return
+    }
+    startStatusChange(async () => {
+      setError('')
+      await saveData()
+      const result = await setTournamentStatus(t.id as string, newStatus as 'draft' | 'open' | 'active' | 'finished')
+      if ('error' in result) { setError(result.error as string); return }
+      setCurrentStatus(newStatus)
+      router.refresh()
+    })
+  }
+
+  useEffect(() => {
+    if (!statusDropdownOpen) return
+    function handler(e: MouseEvent) {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setStatusDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [statusDropdownOpen])
 
   // ── Autosave ──────────────────────────────────────────────────
   async function saveData() {
@@ -1471,12 +1521,43 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
             </button>
           )}
 
-          {(t.status as string) === 'draft' && (
-            <button onClick={handlePublish} disabled={isPublishing}
-              className="px-[17px] py-[9px] bg-accent rounded-[7px] text-[13px] font-semibold text-white hover:bg-[#1d4ed8] transition-colors disabled:opacity-50">
-              {isPublishing ? 'Publicando...' : 'Publicar torneo'}
+          {/* Status chip dropdown */}
+          <div className="relative" ref={statusDropdownRef}>
+            <button
+              onClick={() => setStatusDropdownOpen(o => !o)}
+              disabled={isChangingStatus}
+              className={cn(
+                'flex items-center gap-2 px-[14px] py-[8px] rounded-[8px] border text-[13px] font-semibold transition-colors disabled:opacity-50',
+                STATUS_CHIP[currentStatus] ?? STATUS_CHIP.draft
+              )}
+            >
+              {currentStatus === 'active' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)] animate-pulse shrink-0" />
+              )}
+              {isChangingStatus ? 'Cambiando...' : STATUS_LABELS[currentStatus] ?? currentStatus}
+              <span className={cn('text-[13px] ml-0.5 shrink-0 transition-transform duration-150', statusDropdownOpen && 'rotate-180')}>▾</span>
             </button>
-          )}
+
+            {statusDropdownOpen && (
+              <div className="absolute top-full right-0 mt-1.5 z-30 bg-white border border-border rounded-[10px] shadow-xl p-1.5 min-w-[180px]">
+                {ALL_STATUSES.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => s !== currentStatus && handleStatusChange(s)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-[9px] rounded-[7px] text-[13px] font-semibold transition-colors',
+                      s === currentStatus
+                        ? cn(STATUS_CHIP[s], 'cursor-default')
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    {s === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)] shrink-0" />}
+                    {STATUS_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
