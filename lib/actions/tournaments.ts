@@ -134,6 +134,16 @@ export async function publishTournament(id: string) {
   return { data: rows[0] }
 }
 
+export async function setTournamentStatus(id: string, status: 'draft' | 'open' | 'active' | 'finished') {
+  const rows = await sql`
+    UPDATE tournaments SET status = ${status}, updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  `
+  if (!rows[0]) return { error: 'No se pudo cambiar el estado' }
+  return { data: rows[0] }
+}
+
 export async function closeTournamentRegistrations(id: string) {
   const rows = await sql`
     UPDATE tournaments SET status = 'active', updated_at = NOW()
