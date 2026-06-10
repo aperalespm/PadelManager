@@ -357,19 +357,28 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   const numWaves = assignments[assignments.length - 1].wave + 1
 
   // ── Compute optimal format per category ───────────────────────────────────
+  // All categories use the same court budget (floor division) so extra courts
+  // from uneven division only speed up scheduling, never inflate pair count for
+  // some categories at the expense of others.
+
+  const courtsForFormat = numCats <= numCourts
+    ? Math.max(1, Math.floor(numCourts / numCats))
+    : 1
+
+  const sharedFormat = findCategoryFormat(
+    courtsForFormat,
+    availableMins,
+    trans,
+    pd,
+    format.minGroups,
+    format.minTeamsPerGroup,
+    format.teamsAdvancePerGroup,
+    format.minMatchesPerTeam
+  )
 
   const catFormats: Record<string, { numGroups: number; teamsPerGroup: number }> = {}
   for (const a of assignments) {
-    catFormats[a.cat.id] = findCategoryFormat(
-      a.courtIndices.length,
-      availableMins,
-      trans,
-      pd,
-      format.minGroups,
-      format.minTeamsPerGroup,
-      format.teamsAdvancePerGroup,
-      format.minMatchesPerTeam
-    )
+    catFormats[a.cat.id] = sharedFormat
   }
 
   // ── Court state ───────────────────────────────────────────────────────────
