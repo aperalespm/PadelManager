@@ -225,8 +225,11 @@ function findCategoryFormat(
   let bestG = minGroups
   let bestT = minTeamsPerGroup
 
+  // Start from the minimum feasible t, not minTeamsPerGroup — allows g=4,t=3 > g=2,t=4 even when minTeamsPerGroup=4
+  const tFloor = Math.max(2, minMatchesPerTeam + 1)
+
   for (let g = minGroups; g <= 20; g++) {
-    for (let t = minTeamsPerGroup; t <= 10; t++) {
+    for (let t = tFloor; t <= 10; t++) {
       if (t - 1 < minMatchesPerTeam) continue
 
       const groupMatches = matchesInGroups(g, t)
