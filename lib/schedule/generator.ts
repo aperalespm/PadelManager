@@ -212,7 +212,7 @@ function knockoutTimeMins(
 
 // ── Per-category format optimizer ─────────────────────────────────────────────
 
-function findCategoryFormat(
+export function findCategoryFormat(
   numCourts: number,
   availableMins: number,
   trans: number,
