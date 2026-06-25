@@ -4,6 +4,7 @@ import { useState, useTransition, useRef, useEffect, Children, isValidElement } 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { updateTournament, saveTournamentPhases, deleteTournament, duplicateTournament, publishTournament, updateRegistrationConfig, setTournamentStatus } from '@/lib/actions/tournaments'
+import { findCategoryFormat, buildPhaseDurations } from '@/lib/schedule/generator'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 
@@ -1482,12 +1483,36 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
 
   const expandedCategories = expandCategories(categories)
 
-  // ── Capacity = brackets × groups × teams/group ───────────────────────────
-  // Courts/schedule are a scheduling constraint, not a registration cap.
+  // ── Capacity — run the real optimizer with current config ────────────────
   const numBrackets = expandedCategories.length || 1
   const _gs  = Math.max(2, parseInt(formatState.teams_per_group) || 3)
   const _tg  = Math.max(1, parseInt(formatState.num_groups) || 3)
-  const capacityEstimate = _tg * _gs * numBrackets
+
+  const { capacityEstimate, optG, optT } = (() => {
+    const numCourts = namedCourts.length || 1
+    const numCats   = expandedCategories.length || 1
+    const toM = (s: string) => { const [h=0,m=0] = s.split(':').map(Number); return h*60+m }
+    const avail = toM(schedEnd) - toM(schedStart) - (lunchEnabled ? (parseInt(lunchDuration)||60) : 0)
+    if (avail <= 0) return { capacityEstimate: _tg * _gs * numBrackets, optG: _tg, optT: _gs }
+    const trans = parseInt(transitionMinutes) || 0
+    const pd = buildPhaseDurations(phases.map(p => ({
+      name: p.name,
+      maxDurationMins: parseInt(phaseDurations[p.name] ?? '') || (p.match_config?.time_limit_minutes as unknown as number) || 90,
+    })))
+    const teamsAdv     = Math.max(1, parseInt(formatState.teams_advance_per_group) || 2)
+    const minMatchesPT = Math.max(1, parseInt(formatState.min_matches_per_team)    || 2)
+    const base  = Math.floor(numCourts / numCats)
+    const extra = numCourts % numCats
+    let total = 0
+    let firstOptG = _tg, firstOptT = _gs
+    for (let i = 0; i < numCats; i++) {
+      const cfc = Math.max(1, base + (i < extra ? 1 : 0))
+      const fmt = findCategoryFormat(cfc, avail, trans, pd, _tg, _gs, teamsAdv, minMatchesPT)
+      total += fmt.numGroups * fmt.teamsPerGroup
+      if (i === 0) { firstOptG = fmt.numGroups; firstOptT = fmt.teamsPerGroup }
+    }
+    return { capacityEstimate: total, optG: firstOptG, optT: firstOptT }
+  })()
 
   // ── Court feasibility (warn if schedule can't fit all group matches) ──────
   const courtWarning = (() => {
@@ -1655,7 +1680,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
             <p className="text-[22px] font-extrabold leading-none tracking-[-0.5px] text-accent">
               {capacityEstimate} <span className="text-[13px] font-semibold text-muted-foreground">parejas</span>
             </p>
-            <p className="text-[11px] text-muted-foreground mt-1">{numBrackets} bracket{numBrackets !== 1 ? 's' : ''} · {_tg} grupos · {_gs} eq/grupo</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{numBrackets} bracket{numBrackets !== 1 ? 's' : ''} · {optG} grupos · {optT} eq/grupo</p>
           </div>
           <div className="flex-1 px-5 py-3 border-r border-border">
             <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Precio por persona</p>

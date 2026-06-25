@@ -29,7 +29,31 @@ function groupsElimPhases(numGroups: number, teamsAdvance: number): string[] {
   return phases
 }
 
-function BracketDiagram({ phases, matchCounts }: { phases: string[]; matchCounts: number[] }) {
+function buildConsolationPhases(consolTeams: number): string[] {
+  if (consolTeams < 2) return []
+  const depth = Math.ceil(Math.log2(Math.max(consolTeams, 2)))
+  const phases: string[] = []
+  for (let i = 0; i < depth; i++) {
+    const teamsLeft = Math.pow(2, depth - i)
+    if (teamsLeft === 2) phases.push('Consol. Final')
+    else if (teamsLeft === 4) phases.push('Consol. SF')
+    else if (teamsLeft === 8) phases.push('Consol. QF')
+    else phases.push(`Consol. R${i + 1}`)
+  }
+  return phases
+}
+
+function BracketDiagram({
+  phases,
+  matchCounts,
+  winnerLabel = 'Campeón',
+  winnerEmoji = '🏆',
+}: {
+  phases: string[]
+  matchCounts: number[]
+  winnerLabel?: string
+  winnerEmoji?: string
+}) {
   if (!phases.length) return null
 
   const totalH = matchCounts[0] * BMATCH
@@ -70,7 +94,7 @@ function BracketDiagram({ phases, matchCounts }: { phases: string[]; matchCounts
         </div>
       ))}
       <div className="absolute text-[9px] font-bold uppercase tracking-wide text-center text-muted-foreground"
-        style={{ left: lr * (BCOL + BGAP) + BCOL + BGAP / 2 - 8, top: 0, width: CHAMP_W }}>Campeón</div>
+        style={{ left: lr * (BCOL + BGAP) + BCOL + BGAP / 2 - 8, top: 0, width: CHAMP_W }}>{winnerLabel}</div>
 
       <svg className="absolute pointer-events-none" style={{ left: 0, top: HDR_H }} width={totalW} height={totalH}>
         {segs.map((s, i) => (
@@ -95,7 +119,7 @@ function BracketDiagram({ phases, matchCounts }: { phases: string[]; matchCounts
 
       <div className="absolute flex items-center justify-center"
         style={{ left: champMidX, top: HDR_H + schMatchTop(lr, 0) + BSLOT / 2 - 14, width: 28, height: 28 }}>
-        <span className="text-[22px] leading-none">🏆</span>
+        <span className="text-[22px] leading-none">{winnerEmoji}</span>
       </div>
     </div>
   )
@@ -162,17 +186,34 @@ interface GroupBracketViewProps {
   numGroups: number
   teamsAdvancePerGroup: number
   isDraft?: boolean
+  catFormats?: Record<string, { numGroups: number; teamsPerGroup: number }>
+  minMatchesPerTeam?: number
 }
 
-export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup, isDraft }: GroupBracketViewProps) {
+export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup, isDraft, catFormats, minMatchesPerTeam }: GroupBracketViewProps) {
   const catLabels = Object.keys(catMap).sort()
   const [selCat, setSelCat] = useState(catLabels[0] ?? '')
 
+  // Use per-category format when available
+  const catFmt = catFormats?.[selCat]
+  const activeNumGroups = catFmt?.numGroups ?? numGroups
+  const activeTPG = catFmt?.teamsPerGroup ?? 3
+
   // Compute elimination phases for the bracket diagram
-  const elimPhases = groupsElimPhases(numGroups, teamsAdvancePerGroup).slice(1)
+  const elimPhases = groupsElimPhases(activeNumGroups, teamsAdvancePerGroup).slice(1)
   const mc: number[] = []
   let n = 1
   for (let i = elimPhases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
+
+  // Consolation bracket — shown when group matches alone don't reach the minimum
+  const needsConsolation = minMatchesPerTeam != null
+    && activeTPG > teamsAdvancePerGroup
+    && activeTPG - 1 < minMatchesPerTeam
+  const consolTeams = needsConsolation ? activeNumGroups * (activeTPG - teamsAdvancePerGroup) : 0
+  const cPhases = consolTeams >= 2 ? buildConsolationPhases(consolTeams) : []
+  const cmc: number[] = []
+  let cn = 1
+  for (let i = cPhases.length - 1; i >= 0; i--) { cmc[i] = cn; cn *= 2 }
 
   const groupMap = catMap[selCat] ?? {}
   const groupLabels = Object.keys(groupMap).sort()
@@ -223,10 +264,26 @@ export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup, isDr
           {/* Arrow */}
           <div className="flex items-center self-center shrink-0 text-muted-foreground text-lg pt-4">→</div>
 
-          {/* Elimination bracket */}
-          <div className="shrink-0">
-            <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Eliminatoria</p>
-            <BracketDiagram phases={elimPhases} matchCounts={mc} />
+          {/* Elimination + Consolation brackets */}
+          <div className="shrink-0 flex flex-col gap-6">
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Eliminatoria</p>
+              <BracketDiagram phases={elimPhases} matchCounts={mc} />
+            </div>
+            {cPhases.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--warning)]">Consolación</p>
+                  <span className="text-[9px] text-muted-foreground">· {consolTeams} equipos eliminados</span>
+                </div>
+                <BracketDiagram
+                  phases={cPhases}
+                  matchCounts={cmc}
+                  winnerLabel="3er puesto"
+                  winnerEmoji="🥉"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
