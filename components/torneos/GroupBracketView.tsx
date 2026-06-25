@@ -29,6 +29,12 @@ function groupsElimPhases(numGroups: number, teamsAdvance: number): string[] {
   return phases
 }
 
+function localNextPow2(n: number): number {
+  let p = 1
+  while (p < n) p *= 2
+  return p
+}
+
 function buildConsolationPhases(consolTeams: number): string[] {
   if (consolTeams < 2) return []
   const depth = Math.ceil(Math.log2(Math.max(consolTeams, 2)))
@@ -199,21 +205,42 @@ export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup, isDr
   const activeNumGroups = catFmt?.numGroups ?? numGroups
   const activeTPG = catFmt?.teamsPerGroup ?? 3
 
-  // Compute elimination phases for the bracket diagram
-  const elimPhases = groupsElimPhases(activeNumGroups, teamsAdvancePerGroup).slice(1)
-  const mc: number[] = []
-  let n = 1
-  for (let i = elimPhases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
-
-  // Consolation bracket — shown when group matches alone don't reach the minimum
-  const needsConsolation = minMatchesPerTeam != null
+  // Extra-match logic: when group matches alone don't reach the minimum
+  const needsExtra = minMatchesPerTeam != null
     && activeTPG > teamsAdvancePerGroup
     && activeTPG - 1 < minMatchesPerTeam
-  const consolTeams = needsConsolation ? activeNumGroups * (activeTPG - teamsAdvancePerGroup) : 0
-  const cPhases = consolTeams >= 2 ? buildConsolationPhases(consolTeams) : []
+  const directQualifiers = activeNumGroups * teamsAdvancePerGroup
+  const extraSpots = localNextPow2(directQualifiers) - directQualifiers
+  const elimTeams = needsExtra ? activeNumGroups * (activeTPG - teamsAdvancePerGroup) : 0
+
+  // Wild card: spare KO slots exist → 3rd-placers compete to fill them
+  const showWildCard = needsExtra && extraSpots > 0 && elimTeams > 0
+  const wcMatchCount = showWildCard ? Math.max(0, elimTeams - extraSpots) : 0
+
+  // Consolation: KO is already full → separate bracket for 3rd-placers
+  const showConsolation = needsExtra && extraSpots === 0 && elimTeams >= 2
+  const cPhases = showConsolation ? buildConsolationPhases(elimTeams) : []
   const cmc: number[] = []
   let cn = 1
   for (let i = cPhases.length - 1; i >= 0; i--) { cmc[i] = cn; cn *= 2 }
+
+  // KO bracket uses full nextPow2 team count when wild card is active
+  const koTeamCount = showWildCard ? localNextPow2(directQualifiers) : directQualifiers
+
+  // Compute elimination phases for the bracket diagram
+  const elimPhaseCount = Math.ceil(Math.log2(Math.max(koTeamCount, 2)))
+  const elimPhases: string[] = []
+  for (let i = 0; i < elimPhaseCount; i++) {
+    const teamsLeft = Math.pow(2, elimPhaseCount - i)
+    if (teamsLeft === 2) elimPhases.push('Final')
+    else if (teamsLeft === 4) elimPhases.push('Semifinal')
+    else if (teamsLeft === 8) elimPhases.push('Cuartos de final')
+    else if (teamsLeft === 16) elimPhases.push('Octavos de final')
+    else elimPhases.push(`Ronda ${teamsLeft}`)
+  }
+  const mc: number[] = []
+  let n = 1
+  for (let i = elimPhases.length - 1; i >= 0; i--) { mc[i] = n; n *= 2 }
 
   const groupMap = catMap[selCat] ?? {}
   const groupLabels = Object.keys(groupMap).sort()
@@ -264,17 +291,32 @@ export function GroupBracketView({ catMap, numGroups, teamsAdvancePerGroup, isDr
           {/* Arrow */}
           <div className="flex items-center self-center shrink-0 text-muted-foreground text-lg pt-4">→</div>
 
-          {/* Elimination + Consolation brackets */}
+          {/* Elimination bracket + optional wild card / consolation */}
           <div className="shrink-0 flex flex-col gap-6">
+            {/* Wild card: shown before the main KO when spare slots exist */}
+            {showWildCard && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--warning)]">Repechaje</p>
+                  <span className="text-[9px] text-muted-foreground">
+                    · {wcMatchCount} partido{wcMatchCount !== 1 ? 's' : ''}{extraSpots - wcMatchCount > 0 ? ` + ${extraSpots - wcMatchCount} bye` : ''} → 8°s de final
+                  </span>
+                </div>
+                {wcMatchCount > 0 && (
+                  <BracketDiagram phases={['Repechaje']} matchCounts={[wcMatchCount]} winnerLabel="→ cuartos" winnerEmoji="→" />
+                )}
+              </div>
+            )}
             <div>
               <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mb-2">Eliminatoria</p>
               <BracketDiagram phases={elimPhases} matchCounts={mc} />
             </div>
-            {cPhases.length > 0 && (
+            {/* Consolation: shown when KO is full and 3rd-placers need extra matches */}
+            {showConsolation && cPhases.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--warning)]">Consolación</p>
-                  <span className="text-[9px] text-muted-foreground">· {consolTeams} equipos eliminados</span>
+                  <span className="text-[9px] text-muted-foreground">· {elimTeams} equipos eliminados</span>
                 </div>
                 <BracketDiagram
                   phases={cPhases}

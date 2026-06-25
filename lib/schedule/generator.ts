@@ -210,6 +210,14 @@ function knockoutTimeMins(
   return time
 }
 
+// ── Power-of-2 helper ────────────────────────────────────────────────────────
+
+function nextPow2(n: number): number {
+  let p = 1
+  while (p < n) p *= 2
+  return p
+}
+
 // ── Consolation bracket time ──────────────────────────────────────────────────
 // Single-elimination bracket for eliminated teams, all matches use matchDuration.
 
@@ -248,27 +256,41 @@ export function findCategoryFormat(
   for (let g = minGroups; g <= 20; g++) {
     for (let t = minTeamsPerGroup; t <= 10; t++) {
       const groupMatchesPerTeam = t - 1
-      const needsConsolation = groupMatchesPerTeam < minMatchesPerTeam
+      const needsExtra = groupMatchesPerTeam < minMatchesPerTeam
+      const directQualifiers = g * teamsAdvance
+      const extraSpots = nextPow2(directQualifiers) - directQualifiers
+      const eliminatedTeams = g * (t - teamsAdvance)
 
-      if (needsConsolation) {
-        const consolTeams = g * (t - teamsAdvance)
-        if (consolTeams < 2) continue
-        const consolDepth = Math.ceil(Math.log2(consolTeams))
-        if (groupMatchesPerTeam + consolDepth < minMatchesPerTeam) continue
+      if (needsExtra) {
+        if (extraSpots > 0 && eliminatedTeams > 0) {
+          // Wild card: each eliminated team gets exactly 1 extra match (either plays or gets bye to QF)
+          if (groupMatchesPerTeam + 1 < minMatchesPerTeam) continue
+        } else {
+          // Consolation: single-elimination bracket for eliminated teams
+          if (eliminatedTeams < 2) continue
+          const consolDepth = Math.ceil(Math.log2(eliminatedTeams))
+          if (groupMatchesPerTeam + consolDepth < minMatchesPerTeam) continue
+        }
       }
 
       const groupMatches = matchesInGroups(g, t)
       const groupSlots = Math.ceil(groupMatches / numCourts)
       const groupTime = groupSlots * (pd.groups + trans)
 
-      const knockTeams = g * teamsAdvance
-      const koTime = knockoutTimeMins(knockTeams, numCourts, pd, trans)
+      // Wild card: extra matches before KO to fill spare bracket slots
+      const wcMatchCount = (needsExtra && extraSpots > 0 && eliminatedTeams > 0)
+        ? Math.max(0, eliminatedTeams - extraSpots) : 0
+      const wcTime = wcMatchCount > 0
+        ? Math.ceil(wcMatchCount / numCourts) * (pd.groups + trans) : 0
 
-      const consolTime = needsConsolation
-        ? consolationTimeMins(g * (t - teamsAdvance), numCourts, pd.groups, trans)
-        : 0
+      // KO uses full nextPow2 bracket when wild card is active
+      const koTeams = (needsExtra && extraSpots > 0) ? nextPow2(directQualifiers) : directQualifiers
+      const koTime = knockoutTimeMins(koTeams, numCourts, pd, trans)
 
-      if (groupTime + koTime + consolTime > availableMins) break
+      const consolTime = (needsExtra && extraSpots === 0)
+        ? consolationTimeMins(eliminatedTeams, numCourts, pd.groups, trans) : 0
+
+      if (groupTime + wcTime + koTime + consolTime > availableMins) break
 
       if (g * t > bestG * bestT) {
         bestG = g
@@ -436,6 +458,56 @@ function _schedConsolation(
   }
 }
 
+function _schedWildCard(
+  catId: string,
+  catName: string,
+  catCourts: CourtState[],
+  eliminatedTeams: number,
+  extraSpots: number,
+  matchDuration: number,
+  trans: number,
+  endMins: number,
+  out: ScheduleMatch[],
+  warnings: string[]
+): void {
+  const wcMatchCount = Math.max(0, eliminatedTeams - extraSpots)
+  if (wcMatchCount === 0) return
+
+  const phaseName = 'Repechaje'
+  for (let mi = 0; mi < wcMatchCount; mi++) {
+    const courtForMatch = catCourts.reduce((best, cs) => cs.cursor < best.cursor ? cs : best)
+    const start = skipBlocked(courtForMatch.cursor, matchDuration, courtForMatch.blocked)
+    if (start + matchDuration > endMins) {
+      warnings.push(`Sin tiempo para ${phaseName} de ${catName}`)
+      break
+    }
+    // The two lowest-ranked 3rd-placers play; best 3rd gets a bye
+    const byeRank = extraSpots  // teams getting byes (best-ranked)
+    const p1Label = `3° Gr.${String.fromCharCode(65 + byeRank + mi * 2)}`
+    const p2Label = `3° Gr.${String.fromCharCode(65 + byeRank + mi * 2 + 1)}`
+
+    out.push({
+      id: `${catId}_WC_m${mi + 1}`,
+      courtNumber: courtForMatch.courtNumber,
+      courtName: courtForMatch.name,
+      startTime: toTime(start),
+      endTime: toTime(start + matchDuration),
+      categoryId: catId,
+      categoryName: catName,
+      groupId: null,
+      phase: phaseName,
+      pair1: p1Label,
+      pair2: p2Label,
+      matchLabel: `${catName} · ${phaseName}`,
+      status: 'scheduled',
+    })
+    courtForMatch.cursor = start + matchDuration + trans
+  }
+
+  const roundEnd = Math.max(...catCourts.map(c => c.cursor))
+  catCourts.forEach(c => { c.cursor = roundEnd })
+}
+
 function _schedKO(
   catId: string,
   catName: string,
@@ -446,9 +518,10 @@ function _schedKO(
   trans: number,
   endMins: number,
   out: ScheduleMatch[],
-  warnings: string[]
+  warnings: string[],
+  knockTeamsOverride?: number
 ): void {
-  const knockTeams = numGroups * teamsAdvance
+  const knockTeams = knockTeamsOverride ?? (numGroups * teamsAdvance)
   if (knockTeams < 2) return
 
   let remaining = knockTeams
@@ -664,10 +737,19 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
         _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
         _barrierCat(catCourts)
-        _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings)
-        if (catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam) {
-          const consolTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
-          _schedConsolation(cat.id, cat.name, catCourts, consolTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
+        {
+          const needsExtra = catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam
+          const directQ = catFmt.numGroups * format.teamsAdvancePerGroup
+          const extraSpots = nextPow2(directQ) - directQ
+          const elimTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
+          if (needsExtra && extraSpots > 0 && elimTeams > 0) {
+            _schedWildCard(cat.id, cat.name, catCourts, elimTeams, extraSpots, pd.groups, trans, endMins, scheduledMatches, warnings)
+          }
+          const koTeams = (needsExtra && extraSpots > 0) ? nextPow2(directQ) : undefined
+          _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings, koTeams)
+          if (needsExtra && extraSpots === 0 && elimTeams >= 2) {
+            _schedConsolation(cat.id, cat.name, catCourts, elimTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
+          }
         }
       }
 
@@ -700,10 +782,19 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
         const indices = bin.catCourts.get(cat.id) ?? [0]
         const catCourts = indices.map(i => courtStates[i])
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings)
-        if (catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam) {
-          const consolTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
-          _schedConsolation(cat.id, cat.name, catCourts, consolTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
+        {
+          const needsExtra = catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam
+          const directQ = catFmt.numGroups * format.teamsAdvancePerGroup
+          const extraSpots = nextPow2(directQ) - directQ
+          const elimTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
+          if (needsExtra && extraSpots > 0 && elimTeams > 0) {
+            _schedWildCard(cat.id, cat.name, catCourts, elimTeams, extraSpots, pd.groups, trans, endMins, scheduledMatches, warnings)
+          }
+          const koTeams = (needsExtra && extraSpots > 0) ? nextPow2(directQ) : undefined
+          _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings, koTeams)
+          if (needsExtra && extraSpots === 0 && elimTeams >= 2) {
+            _schedConsolation(cat.id, cat.name, catCourts, elimTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
+          }
         }
       }
 
