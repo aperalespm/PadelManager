@@ -210,6 +210,26 @@ function knockoutTimeMins(
   return time
 }
 
+// ── Consolation bracket time ──────────────────────────────────────────────────
+// Single-elimination bracket for eliminated teams, all matches use matchDuration.
+
+function consolationTimeMins(
+  consolationTeams: number,
+  numCourts: number,
+  matchDuration: number,
+  trans: number
+): number {
+  if (consolationTeams < 2) return 0
+  let time = 0
+  let remaining = consolationTeams
+  while (remaining >= 2) {
+    const slots = Math.ceil(Math.floor(remaining / 2) / numCourts)
+    time += slots * (matchDuration + trans)
+    remaining = Math.ceil(remaining / 2)
+  }
+  return time
+}
+
 // ── Per-category format optimizer ─────────────────────────────────────────────
 
 export function findCategoryFormat(
@@ -227,7 +247,15 @@ export function findCategoryFormat(
 
   for (let g = minGroups; g <= 20; g++) {
     for (let t = minTeamsPerGroup; t <= 10; t++) {
-      if (t - 1 < minMatchesPerTeam) continue
+      const groupMatchesPerTeam = t - 1
+      const needsConsolation = groupMatchesPerTeam < minMatchesPerTeam
+
+      if (needsConsolation) {
+        const consolTeams = g * (t - teamsAdvance)
+        if (consolTeams < 2) continue
+        const consolDepth = Math.ceil(Math.log2(consolTeams))
+        if (groupMatchesPerTeam + consolDepth < minMatchesPerTeam) continue
+      }
 
       const groupMatches = matchesInGroups(g, t)
       const groupSlots = Math.ceil(groupMatches / numCourts)
@@ -236,7 +264,11 @@ export function findCategoryFormat(
       const knockTeams = g * teamsAdvance
       const koTime = knockoutTimeMins(knockTeams, numCourts, pd, trans)
 
-      if (groupTime + koTime > availableMins) break
+      const consolTime = needsConsolation
+        ? consolationTimeMins(g * (t - teamsAdvance), numCourts, pd.groups, trans)
+        : 0
+
+      if (groupTime + koTime + consolTime > availableMins) break
 
       if (g * t > bestG * bestT) {
         bestG = g
@@ -348,6 +380,60 @@ function _schedGroups(
 function _barrierCat(catCourts: CourtState[]): void {
   const t = Math.max(...catCourts.map(c => c.cursor))
   catCourts.forEach(c => { c.cursor = t })
+}
+
+function _schedConsolation(
+  catId: string,
+  catName: string,
+  catCourts: CourtState[],
+  consolationTeams: number,
+  matchDuration: number,
+  trans: number,
+  endMins: number,
+  out: ScheduleMatch[],
+  warnings: string[]
+): void {
+  if (consolationTeams < 2) return
+  let remaining = consolationTeams
+  let roundIdx = 0
+
+  while (remaining >= 2) {
+    const phaseName = remaining === 2 ? 'Consolación Final' : `Consolación SF`
+    const numMatches = Math.floor(remaining / 2)
+
+    for (let mi = 0; mi < numMatches; mi++) {
+      const courtForMatch = catCourts.reduce((best, cs) => cs.cursor < best.cursor ? cs : best)
+      const start = skipBlocked(courtForMatch.cursor, matchDuration, courtForMatch.blocked)
+      if (start + matchDuration > endMins) {
+        warnings.push(`Sin tiempo para ${phaseName} de ${catName}`)
+        break
+      }
+      const p1Label = roundIdx === 0 ? `Elim. Gr.${String.fromCharCode(65 + mi * 2)}` : `Gan. C${mi * 2 + 1}`
+      const p2Label = roundIdx === 0 ? `Elim. Gr.${String.fromCharCode(65 + mi * 2 + 1)}` : `Gan. C${mi * 2 + 2}`
+
+      out.push({
+        id: `${catId}_CON_r${roundIdx}_m${mi + 1}`,
+        courtNumber: courtForMatch.courtNumber,
+        courtName: courtForMatch.name,
+        startTime: toTime(start),
+        endTime: toTime(start + matchDuration),
+        categoryId: catId,
+        categoryName: catName,
+        groupId: null,
+        phase: phaseName,
+        pair1: p1Label,
+        pair2: p2Label,
+        matchLabel: `${catName} · ${phaseName}`,
+        status: 'scheduled',
+      })
+      courtForMatch.cursor = start + matchDuration + trans
+    }
+
+    const roundEnd = Math.max(...catCourts.map(c => c.cursor))
+    catCourts.forEach(c => { c.cursor = roundEnd })
+    remaining = Math.ceil(remaining / 2)
+    roundIdx++
+  }
 }
 
 function _schedKO(
@@ -579,6 +665,10 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
         _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
         _barrierCat(catCourts)
         _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings)
+        if (catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam) {
+          const consolTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
+          _schedConsolation(cat.id, cat.name, catCourts, consolTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
+        }
       }
 
       cursor = Math.max(...courtStates.map(c => c.cursor))
@@ -611,6 +701,10 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
         const catCourts = indices.map(i => courtStates[i])
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
         _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings)
+        if (catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam) {
+          const consolTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
+          _schedConsolation(cat.id, cat.name, catCourts, consolTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
+        }
       }
 
       cursor = Math.max(...courtStates.map(c => c.cursor))
@@ -674,6 +768,60 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
     },
     warnings,
   }
+}
+
+// ── Compute optimal formats from venue_details ────────────────────────────────
+// Shared utility used by cuadro page and bracket actions to stay in sync with
+// the schedule optimizer without re-running a full schedule generation.
+
+export function computeOptimalFormats(
+  vd: Record<string, unknown>
+): Record<string, { numGroups: number; teamsPerGroup: number }> {
+  const sched = (vd.schedule as Record<string, unknown>) ?? {}
+  const startMins = toMins(String(sched.start_time ?? '09:00'))
+  const endMins   = toMins(String(sched.end_time   ?? '21:00'))
+  const trans     = parseInt(String(sched.transition_minutes ?? '0')) || 0
+  const lunch     = sched.lunch_break as { duration_minutes?: number } | null | undefined
+  const avail     = endMins - startMins - (lunch?.duration_minutes ?? 0)
+  if (avail <= 0) return {}
+
+  const rawPhases = (vd.phases as Array<{ name: string; match_config?: { time_limit_minutes?: number } }>) ?? []
+  const pd = ((sched.phase_durations ?? vd.phase_durations) as PhaseDurations | undefined)
+    ?? buildPhaseDurations(rawPhases.map(p => ({
+      name: p.name,
+      maxDurationMins: (p.match_config?.time_limit_minutes as number) ?? 60,
+    })))
+
+  const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
+  const expanded: string[] = []
+  for (const cat of rawCats) {
+    if (!cat.name?.trim()) continue
+    if (!cat.genders?.length) {
+      expanded.push(cat.name)
+    } else {
+      for (const g of cat.genders) {
+        const suffix = g === 'masculino' ? ' Masculino' : g === 'femenino' ? ' Femenino' : ' Mixto'
+        expanded.push(cat.name + suffix)
+      }
+    }
+  }
+  if (expanded.length === 0) return {}
+
+  const numCourts   = Math.max(1, ((vd.courts as unknown[]) ?? []).length)
+  const numCats     = expanded.length
+  const minGroups   = Math.max(1, parseInt(String(vd.num_groups   ?? '2')) || 2)
+  const minTPG      = Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
+  const teamsAdv    = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
+  const minMatches  = Math.max(1, parseInt(String(vd.min_matches_per_team ?? '2')) || 2)
+  const base  = Math.floor(numCourts / numCats)
+  const extra = numCourts % numCats
+
+  const result: Record<string, { numGroups: number; teamsPerGroup: number }> = {}
+  expanded.forEach((name, i) => {
+    const cfc = Math.max(1, base + (i < extra ? 1 : 0))
+    result[name] = findCategoryFormat(cfc, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
+  })
+  return result
 }
 
 function emptyResult(endTime: string, format: GeneratorConfig['format'], warnings: string[]): GeneratorResult {

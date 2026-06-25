@@ -1,6 +1,7 @@
 'use server'
 
 import { sql } from '@/lib/db'
+import { computeOptimalFormats } from '@/lib/schedule/generator'
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -230,7 +231,8 @@ export async function generateGroupBracket(tournamentId: string) {
   await sql`DELETE FROM matches WHERE tournament_id = ${tournamentId}`
 
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
-  const numGroups = Math.max(1, parseInt(String(vd.num_groups ?? '3')) || 3)
+  const catFormats = computeOptimalFormats(vd)
+  const fallbackNumGroups = Math.max(1, parseInt(String(vd.num_groups ?? '2')) || 2)
 
   // Group registrations by category from form_data
   const catMap: Record<string, typeof regs> = {}
@@ -246,6 +248,7 @@ export async function generateGroupBracket(tournamentId: string) {
   const groupLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
   for (const [catLabel, catRegs] of Object.entries(catMap)) {
+    const numGroups = catFormats[catLabel]?.numGroups ?? fallbackNumGroups
     const shuffled = shuffle([...catRegs])
     const actualGroups = Math.max(1, Math.min(numGroups, Math.floor(shuffled.length / 2)))
 
@@ -396,8 +399,9 @@ export async function getGroupBracketDraftData(tournamentId: string) {
   const t = tRows[0]
 
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
-  const numGroups = Math.max(1, parseInt(String(vd.num_groups ?? '3')) || 3)
-  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '3')) || 3)
+  const catFormats = computeOptimalFormats(vd)
+  const fallbackNumGroups = Math.max(1, parseInt(String(vd.num_groups ?? '2')) || 2)
+  const fallbackTPG = Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
   const groupLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
   // Expand configured categories (same logic as the page)
@@ -435,20 +439,23 @@ export async function getGroupBracketDraftData(tournamentId: string) {
   const catMap: Record<string, Record<string, Array<{ id: string; name: string }>>> = {}
 
   function buildCategory(catName: string, catRegs: typeof regs) {
+    const fmt = catFormats[catName]
+    const ng = fmt?.numGroups ?? fallbackNumGroups
+    const tpg = fmt?.teamsPerGroup ?? fallbackTPG
     catMap[catName] = {}
-    for (let g = 0; g < numGroups; g++) {
+    for (let g = 0; g < ng; g++) {
       catMap[catName][`Grupo ${groupLetters[g]}`] = []
     }
     // Distribute confirmed regs round-robin across groups
     catRegs.forEach((reg, i) => {
-      const grp = `Grupo ${groupLetters[i % numGroups]}`
+      const grp = `Grupo ${groupLetters[i % ng]}`
       catMap[catName][grp].push({ id: reg.id as string, name: reg.pair_name as string })
     })
     // Fill remaining slots with placeholders
-    for (let g = 0; g < numGroups; g++) {
+    for (let g = 0; g < ng; g++) {
       const grp = `Grupo ${groupLetters[g]}`
       const existing = catMap[catName][grp].length
-      for (let s = existing + 1; s <= teamsPerGroup; s++) {
+      for (let s = existing + 1; s <= tpg; s++) {
         catMap[catName][grp].push({ id: `__slot__${catName}-${g}-${s}`, name: `P${s}` })
       }
     }

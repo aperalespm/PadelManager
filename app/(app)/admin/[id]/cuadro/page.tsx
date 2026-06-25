@@ -3,6 +3,7 @@ import { getMatchesForTournament } from '@/lib/actions/matches'
 import { getGroupBracketData, getGroupBracketDraftData } from '@/lib/actions/bracket'
 import { getRegistrationCountsByCategory } from '@/lib/actions/registrations'
 import { loadScheduleChat } from '@/lib/actions/schedule-agent'
+import { computeOptimalFormats } from '@/lib/schedule/generator'
 import { TournamentBracket } from '@/components/torneos/TournamentBracket'
 import { GroupBracketView } from '@/components/torneos/GroupBracketView'
 import { GenerateBracketButton } from '@/components/torneos/GenerateBracketButton'
@@ -36,13 +37,15 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
   const isGroupsElim = format === 'groups_elimination'
 
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
-  const numGroups = Math.max(1, parseInt(String(vd.num_groups ?? '3')) || 3)
-  const teamsPerGroup = Math.max(1, parseInt(String(vd.teams_per_group ?? '3')) || 3)
+  const numGroups = Math.max(1, parseInt(String(vd.num_groups ?? '2')) || 2)
   const teamsAdvancePerGroup = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
-  const capacityPerCategory = numGroups * teamsPerGroup
+  const minMatchesPerTeam = Math.max(1, parseInt(String(vd.min_matches_per_team ?? '2')) || 2)
 
   const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
   const categoryNames = expandCategoryNames(rawCats)
+
+  // Compute per-category optimizer formats (same as horario page)
+  const catFormats = computeOptimalFormats(vd)
 
   const [matches, regCounts, scheduleResult] = await Promise.all([
     getMatchesForTournament(id) as Promise<Record<string, unknown>[]>,
@@ -65,17 +68,24 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
     : null
   const draftCatMap = draftDataResult?.data ?? null
 
+  function catCapacity(name: string): number {
+    const fmt = catFormats[name]
+    if (fmt) return fmt.numGroups * fmt.teamsPerGroup
+    // fallback to configured minimum when optimizer has no data for this category
+    return numGroups * Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
+  }
+
   // Build fill data — configured categories first, then any uncategorised
   const fillData = categoryNames.length > 0
     ? categoryNames.map(name => {
         const row = regCounts.find(r => r.category === name)
-        return { name, confirmed: row?.confirmed ?? 0, pending: row?.pending ?? 0, capacity: capacityPerCategory }
+        return { name, confirmed: row?.confirmed ?? 0, pending: row?.pending ?? 0, capacity: catCapacity(name) }
       })
     : regCounts.map(r => ({
         name: r.category || 'Sin categoría',
         confirmed: r.confirmed,
         pending: r.pending,
-        capacity: capacityPerCategory,
+        capacity: catCapacity(r.category || ''),
       }))
 
   const totalConfirmed = fillData.reduce((s, c) => s + c.confirmed, 0)
@@ -151,6 +161,8 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
               catMap={draftCatMap}
               numGroups={numGroups}
               teamsAdvancePerGroup={teamsAdvancePerGroup}
+              catFormats={catFormats}
+              minMatchesPerTeam={minMatchesPerTeam}
               isDraft
             />
           </div>
@@ -169,6 +181,8 @@ export default async function AdminCuadroPage({ params }: { params: Promise<{ id
               catMap={catMap}
               numGroups={numGroups}
               teamsAdvancePerGroup={teamsAdvancePerGroup}
+              catFormats={catFormats}
+              minMatchesPerTeam={minMatchesPerTeam}
             />
           </div>
         </>
