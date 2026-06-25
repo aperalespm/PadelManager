@@ -1488,13 +1488,12 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
   const _gs  = Math.max(2, parseInt(formatState.teams_per_group) || 3)
   const _tg  = Math.max(1, parseInt(formatState.num_groups) || 3)
 
-  const { optG, optT } = (() => {
+  const { capacityEstimate, optG, optT } = (() => {
     const numCourts = namedCourts.length || 1
     const numCats   = expandedCategories.length || 1
-    const courtsForFormat = Math.max(1, Math.floor(numCourts / numCats))
     const toM = (s: string) => { const [h=0,m=0] = s.split(':').map(Number); return h*60+m }
     const avail = toM(schedEnd) - toM(schedStart) - (lunchEnabled ? (parseInt(lunchDuration)||60) : 0)
-    if (avail <= 0) return { optG: _tg, optT: _gs }
+    if (avail <= 0) return { capacityEstimate: _tg * _gs * numBrackets, optG: _tg, optT: _gs }
     const trans = parseInt(transitionMinutes) || 0
     const pd = buildPhaseDurations(phases.map(p => ({
       name: p.name,
@@ -1502,11 +1501,18 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
     })))
     const teamsAdv     = Math.max(1, parseInt(formatState.teams_advance_per_group) || 2)
     const minMatchesPT = Math.max(1, parseInt(formatState.min_matches_per_team)    || 2)
-    const fmt = findCategoryFormat(courtsForFormat, avail, trans, pd, _tg, _gs, teamsAdv, minMatchesPT)
-    return { optG: fmt.numGroups, optT: fmt.teamsPerGroup }
+    const base  = Math.floor(numCourts / numCats)
+    const extra = numCourts % numCats
+    let total = 0
+    let firstOptG = _tg, firstOptT = _gs
+    for (let i = 0; i < numCats; i++) {
+      const cfc = Math.max(1, base + (i < extra ? 1 : 0))
+      const fmt = findCategoryFormat(cfc, avail, trans, pd, _tg, _gs, teamsAdv, minMatchesPT)
+      total += fmt.numGroups * fmt.teamsPerGroup
+      if (i === 0) { firstOptG = fmt.numGroups; firstOptT = fmt.teamsPerGroup }
+    }
+    return { capacityEstimate: total, optG: firstOptG, optT: firstOptT }
   })()
-
-  const capacityEstimate = optG * optT * numBrackets
 
   // ── Court feasibility (warn if schedule can't fit all group matches) ──────
   const courtWarning = (() => {
