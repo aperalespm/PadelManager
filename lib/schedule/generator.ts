@@ -366,7 +366,8 @@ function _schedGroups(
 
   for (let g = 0; g < numGroups; g++) {
     const gl = String.fromCharCode(65 + g)
-    const groupCourt = catCourts[g % catCourts.length]
+    const lbcCourts = [...catCourts].sort((a, b) => a.cursor - b.cursor)
+    const groupCourt = lbcCourts[g % lbcCourts.length]
     const slot = pairList.slice(g * teamsPerGroup, (g + 1) * teamsPerGroup)
     const rrPairs = roundRobinPairs(slot.length)
 
@@ -725,56 +726,66 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   const scheduledMatches: ScheduleMatch[] = []
 
   // ── Schedule ──────────────────────────────────────────────────────────────
+  // Shared KO dispatch — used by both modes
+  function schedKOForCat(cat: typeof bins[0]['cats'][0], catCourts: CourtState[], catFmt: { numGroups: number; teamsPerGroup: number }): void {
+    const needsExtra = catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam
+    const directQ = catFmt.numGroups * format.teamsAdvancePerGroup
+    const extraSpots = nextPow2(directQ) - directQ
+    const elimTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
+    if (needsExtra && extraSpots > 0 && elimTeams > 0) {
+      _schedWildCard(cat.id, cat.name, catCourts, elimTeams, extraSpots, pd.groups, trans, endMins, scheduledMatches, warnings)
+    }
+    const koTeams = (needsExtra && extraSpots > 0) ? nextPow2(directQ) : undefined
+    _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings, koTeams)
+    if (needsExtra && extraSpots === 0 && elimTeams >= 2) {
+      _schedConsolation(cat.id, cat.name, catCourts, elimTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
+    }
+  }
+
   if (mode === 'complete') {
-    // Each bin: groups + KO, then next bin starts
+    // Each bin: shared groups pass → parallel dedicated KO pass
     let cursor = startMins
     for (const bin of bins) {
       for (const cs of courtStates) cs.cursor = cursor
 
+      // Groups: all cats share all courts (LBC assignment ensures true interleaving)
+      for (const cat of bin.cats) {
+        const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
+        _schedGroups(cat.id, cat.name, courtStates, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
+      }
+      _barrierCat(courtStates)
+      const afterGroups = Math.max(...courtStates.map(c => c.cursor))
+
+      // KO: dedicated court subsets, each cat starts from afterGroups
       for (const cat of bin.cats) {
         const indices = bin.catCourts.get(cat.id) ?? [0]
         const catCourts = indices.map(i => courtStates[i])
-        const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
+        catCourts.forEach(c => { c.cursor = Math.max(c.cursor, afterGroups) })
         _barrierCat(catCourts)
-        {
-          const needsExtra = catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam
-          const directQ = catFmt.numGroups * format.teamsAdvancePerGroup
-          const extraSpots = nextPow2(directQ) - directQ
-          const elimTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
-          if (needsExtra && extraSpots > 0 && elimTeams > 0) {
-            _schedWildCard(cat.id, cat.name, catCourts, elimTeams, extraSpots, pd.groups, trans, endMins, scheduledMatches, warnings)
-          }
-          const koTeams = (needsExtra && extraSpots > 0) ? nextPow2(directQ) : undefined
-          _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings, koTeams)
-          if (needsExtra && extraSpots === 0 && elimTeams >= 2) {
-            _schedConsolation(cat.id, cat.name, catCourts, elimTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
-          }
-        }
+        const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
+        schedKOForCat(cat, catCourts, catFmt)
       }
 
       cursor = Math.max(...courtStates.map(c => c.cursor))
     }
   } else {
-    // by_phase: all bins' groups sequentially, then all bins' KO sequentially
+    // by_phase: shared groups for all bins, then parallel dedicated KO for all bins
     let cursor = startMins
 
-    // Groups pass
+    // Groups pass: all cats in each bin share all courts
     for (const bin of bins) {
       for (const cs of courtStates) cs.cursor = cursor
 
       for (const cat of bin.cats) {
-        const indices = bin.catCourts.get(cat.id) ?? [0]
-        const catCourts = indices.map(i => courtStates[i])
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
-        _barrierCat(catCourts)
+        _schedGroups(cat.id, cat.name, courtStates, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
       }
+      _barrierCat(courtStates)
 
       cursor = Math.max(...courtStates.map(c => c.cursor))
     }
 
-    // KO pass — starts after all groups complete
+    // KO pass — starts after all groups complete; dedicated courts per cat
     for (const bin of bins) {
       for (const cs of courtStates) cs.cursor = cursor
 
@@ -782,20 +793,7 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
         const indices = bin.catCourts.get(cat.id) ?? [0]
         const catCourts = indices.map(i => courtStates[i])
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        {
-          const needsExtra = catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam
-          const directQ = catFmt.numGroups * format.teamsAdvancePerGroup
-          const extraSpots = nextPow2(directQ) - directQ
-          const elimTeams = catFmt.numGroups * (catFmt.teamsPerGroup - format.teamsAdvancePerGroup)
-          if (needsExtra && extraSpots > 0 && elimTeams > 0) {
-            _schedWildCard(cat.id, cat.name, catCourts, elimTeams, extraSpots, pd.groups, trans, endMins, scheduledMatches, warnings)
-          }
-          const koTeams = (needsExtra && extraSpots > 0) ? nextPow2(directQ) : undefined
-          _schedKO(cat.id, cat.name, catCourts, catFmt.numGroups, format.teamsAdvancePerGroup, pd, trans, endMins, scheduledMatches, warnings, koTeams)
-          if (needsExtra && extraSpots === 0 && elimTeams >= 2) {
-            _schedConsolation(cat.id, cat.name, catCourts, elimTeams, pd.groups, trans, endMins, scheduledMatches, warnings)
-          }
-        }
+        schedKOForCat(cat, catCourts, catFmt)
       }
 
       cursor = Math.max(...courtStates.map(c => c.cursor))
@@ -861,6 +859,72 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   }
 }
 
+// ── Shared-groups format optimizer ────────────────────────────────────────────
+// Models the scheduler where all categories share the court pool during groups,
+// then run KO in parallel on dedicated subsets. Adding 1 court reduces group
+// slots for ALL categories (ceil(totalGroupMatches/numCourts) decreases).
+
+function findSharedGroupsFormat(
+  numCats: number,
+  numCourts: number,
+  availableMins: number,
+  trans: number,
+  pd: PhaseDurations,
+  minGroups: number,
+  minTeamsPerGroup: number,
+  teamsAdvance: number,
+  minMatchesPerTeam: number
+): { numGroups: number; teamsPerGroup: number } {
+  const koCourtCount = Math.max(1, Math.floor(numCourts / numCats))
+  let bestG = minGroups
+  let bestT = minTeamsPerGroup
+
+  for (let g = minGroups; g <= 20; g++) {
+    for (let t = minTeamsPerGroup; t <= 10; t++) {
+      const groupMatchesPerTeam = t - 1
+      const needsExtra = groupMatchesPerTeam < minMatchesPerTeam
+      const directQualifiers = g * teamsAdvance
+      const extraSpots = nextPow2(directQualifiers) - directQualifiers
+      const eliminatedTeams = g * (t - teamsAdvance)
+
+      if (needsExtra) {
+        if (extraSpots > 0 && eliminatedTeams > 0) {
+          if (groupMatchesPerTeam + 1 < minMatchesPerTeam) continue
+        } else {
+          if (eliminatedTeams < 2) continue
+          const consolDepth = Math.ceil(Math.log2(eliminatedTeams))
+          if (groupMatchesPerTeam + consolDepth < minMatchesPerTeam) continue
+        }
+      }
+
+      // Groups: ALL categories share ALL courts
+      const totalGroupMatches = numCats * matchesInGroups(g, t)
+      const groupSlots = Math.ceil(totalGroupMatches / numCourts)
+      const groupTime  = groupSlots * (pd.groups + trans)
+
+      // Wild card: also shared (runs after groups, before KO)
+      const wcMatchCount = (needsExtra && extraSpots > 0 && eliminatedTeams > 0)
+        ? Math.max(0, eliminatedTeams - extraSpots) : 0
+      const totalWcMatches = wcMatchCount * numCats
+      const wcTime = totalWcMatches > 0
+        ? Math.ceil(totalWcMatches / numCourts) * (pd.groups + trans) : 0
+
+      // KO: parallel, each cat on koCourtCount dedicated courts
+      const koTeams = (needsExtra && extraSpots > 0) ? nextPow2(directQualifiers) : directQualifiers
+      const koTime  = knockoutTimeMins(koTeams, koCourtCount, pd, trans)
+
+      // Consolation: parallel
+      const consolTime = (needsExtra && extraSpots === 0)
+        ? consolationTimeMins(eliminatedTeams, koCourtCount, pd.groups, trans) : 0
+
+      if (groupTime + wcTime + koTime + consolTime > availableMins) break
+
+      if (g * t > bestG * bestT) { bestG = g; bestT = t }
+    }
+  }
+  return { numGroups: bestG, teamsPerGroup: bestT }
+}
+
 // ── Compute optimal formats from venue_details ────────────────────────────────
 // Shared utility used by cuadro page and bracket actions to stay in sync with
 // the schedule optimizer without re-running a full schedule generation.
@@ -904,16 +968,16 @@ export function computeOptimalFormats(
   const minTPG     = Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
   const teamsAdv   = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
   const minMatches = Math.max(1, parseInt(String(vd.min_matches_per_team ?? '2')) || 2)
-  // Equal court allocation: all categories get the same floor(numCourts/numCats) courts
-  // so the optimizer shows equal capacity for every category in the cuadro badges.
-  const base = Math.max(1, Math.floor(numCourts / numCats))
+
+  // Shared-groups model: all categories share the court pool during groups, so
+  // every extra court reduces group slots for ALL categories equally.
+  const sharedFmt = findSharedGroupsFormat(numCats, numCourts, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
+
   // Sort descending by prestige so order matches the scheduler (sortByPrestige)
   const sortedExpanded = [...expanded].sort((a, b) => parsePrestige(b) - parsePrestige(a))
 
   const result: Record<string, { numGroups: number; teamsPerGroup: number }> = {}
-  sortedExpanded.forEach(name => {
-    result[name] = findCategoryFormat(base, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
-  })
+  sortedExpanded.forEach(name => { result[name] = sharedFmt })
   return result
 }
 
