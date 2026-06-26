@@ -413,7 +413,7 @@ export async function getGroupBracketDraftData(tournamentId: string) {
       categoryNames.push(cat.name)
     } else {
       for (const g of cat.genders) {
-        const suffix = g === 'masculino' ? ' Masculino' : g === 'femenino' ? ' Femenino' : ' Mixto'
+        const suffix = g === 'M' ? ' Masculino' : g === 'F' ? ' Femenino' : ' Mixto'
         categoryNames.push(cat.name + suffix)
       }
     }

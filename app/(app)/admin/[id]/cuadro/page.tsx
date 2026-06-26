@@ -19,7 +19,7 @@ function expandCategoryNames(cats: Array<{ name: string; genders?: string[] }>):
       result.push(cat.name)
     } else {
       for (const g of cat.genders) {
-        const suffix = g === 'masculino' ? ' Masculino' : g === 'femenino' ? ' Femenino' : ' Mixto'
+        const suffix = g === 'M' ? ' Masculino' : g === 'F' ? ' Femenino' : ' Mixto'
         result.push(cat.name + suffix)
       }
     }
