@@ -732,8 +732,7 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
       for (const cs of courtStates) cs.cursor = cursor
 
       for (const cat of bin.cats) {
-        const indices = bin.catCourts.get(cat.id) ?? [0]
-        const catCourts = indices.map(i => courtStates[i])
+        const catCourts = courtStates
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
         _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
         _barrierCat(catCourts)
@@ -764,8 +763,7 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
       for (const cs of courtStates) cs.cursor = cursor
 
       for (const cat of bin.cats) {
-        const indices = bin.catCourts.get(cat.id) ?? [0]
-        const catCourts = indices.map(i => courtStates[i])
+        const catCourts = courtStates
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
         _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
         _barrierCat(catCourts)
@@ -779,8 +777,7 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
       for (const cs of courtStates) cs.cursor = cursor
 
       for (const cat of bin.cats) {
-        const indices = bin.catCourts.get(cat.id) ?? [0]
-        const catCourts = indices.map(i => courtStates[i])
+        const catCourts = courtStates
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
         {
           const needsExtra = catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam
@@ -891,26 +888,26 @@ export function computeOptimalFormats(
       expanded.push(cat.name)
     } else {
       for (const g of cat.genders) {
-        const suffix = g === 'masculino' ? ' Masculino' : g === 'femenino' ? ' Femenino' : ' Mixto'
+        const suffix = g === 'M' ? ' Masculino' : g === 'F' ? ' Femenino' : ' Mixto'
         expanded.push(cat.name + suffix)
       }
     }
   }
   if (expanded.length === 0) return {}
 
-  const numCourts   = Math.max(1, ((vd.courts as unknown[]) ?? []).length)
-  const numCats     = expanded.length
-  const minGroups   = Math.max(1, parseInt(String(vd.num_groups   ?? '2')) || 2)
-  const minTPG      = Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
-  const teamsAdv    = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
-  const minMatches  = Math.max(1, parseInt(String(vd.min_matches_per_team ?? '2')) || 2)
-  const base  = Math.floor(numCourts / numCats)
-  const extra = numCourts % numCats
+  const numCourts  = Math.max(1, ((vd.courts as unknown[]) ?? []).length)
+  const numCats    = expanded.length
+  const minGroups  = Math.max(1, parseInt(String(vd.num_groups   ?? '2')) || 2)
+  const minTPG     = Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
+  const teamsAdv   = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
+  const minMatches = Math.max(1, parseInt(String(vd.min_matches_per_team ?? '2')) || 2)
+  const base       = Math.max(1, Math.floor(numCourts / numCats))
+  // Sort descending by prestige so order matches the scheduler (sortByPrestige)
+  const sortedExpanded = [...expanded].sort((a, b) => parsePrestige(b) - parsePrestige(a))
 
   const result: Record<string, { numGroups: number; teamsPerGroup: number }> = {}
-  expanded.forEach((name, i) => {
-    const cfc = Math.max(1, base + (i < extra ? 1 : 0))
-    result[name] = findCategoryFormat(cfc, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
+  sortedExpanded.forEach(name => {
+    result[name] = findCategoryFormat(base, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
   })
   return result
 }
