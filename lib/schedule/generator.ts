@@ -732,7 +732,8 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
       for (const cs of courtStates) cs.cursor = cursor
 
       for (const cat of bin.cats) {
-        const catCourts = courtStates
+        const indices = bin.catCourts.get(cat.id) ?? [0]
+        const catCourts = indices.map(i => courtStates[i])
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
         _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
         _barrierCat(catCourts)
@@ -763,7 +764,8 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
       for (const cs of courtStates) cs.cursor = cursor
 
       for (const cat of bin.cats) {
-        const catCourts = courtStates
+        const indices = bin.catCourts.get(cat.id) ?? [0]
+        const catCourts = indices.map(i => courtStates[i])
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
         _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
         _barrierCat(catCourts)
@@ -777,7 +779,8 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
       for (const cs of courtStates) cs.cursor = cursor
 
       for (const cat of bin.cats) {
-        const catCourts = courtStates
+        const indices = bin.catCourts.get(cat.id) ?? [0]
+        const catCourts = indices.map(i => courtStates[i])
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
         {
           const needsExtra = catFmt.teamsPerGroup - 1 < format.minMatchesPerTeam
@@ -901,16 +904,15 @@ export function computeOptimalFormats(
   const minTPG     = Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
   const teamsAdv   = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
   const minMatches = Math.max(1, parseInt(String(vd.min_matches_per_team ?? '2')) || 2)
-  // Each category shares all courts but gets a proportional slice of the day.
-  // This matches the scheduler (shared courtStates) and makes capacity grow
-  // as courts are added, rather than flooring away the remainder.
-  const availPerCat = Math.floor(avail / numCats)
+  // Equal court allocation: all categories get the same floor(numCourts/numCats) courts
+  // so the optimizer shows equal capacity for every category in the cuadro badges.
+  const base = Math.max(1, Math.floor(numCourts / numCats))
   // Sort descending by prestige so order matches the scheduler (sortByPrestige)
   const sortedExpanded = [...expanded].sort((a, b) => parsePrestige(b) - parsePrestige(a))
 
   const result: Record<string, { numGroups: number; teamsPerGroup: number }> = {}
   sortedExpanded.forEach(name => {
-    result[name] = findCategoryFormat(numCourts, availPerCat, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
+    result[name] = findCategoryFormat(base, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
   })
   return result
 }
