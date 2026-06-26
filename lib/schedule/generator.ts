@@ -901,13 +901,16 @@ export function computeOptimalFormats(
   const minTPG     = Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
   const teamsAdv   = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
   const minMatches = Math.max(1, parseInt(String(vd.min_matches_per_team ?? '2')) || 2)
-  const base       = Math.max(1, Math.floor(numCourts / numCats))
+  // Each category shares all courts but gets a proportional slice of the day.
+  // This matches the scheduler (shared courtStates) and makes capacity grow
+  // as courts are added, rather than flooring away the remainder.
+  const availPerCat = Math.floor(avail / numCats)
   // Sort descending by prestige so order matches the scheduler (sortByPrestige)
   const sortedExpanded = [...expanded].sort((a, b) => parsePrestige(b) - parsePrestige(a))
 
   const result: Record<string, { numGroups: number; teamsPerGroup: number }> = {}
   sortedExpanded.forEach(name => {
-    result[name] = findCategoryFormat(base, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
+    result[name] = findCategoryFormat(numCourts, availPerCat, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
   })
   return result
 }
