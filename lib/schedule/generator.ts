@@ -400,6 +400,67 @@ function _schedGroups(
   }
 }
 
+function _schedGroupsAll(
+  cats: Array<{ id: string; name: string }>,
+  catFmts: Map<string, { numGroups: number; teamsPerGroup: number }>,
+  allCourts: CourtState[],
+  defaultFmt: { numGroups: number; teamsPerGroup: number },
+  registeredPairs: GeneratorConfig['registeredPairs'],
+  pd: PhaseDurations,
+  trans: number,
+  endMins: number,
+  out: ScheduleMatch[],
+  warnings: string[]
+): void {
+  type GroupDesc = { catId: string; catName: string; gl: string; pairs: string[]; rrPairs: [number, number][] }
+  const allGroups: GroupDesc[] = []
+  for (const cat of cats) {
+    const fmt = catFmts.get(cat.id) ?? defaultFmt
+    const reg = registeredPairs?.find(r => r.category === cat.name || r.category === cat.id)
+    const needed = fmt.numGroups * fmt.teamsPerGroup
+    const pairList = reg ? [...reg.pairs.slice(0, needed)] : []
+    while (pairList.length < needed) pairList.push(`P${pairList.length + 1}`)
+    for (let g = 0; g < fmt.numGroups; g++) {
+      const gl = String.fromCharCode(65 + g)
+      const slot = pairList.slice(g * fmt.teamsPerGroup, (g + 1) * fmt.teamsPerGroup)
+      allGroups.push({ catId: cat.id, catName: cat.name, gl, pairs: slot, rrPairs: roundRobinPairs(slot.length) })
+    }
+  }
+  // Schedule round by round: all groups' match-0, then match-1, etc.
+  // Each individual match uses true LBC so courts stay balanced (±1 match max).
+  const maxRounds = allGroups.reduce((m, g) => Math.max(m, g.rrPairs.length), 0)
+  for (let mi = 0; mi < maxRounds; mi++) {
+    for (const grp of allGroups) {
+      if (mi >= grp.rrPairs.length) continue
+      const court = [...allCourts].sort((a, b) => a.cursor - b.cursor)[0]
+      const [i, j] = grp.rrPairs[mi]
+      const p1 = grp.pairs[i] ?? `P${i + 1}`
+      const p2 = grp.pairs[j] ?? `P${j + 1}`
+      const start = skipBlocked(court.cursor, pd.groups, court.blocked)
+      if (start + pd.groups > endMins) {
+        warnings.push(`Sin tiempo para grupo ${grp.gl} de ${grp.catName}`)
+        continue
+      }
+      out.push({
+        id: `${grp.catId}_G${grp.gl}_m${mi + 1}`,
+        courtNumber: court.courtNumber,
+        courtName: court.name,
+        startTime: toTime(start),
+        endTime: toTime(start + pd.groups),
+        categoryId: grp.catId,
+        categoryName: grp.catName,
+        groupId: `${grp.catId}_G${grp.gl}`,
+        phase: `Grupo ${grp.gl}`,
+        pair1: p1,
+        pair2: p2,
+        matchLabel: `${grp.catName} · Grupo ${grp.gl}`,
+        status: 'scheduled',
+      })
+      court.cursor = start + pd.groups + trans
+    }
+  }
+}
+
 function _barrierCat(catCourts: CourtState[]): void {
   const t = Math.max(...catCourts.map(c => c.cursor))
   catCourts.forEach(c => { c.cursor = t })
@@ -748,11 +809,9 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
     for (const bin of bins) {
       for (const cs of courtStates) cs.cursor = cursor
 
-      // Groups: all cats share all courts (LBC assignment ensures true interleaving)
-      for (const cat of bin.cats) {
-        const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        _schedGroups(cat.id, cat.name, courtStates, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
-      }
+      // Groups: all cats share all courts via per-match LBC (balanced, no gaps)
+      const defaultFmt = { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
+      _schedGroupsAll(bin.cats, bin.catFmts, courtStates, defaultFmt, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
       _barrierCat(courtStates)
       const afterGroups = Math.max(...courtStates.map(c => c.cursor))
 
@@ -776,10 +835,8 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
     for (const bin of bins) {
       for (const cs of courtStates) cs.cursor = cursor
 
-      for (const cat of bin.cats) {
-        const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        _schedGroups(cat.id, cat.name, courtStates, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
-      }
+      const defaultFmtByPhase = { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
+      _schedGroupsAll(bin.cats, bin.catFmts, courtStates, defaultFmtByPhase, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
       _barrierCat(courtStates)
 
       cursor = Math.max(...courtStates.map(c => c.cursor))
