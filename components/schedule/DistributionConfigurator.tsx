@@ -11,6 +11,7 @@ interface Category {
 
 interface Props {
   categories: Category[]
+  numCourts: number
   distribution: ScheduleDistribution | null
   onChange: (d: ScheduleDistribution) => void
   disabled?: boolean
@@ -32,15 +33,17 @@ function normalise(dist: ScheduleDistribution | null, cats: Category[]): Distrib
 }
 
 
-export function DistributionConfigurator({ categories, distribution, onChange, disabled }: Props) {
-  const bins  = normalise(distribution, categories)
-  const mode  = distribution?.mode ?? 'complete'
-  const multi = bins.length > 1
+export function DistributionConfigurator({ categories, numCourts, distribution, onChange, disabled }: Props) {
+  const bins           = normalise(distribution, categories)
+  const mode           = distribution?.mode ?? 'complete'
+  const groupsSched    = distribution?.groupsScheduling ?? 'shared'
+  const multi          = bins.length > 1
+  const showGroupsMode = numCourts > 0 && numCourts === categories.length
 
   const dragCat = useRef<string | null>(null)
 
-  function emit(newBins: DistributionBin[], newMode?: 'complete' | 'by_phase') {
-    onChange({ bins: newBins, mode: newMode ?? mode })
+  function emit(newBins: DistributionBin[], newMode?: 'complete' | 'by_phase', newGroupsSched?: 'parallel' | 'shared') {
+    onChange({ bins: newBins, mode: newMode ?? mode, groupsScheduling: newGroupsSched ?? groupsSched })
   }
 
   function addBin() {
@@ -105,6 +108,42 @@ export function DistributionConfigurator({ categories, distribution, onChange, d
             {mode === 'complete'
               ? 'Cada grupo completa grupos + eliminatorias antes del siguiente'
               : 'Todos los grupos primero, luego todas las eliminatorias'}
+          </span>
+        </div>
+      )}
+
+      {/* Groups scheduling — only visible when numCourts === numCats */}
+      {showGroupsMode && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-muted-foreground font-medium">Grupos:</span>
+          <div className="flex items-center rounded-full border border-border overflow-hidden text-[11px] font-medium">
+            <button
+              onClick={() => emit(bins, undefined, 'parallel')}
+              className={cn(
+                'px-3 py-1 transition-colors',
+                groupsSched === 'parallel'
+                  ? 'bg-accent text-white'
+                  : 'text-muted-foreground hover:bg-muted'
+              )}
+            >
+              Por categoría
+            </button>
+            <button
+              onClick={() => emit(bins, undefined, 'shared')}
+              className={cn(
+                'px-3 py-1 border-l border-border transition-colors',
+                groupsSched === 'shared'
+                  ? 'bg-accent text-white'
+                  : 'text-muted-foreground hover:bg-muted'
+              )}
+            >
+              Compartidas
+            </button>
+          </div>
+          <span className="text-[10px] text-muted-foreground">
+            {groupsSched === 'parallel'
+              ? 'Cada categoría en su propia pista durante grupos'
+              : 'Partidos de grupos rotando por todas las pistas'}
           </span>
         </div>
       )}

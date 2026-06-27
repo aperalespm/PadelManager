@@ -44,4 +44,5 @@ export type DistributionBin = {
 export type ScheduleDistribution = {
   bins: DistributionBin[]
   mode: 'complete' | 'by_phase'
+  groupsScheduling?: 'parallel' | 'shared'
 }
