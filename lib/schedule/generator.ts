@@ -302,6 +302,65 @@ export function findCategoryFormat(
   return { numGroups: bestG, teamsPerGroup: bestT }
 }
 
+// ── Shared-court group format optimizer ──────────────────────────────────────
+// Groups phase: all cats share ALL courts (per-match LBC).
+// KO phase: floor(numCourts/numCats) courts per cat (parallel).
+
+function findSharedGroupsFormat(
+  numCats: number,
+  numCourts: number,
+  availableMins: number,
+  trans: number,
+  pd: PhaseDurations,
+  minGroups: number,
+  minTeamsPerGroup: number,
+  teamsAdvance: number,
+  minMatchesPerTeam: number
+): { numGroups: number; teamsPerGroup: number } {
+  const koCourtCount = Math.max(1, Math.floor(numCourts / numCats))
+  let bestG = minGroups
+  let bestT = minTeamsPerGroup
+
+  for (let g = minGroups; g <= 20; g++) {
+    for (let t = minTeamsPerGroup; t <= 10; t++) {
+      const groupMatchesPerTeam = t - 1
+      const needsExtra = groupMatchesPerTeam < minMatchesPerTeam
+      const directQualifiers = g * teamsAdvance
+      const extraSpots = nextPow2(directQualifiers) - directQualifiers
+      const eliminatedTeams = g * (t - teamsAdvance)
+
+      if (needsExtra) {
+        if (extraSpots > 0 && eliminatedTeams > 0) {
+          if (groupMatchesPerTeam + 1 < minMatchesPerTeam) continue
+        } else {
+          if (eliminatedTeams < 2) continue
+          const consolDepth = Math.ceil(Math.log2(eliminatedTeams))
+          if (groupMatchesPerTeam + consolDepth < minMatchesPerTeam) continue
+        }
+      }
+
+      // Groups: all cats share all courts (per-match LBC formula)
+      const totalGroupMatches = numCats * matchesInGroups(g, t)
+      const groupSlots = Math.ceil(totalGroupMatches / numCourts)
+      const groupTime = groupSlots * (pd.groups + trans)
+
+      // WC, KO, consol: per-cat on koCourtCount courts (cats parallel → single-cat wall clock)
+      const wcMatchCount = (needsExtra && extraSpots > 0 && eliminatedTeams > 0)
+        ? Math.max(0, eliminatedTeams - extraSpots) : 0
+      const wcTime = wcMatchCount > 0
+        ? Math.ceil(wcMatchCount / koCourtCount) * (pd.groups + trans) : 0
+      const koTeams = (needsExtra && extraSpots > 0) ? nextPow2(directQualifiers) : directQualifiers
+      const koTime = knockoutTimeMins(koTeams, koCourtCount, pd, trans)
+      const consolTime = (needsExtra && extraSpots === 0)
+        ? consolationTimeMins(eliminatedTeams, koCourtCount, pd.groups, trans) : 0
+
+      if (groupTime + wcTime + koTime + consolTime > availableMins) break
+      if (g * t > bestG * bestT) { bestG = g; bestT = t }
+    }
+  }
+  return { numGroups: bestG, teamsPerGroup: bestT }
+}
+
 // ── Public config / result types ─────────────────────────────────────────────
 
 export interface GeneratorConfig {
@@ -402,6 +461,58 @@ function _schedGroups(
 function _barrierCat(catCourts: CourtState[]): void {
   const t = Math.max(...catCourts.map(c => c.cursor))
   catCourts.forEach(c => { c.cursor = t })
+}
+
+// Schedules all cats' group matches interleaved via per-match LBC across all courts.
+function _schedGroupsAll(
+  cats: Array<{ id: string; name: string }>,
+  catFmts: Map<string, { numGroups: number; teamsPerGroup: number }>,
+  allCourts: CourtState[],
+  registeredPairs: GeneratorConfig['registeredPairs'],
+  pd: PhaseDurations,
+  trans: number,
+  endMins: number,
+  out: ScheduleMatch[],
+  warnings: string[]
+): void {
+  for (const cat of cats) {
+    const fmt = catFmts.get(cat.id) ?? { numGroups: 2, teamsPerGroup: 3 }
+    const reg = registeredPairs?.find(r => r.category === cat.name || r.category === cat.id)
+    const needed = fmt.numGroups * fmt.teamsPerGroup
+    const pairList = reg ? [...reg.pairs.slice(0, needed)] : []
+    while (pairList.length < needed) pairList.push(`P${pairList.length + 1}`)
+
+    for (let g = 0; g < fmt.numGroups; g++) {
+      const gl = String.fromCharCode(65 + g)
+      const slot = pairList.slice(g * fmt.teamsPerGroup, (g + 1) * fmt.teamsPerGroup)
+      const rrPairs = roundRobinPairs(slot.length)
+      for (let mi = 0; mi < rrPairs.length; mi++) {
+        const [i, j] = rrPairs[mi]
+        const courtForMatch = allCourts.reduce((best, cs) => cs.cursor < best.cursor ? cs : best)
+        const start = skipBlocked(courtForMatch.cursor, pd.groups, courtForMatch.blocked)
+        if (start + pd.groups > endMins) {
+          warnings.push(`Sin tiempo para grupo ${gl} de ${cat.name}`)
+          break
+        }
+        out.push({
+          id: `${cat.id}_G${gl}_m${mi + 1}`,
+          courtNumber: courtForMatch.courtNumber,
+          courtName: courtForMatch.name,
+          startTime: toTime(start),
+          endTime: toTime(start + pd.groups),
+          categoryId: cat.id,
+          categoryName: cat.name,
+          groupId: `${cat.id}_G${gl}`,
+          phase: `Grupo ${gl}`,
+          pair1: slot[i] ?? `P${i + 1}`,
+          pair2: slot[j] ?? `P${j + 1}`,
+          matchLabel: `${cat.name} · Grupo ${gl}`,
+          status: 'scheduled',
+        })
+        courtForMatch.cursor = start + pd.groups + trans
+      }
+    }
+  }
 }
 
 function _schedConsolation(
@@ -615,6 +726,22 @@ function assignCourtsInBin(
   return map
 }
 
+// KO courts: exactly floor(numCourts/numCats) per cat — equal across all categories.
+function assignKOCourtsForBin(
+  binCats: Array<{ id: string }>,
+  numCourts: number
+): Map<string, number[]> {
+  const map = new Map<string, number[]>()
+  if (binCats.length === 0) return map
+  const koCount = Math.max(1, Math.floor(numCourts / binCats.length))
+  let ci = 0
+  for (const cat of binCats) {
+    map.set(cat.id, Array.from({ length: koCount }, (_, j) => ci + j))
+    ci += koCount
+  }
+  return map
+}
+
 // ── Main scheduler ────────────────────────────────────────────────────────────
 
 export function generateSchedule(config: GeneratorConfig): GeneratorResult {
@@ -657,17 +784,14 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   const timeBudgetPerBin = availableMins / numBins
 
   if (!hasBins) {
-    // Single bin — all cats, use full available time
-    const catCourts = assignCourtsInBin(sortedCats, numCourts)
-    const courtCounts = courtCountsForBin(numCourts, sortedCats)
+    // Single bin — all cats share all courts for groups; KO on dedicated courts
+    const sharedFmt = findSharedGroupsFormat(
+      sortedCats.length, numCourts, availableMins, trans, pd,
+      format.minGroups, format.minTeamsPerGroup, format.teamsAdvancePerGroup, format.minMatchesPerTeam
+    )
     const catFmts = new Map<string, { numGroups: number; teamsPerGroup: number }>()
-    for (const cat of sortedCats) {
-      const cfc = Math.max(1, courtCounts.get(cat.id) ?? 1)
-      catFmts.set(cat.id, findCategoryFormat(
-        cfc, availableMins, trans, pd,
-        format.minGroups, format.minTeamsPerGroup, format.teamsAdvancePerGroup, format.minMatchesPerTeam
-      ))
-    }
+    for (const cat of sortedCats) catFmts.set(cat.id, sharedFmt)
+    const catCourts = assignKOCourtsForBin(sortedCats, numCourts)
     bins.push({ cats: sortedCats, catCourts, catFmts })
   } else {
     // User-defined bins
@@ -679,16 +803,13 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
       binCats.forEach(c => allAssigned.add(c.id))
       if (binCats.length === 0) continue
 
-      const catCourts = assignCourtsInBin(binCats, numCourts)
-      const courtCounts = courtCountsForBin(numCourts, binCats)
+      const sharedFmt = findSharedGroupsFormat(
+        binCats.length, numCourts, timeBudgetPerBin, trans, pd,
+        format.minGroups, format.minTeamsPerGroup, format.teamsAdvancePerGroup, format.minMatchesPerTeam
+      )
       const catFmts = new Map<string, { numGroups: number; teamsPerGroup: number }>()
-      for (const cat of binCats) {
-        const cfc = Math.max(1, courtCounts.get(cat.id) ?? 1)
-        catFmts.set(cat.id, findCategoryFormat(
-          cfc, timeBudgetPerBin, trans, pd,
-          format.minGroups, format.minTeamsPerGroup, format.teamsAdvancePerGroup, format.minMatchesPerTeam
-        ))
-      }
+      for (const cat of binCats) catFmts.set(cat.id, sharedFmt)
+      const catCourts = assignKOCourtsForBin(binCats, numCourts)
       bins.push({ cats: binCats, catCourts, catFmts })
     }
 
@@ -697,15 +818,12 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
     if (orphans.length > 0 && bins.length > 0) {
       const b = bins[0]
       b.cats = [...b.cats, ...orphans]
-      b.catCourts = assignCourtsInBin(b.cats, numCourts)
-      const newCourtCounts = courtCountsForBin(numCourts, b.cats)
-      for (const cat of b.cats) {
-        const cfc = Math.max(1, newCourtCounts.get(cat.id) ?? 1)
-        b.catFmts.set(cat.id, findCategoryFormat(
-          cfc, timeBudgetPerBin, trans, pd,
-          format.minGroups, format.minTeamsPerGroup, format.teamsAdvancePerGroup, format.minMatchesPerTeam
-        ))
-      }
+      const sharedFmt = findSharedGroupsFormat(
+        b.cats.length, numCourts, timeBudgetPerBin, trans, pd,
+        format.minGroups, format.minTeamsPerGroup, format.teamsAdvancePerGroup, format.minMatchesPerTeam
+      )
+      for (const cat of b.cats) b.catFmts.set(cat.id, sharedFmt)
+      b.catCourts = assignKOCourtsForBin(b.cats, numCourts)
     }
   }
 
@@ -742,32 +860,30 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   }
 
   if (mode === 'complete') {
-    // Each bin: all cats run sequentially, each using all courts
+    // Groups: all cats interleaved via LBC across all courts.
+    // KO: each cat on its dedicated courts (parallel).
     let cursor = startMins
     for (const bin of bins) {
       for (const cs of courtStates) cs.cursor = cursor
+      _schedGroupsAll(bin.cats, bin.catFmts, courtStates, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
+      _barrierCat(courtStates)
       for (const cat of bin.cats) {
-        const catCourts = courtStates
+        const koIdxs = bin.catCourts.get(cat.id) ?? []
+        const koCourts = koIdxs.length > 0 ? koIdxs.map(i => courtStates[i]) : courtStates
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
-        _barrierCat(catCourts)
-        schedKOForCat(cat, catCourts, catFmt)
+        schedKOForCat(cat, koCourts, catFmt)
       }
       cursor = Math.max(...courtStates.map(c => c.cursor))
     }
   } else {
-    // by_phase: all bins' groups sequentially, then all bins' KO sequentially
+    // by_phase: groups interleaved for all bins, then KO per cat on dedicated courts
     let cursor = startMins
 
     // Groups pass
     for (const bin of bins) {
       for (const cs of courtStates) cs.cursor = cursor
-      for (const cat of bin.cats) {
-        const catCourts = courtStates
-        const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        _schedGroups(cat.id, cat.name, catCourts, catFmt.numGroups, catFmt.teamsPerGroup, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
-        _barrierCat(catCourts)
-      }
+      _schedGroupsAll(bin.cats, bin.catFmts, courtStates, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
+      _barrierCat(courtStates)
       cursor = Math.max(...courtStates.map(c => c.cursor))
     }
 
@@ -775,9 +891,10 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
     for (const bin of bins) {
       for (const cs of courtStates) cs.cursor = cursor
       for (const cat of bin.cats) {
-        const catCourts = courtStates
+        const koIdxs = bin.catCourts.get(cat.id) ?? []
+        const koCourts = koIdxs.length > 0 ? koIdxs.map(i => courtStates[i]) : courtStates
         const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        schedKOForCat(cat, catCourts, catFmt)
+        schedKOForCat(cat, koCourts, catFmt)
       }
       cursor = Math.max(...courtStates.map(c => c.cursor))
     }
@@ -885,15 +1002,12 @@ export function computeOptimalFormats(
   const minTPG     = Math.max(2, parseInt(String(vd.teams_per_group ?? '3')) || 3)
   const teamsAdv   = Math.max(1, parseInt(String(vd.teams_advance_per_group ?? '2')) || 2)
   const minMatches = Math.max(1, parseInt(String(vd.min_matches_per_team ?? '2')) || 2)
-  const base       = Math.max(1, Math.floor(numCourts / numCats))
-
-  // Sort descending by prestige so order matches the scheduler (sortByPrestige)
   const sortedExpanded = [...expanded].sort((a, b) => parsePrestige(b) - parsePrestige(a))
 
   const result: Record<string, { numGroups: number; teamsPerGroup: number }> = {}
-  sortedExpanded.forEach(name => {
-    result[name] = findCategoryFormat(base, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
-  })
+  if (numCats === 0) return result
+  const sharedFmt = findSharedGroupsFormat(numCats, numCourts, avail, trans, pd, minGroups, minTPG, teamsAdv, minMatches)
+  sortedExpanded.forEach(name => { result[name] = sharedFmt })
   return result
 }
 
