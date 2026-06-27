@@ -625,6 +625,7 @@ export function ScheduleAgent({
           </p>
           <DistributionConfigurator
             categories={(tournamentConfig.categories as Array<{ id: string; name: string }>) ?? []}
+            numCourts={(tournamentConfig.courts as Array<unknown>)?.length ?? 0}
             distribution={distribution}
             onChange={handleDistributionChange}
             disabled={isAutoGenerating || isGenerating}
