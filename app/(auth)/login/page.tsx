@@ -36,7 +36,7 @@ export default function LoginPage() {
       setError('Email o contraseña incorrectos')
       setLoading(false)
     } else {
-      router.push('/torneos')
+      router.push('/admin')
     }
   }
 

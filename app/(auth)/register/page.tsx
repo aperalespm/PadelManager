@@ -40,7 +40,7 @@ export default function RegisterPage() {
       setError(err.message ?? 'Error al crear la cuenta')
       setLoading(false)
     } else {
-      router.push('/torneos')
+      router.push('/admin')
     }
   }
 
