@@ -1007,10 +1007,10 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
             {field.type === 'text' && <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)]" />}
             {field.type === 'number' && <div className="w-24 h-8 border border-border rounded-[6px] bg-[var(--muted)]" />}
             {field.type === 'select' && (
-              <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)] flex items-center justify-between px-3">
-                <span className="text-[11px] text-muted-foreground/60">{field.options[0] ?? 'Selecciona…'}</span>
-                <span className="text-[10px] text-muted-foreground">▾</span>
-              </div>
+              <select className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)] text-[11px] text-foreground px-2 outline-none">
+                <option value="">Selecciona…</option>
+                {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
             )}
             {field.type === 'checkbox' && (
               <div className="flex items-center gap-2">
