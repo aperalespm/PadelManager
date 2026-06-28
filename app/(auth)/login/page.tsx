@@ -3,7 +3,7 @@
 import { signInAction } from '@/lib/actions/auth'
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -26,7 +26,6 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -37,8 +36,7 @@ export default function LoginPage() {
       setError(result.error)
       setLoading(false)
     } else {
-      const from = searchParams.get('from') ?? '/torneos'
-      router.push(from)
+      router.push('/torneos')
     }
   }
 
