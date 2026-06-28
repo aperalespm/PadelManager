@@ -31,12 +31,17 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { error: err } = await authClient.signIn.email({ email, password })
-    if (err) {
-      setError('Email o contraseña incorrectos')
+    try {
+      const { error: err } = await authClient.signIn.email({ email, password })
+      if (err) {
+        setError('Email o contraseña incorrectos')
+      } else {
+        router.push('/admin')
+      }
+    } catch {
+      setError('Error de conexión. Inténtalo de nuevo.')
+    } finally {
       setLoading(false)
-    } else {
-      router.push('/admin')
     }
   }
 
