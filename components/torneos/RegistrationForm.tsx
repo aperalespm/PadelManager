@@ -169,59 +169,60 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
         </div>
       )}
 
-      {/* ── Tipo de inscripción ──────────────────────────────────── */}
-      {bothEnabled && (
-        <div>
-          <FieldLabel required>¿Cómo te inscribes?</FieldLabel>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setRegType('pair')}
-              className={cn(
-                'flex-1 py-3 rounded-xl border text-[14px] font-semibold transition-all',
-                isPair
-                  ? 'bg-accent text-white border-accent shadow-sm'
-                  : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
-              )}>
-              En pareja
-            </button>
-            <button type="button" onClick={() => setRegType('individual')}
-              className={cn(
-                'flex-1 py-3 rounded-xl border text-[14px] font-semibold transition-all',
-                !isPair
-                  ? 'bg-accent text-white border-accent shadow-sm'
-                  : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
-              )}>
-              Individual
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Categoría ───────────────────────────────────────────── */}
-      {categoryOptions.length > 0 && (
-        <div>
-          <FieldLabel required>Categoría</FieldLabel>
-          <div className="flex flex-wrap gap-2">
-            {categoryOptions.map(cat => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setField('category', cat)}
-                className={cn(
-                  'px-5 py-2 rounded-full border text-[14px] font-medium transition-all',
-                  fields.category === cat
-                    ? 'bg-accent text-white border-accent shadow-sm'
-                    : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
-                )}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ── Jugador 1 ────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
+
+        {/* ── Tipo de inscripción ── */}
+        {bothEnabled && (
+          <div>
+            <FieldLabel required>¿Cómo te inscribes?</FieldLabel>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setRegType('pair')}
+                className={cn(
+                  'flex-1 py-3 rounded-xl border text-[14px] font-semibold transition-all',
+                  isPair
+                    ? 'bg-accent text-white border-accent shadow-sm'
+                    : 'bg-background/70 text-foreground border-border hover:bg-background'
+                )}>
+                En pareja
+              </button>
+              <button type="button" onClick={() => setRegType('individual')}
+                className={cn(
+                  'flex-1 py-3 rounded-xl border text-[14px] font-semibold transition-all',
+                  !isPair
+                    ? 'bg-accent text-white border-accent shadow-sm'
+                    : 'bg-background/70 text-foreground border-border hover:bg-background'
+                )}>
+                Individual
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Categoría ── */}
+        {categoryOptions.length > 0 && (
+          <div>
+            <FieldLabel required>Categoría</FieldLabel>
+            <div className="flex flex-wrap gap-2">
+              {categoryOptions.map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setField('category', cat)}
+                  className={cn(
+                    'px-5 py-2 rounded-full border text-[14px] font-medium transition-all',
+                    fields.category === cat
+                      ? 'bg-accent text-white border-accent shadow-sm'
+                      : 'bg-background/70 text-foreground border-border hover:bg-background'
+                  )}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-2.5">
           <SectionBadge n={1} />
           <span className="text-[15px] font-semibold text-foreground">Tus datos</span>
