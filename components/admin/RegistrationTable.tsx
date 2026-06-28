@@ -34,6 +34,15 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 const SYSTEM_FORM_KEYS = ['name', 'partner_name', 'email', 'partner_email', 'category']
 
+const FORM_KEY_LABELS: Record<string, string> = {
+  side: 'Lado en pista', partner_side: 'Lado pareja',
+  registration_type: 'Tipo de inscripción',
+  conditions: 'Términos y condiciones',
+  phone: 'Teléfono', partner_phone: 'Teléfono pareja',
+  level: 'Nivel', partner_level: 'Nivel pareja',
+}
+const selectCls = 'border border-border rounded-[8px] text-[14px] bg-background px-3 py-2 w-full outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors'
+
 interface PlayerRow {
   registrationId: string
   playerIndex: 1 | 2
@@ -692,31 +701,45 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
                 />
               </div>
 
-              {/* Email pareja */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Email pareja <span className="font-normal normal-case">(opcional)</span>
-                </label>
-                <Input
-                  type="email"
-                  value={(editFormData.partner_email as string) ?? ''}
-                  onChange={e => setEditFormData(prev => ({ ...prev, partner_email: e.target.value }))}
-                  placeholder="email@ejemplo.com"
-                />
-              </div>
-
-              {/* Otros campos */}
-              {otherFormDataKeys.map(key => (
-                <div key={key} className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    {key}
-                  </label>
-                  <Input
-                    value={(editFormData[key] as string) ?? ''}
-                    onChange={e => setEditFormData(prev => ({ ...prev, [key]: e.target.value }))}
-                  />
-                </div>
-              ))}
+              {/* Otros campos de form_data */}
+              {otherFormDataKeys.map(key => {
+                const label = FORM_KEY_LABELS[key] ?? key
+                const val = (editFormData[key] as string) ?? ''
+                const setVal = (v: string) => setEditFormData(prev => ({ ...prev, [key]: v }))
+                if (key === 'conditions') return (
+                  <div key={key} className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</label>
+                    <span className={`text-[13px] font-medium ${val === 'true' ? 'text-[var(--success)]' : 'text-muted-foreground'}`}>
+                      {val === 'true' ? '✓ Aceptadas' : '✗ No aceptadas'}
+                    </span>
+                  </div>
+                )
+                if (key === 'side' || key === 'partner_side') return (
+                  <div key={key} className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</label>
+                    <select value={val} onChange={e => setVal(e.target.value)} className={selectCls}>
+                      <option value="">—</option>
+                      <option value="Derecha">Derecha</option>
+                      <option value="Reves">Reves</option>
+                    </select>
+                  </div>
+                )
+                if (key === 'registration_type') return (
+                  <div key={key} className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</label>
+                    <select value={val} onChange={e => setVal(e.target.value)} className={selectCls}>
+                      <option value="individual">Individual</option>
+                      <option value="pair">Pareja</option>
+                    </select>
+                  </div>
+                )
+                return (
+                  <div key={key} className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</label>
+                    <Input value={val} onChange={e => setVal(e.target.value)} />
+                  </div>
+                )
+              })}
             </div>
 
             {/* Panel footer */}
