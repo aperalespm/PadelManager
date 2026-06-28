@@ -94,22 +94,27 @@ export async function addParticipantByAdmin(input: unknown) {
 }
 
 export async function registerForTournament(input: unknown) {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
-
   const parsed = registerSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const { tournament_id, player2_id, player2_name, registration_type, form_data } = parsed.data
+  const { tournament_id, player2_name, registration_type, form_data } = parsed.data
 
-  const t = await sql`SELECT max_players, registration_type, status FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
+  const t = await sql`SELECT max_players, status FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
   if (t[0].status !== 'open') return { error: 'Las inscripciones están cerradas' }
 
+  // Duplicate check by email stored in form_data
+  const email = (form_data as Record<string, unknown>)?.email as string | undefined
+  if (email) {
+    const existing = await sql`
+      SELECT id FROM registrations
+      WHERE tournament_id = ${tournament_id} AND form_data->>'email' = ${email}
+      LIMIT 1
+    `
+    if (existing[0]) return { error: 'Ya estás inscrito en este torneo' }
+  }
+
   const confirmed = await sql`SELECT count(*)::int AS n FROM registrations WHERE tournament_id = ${tournament_id} AND status = 'confirmed'`
   const isFull = confirmed[0].n >= t[0].max_players
-
-  const existing = await sql`SELECT id FROM registrations WHERE tournament_id = ${tournament_id} AND (player1_id = ${session.user.id} OR player2_id = ${session.user.id}) LIMIT 1`
-  if (existing[0]) return { error: 'Ya estás inscrito en este torneo' }
 
   const status = isFull ? 'waitlist' : 'pending'
   let waitlistPosition = null
@@ -118,15 +123,17 @@ export async function registerForTournament(input: unknown) {
     waitlistPosition = (wl[0].n ?? 0) + 1
   }
 
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS registration_type TEXT DEFAULT 'pair'`
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS form_data JSONB DEFAULT '{}'`
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS category TEXT`
 
   const category = (form_data as Record<string, unknown>)?.category as string | null ?? null
+  const player1Name = (form_data as Record<string, unknown>)?.name as string | null ?? null
 
   const rows = await sql`
-    INSERT INTO registrations (tournament_id, player1_id, player2_id, player2_name, registration_type, form_data, category, status, waitlist_position)
-    VALUES (${tournament_id}, ${session.user.id}, ${player2_id ?? null}, ${player2_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(form_data ?? {})}, ${category}, ${status}, ${waitlistPosition})
+    INSERT INTO registrations (tournament_id, player1_name, player2_name, registration_type, form_data, category, status, waitlist_position)
+    VALUES (${tournament_id}, ${player1Name}, ${player2_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(form_data ?? {})}, ${category}, ${status}, ${waitlistPosition})
     RETURNING *
   `
   return { data: rows[0] }
