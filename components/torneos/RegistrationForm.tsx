@@ -24,7 +24,7 @@ interface RegistrationConfig {
 
 const DEFAULT_CONFIG: RegistrationConfig = {
   registration_types: ['pair'],
-  system_fields: { name: true, email: true, phone: true, level: false, conditions: true, partner_name: true, partner_email: true, partner_phone: false, partner_level: false },
+  system_fields: { name: true, email: true, phone: true, level: false, side: true, conditions: true, partner_name: true, partner_email: true, partner_phone: false, partner_level: false, partner_side: true },
   custom_fields: [],
 }
 
