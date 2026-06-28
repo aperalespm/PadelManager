@@ -179,7 +179,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
                 'flex-1 py-3 rounded-xl border text-[14px] font-semibold transition-all',
                 isPair
                   ? 'bg-accent text-white border-accent shadow-sm'
-                  : 'border-border text-muted-foreground hover:border-accent/40 hover:bg-muted/50'
+                  : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
               )}>
               En pareja
             </button>
@@ -188,7 +188,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
                 'flex-1 py-3 rounded-xl border text-[14px] font-semibold transition-all',
                 !isPair
                   ? 'bg-accent text-white border-accent shadow-sm'
-                  : 'border-border text-muted-foreground hover:border-accent/40 hover:bg-muted/50'
+                  : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
               )}>
               Individual
             </button>
@@ -210,7 +210,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
                   'px-5 py-2 rounded-full border text-[14px] font-medium transition-all',
                   fields.category === cat
                     ? 'bg-accent text-white border-accent shadow-sm'
-                    : 'border-border text-foreground bg-background hover:border-accent/40 hover:bg-muted/50'
+                    : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
                 )}
               >
                 {cat}
@@ -221,7 +221,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
       )}
 
       {/* ── Jugador 1 ────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-border bg-muted/20 p-5 flex flex-col gap-4">
+      <section className="rounded-2xl border border-border bg-muted/40 p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2.5">
           <SectionBadge n={1} />
           <span className="text-[15px] font-semibold text-foreground">Tus datos</span>
@@ -259,7 +259,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
                   'flex-1 py-2.5 rounded-xl border text-[14px] font-semibold transition-all',
                   fields.side === side
                     ? 'bg-accent text-white border-accent shadow-sm'
-                    : 'border-border text-muted-foreground hover:border-accent/40 hover:bg-muted/50'
+                    : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
                 )}
               >{side}</button>
             ))}
@@ -269,7 +269,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
 
       {/* ── Jugador 2 ────────────────────────────────────────────── */}
       {isPair && (
-        <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
+        <section className="rounded-2xl border border-border bg-muted/40 p-5 flex flex-col gap-4">
           <div className="flex items-center gap-2.5">
             <SectionBadge n={2} accent />
             <span className="text-[15px] font-semibold text-accent">Datos de tu pareja</span>
@@ -307,7 +307,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
                     'flex-1 py-2.5 rounded-xl border text-[14px] font-semibold transition-all',
                     fields.partner_side === side
                       ? 'bg-accent text-white border-accent shadow-sm'
-                      : 'border-accent/20 text-muted-foreground hover:border-accent/40 hover:bg-accent/10'
+                      : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
                   )}
                 >{side}</button>
               ))}
