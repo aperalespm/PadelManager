@@ -170,7 +170,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
       )}
 
       {/* ── Jugador 1 ────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
+      <section className="rounded-2xl border border-accent/30 bg-accent/[0.08] p-5 flex flex-col gap-4">
 
         {/* ── Tipo de inscripción ── */}
         {bothEnabled && (
@@ -270,7 +270,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
 
       {/* ── Jugador 2 ────────────────────────────────────────────── */}
       {isPair && (
-        <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
+        <section className="rounded-2xl border border-accent/30 bg-accent/[0.08] p-5 flex flex-col gap-4">
           <div className="flex items-center gap-2.5">
             <SectionBadge n={2} accent />
             <span className="text-[15px] font-semibold text-accent">Datos de tu pareja</span>
@@ -318,35 +318,43 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
       )}
 
       {/* ── Custom fields ─────────────────────────────────────────── */}
-      {config.custom_fields.filter(cf =>
-        cf.applies_to === 'all' || (isPair && cf.applies_to === 'pair') || (!isPair && cf.applies_to === 'individual')
-      ).map(cf => (
-        <div key={cf.id}>
-          {cf.type !== 'checkbox' && <FieldLabel required={cf.required}>{cf.label}</FieldLabel>}
-          {cf.type === 'text' && (
-            <input className={inputCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)} />
-          )}
-          {cf.type === 'number' && (
-            <input type="number" className={numberCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)} />
-          )}
-          {cf.type === 'select' && (
-            <select className={inputCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)}>
-              <option value="">Selecciona…</option>
-              {cf.options.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          )}
-          {cf.type === 'checkbox' && (
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input type="checkbox" checked={checks[cf.id] ?? false} onChange={e => setChecks(c => ({ ...c, [cf.id]: e.target.checked }))}
-                className="mt-0.5 w-5 h-5 rounded border-border accent-accent shrink-0" />
-              <span className="text-[14px] text-foreground">
-                {cf.label}
-                {cf.required ? <span className="text-[var(--error)] ml-1">*</span> : <span className="text-muted-foreground ml-1.5 text-[12px]">(opcional)</span>}
-              </span>
-            </label>
-          )}
-        </div>
-      ))}
+      {(() => {
+        const visibleCustom = config.custom_fields.filter(cf =>
+          cf.applies_to === 'all' || (isPair && cf.applies_to === 'pair') || (!isPair && cf.applies_to === 'individual')
+        )
+        if (visibleCustom.length === 0) return null
+        return (
+          <section className="rounded-2xl border border-accent/30 bg-accent/[0.08] p-5 flex flex-col gap-4">
+            {visibleCustom.map(cf => (
+              <div key={cf.id}>
+                {cf.type !== 'checkbox' && <FieldLabel required={cf.required}>{cf.label}</FieldLabel>}
+                {cf.type === 'text' && (
+                  <input className={inputCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)} />
+                )}
+                {cf.type === 'number' && (
+                  <input type="number" className={numberCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)} />
+                )}
+                {cf.type === 'select' && (
+                  <select className={inputCls} value={fields[cf.id] ?? ''} onChange={e => setField(cf.id, e.target.value)}>
+                    <option value="">Selecciona…</option>
+                    {cf.options.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                )}
+                {cf.type === 'checkbox' && (
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={checks[cf.id] ?? false} onChange={e => setChecks(c => ({ ...c, [cf.id]: e.target.checked }))}
+                      className="mt-0.5 w-5 h-5 rounded border-border accent-accent shrink-0" />
+                    <span className="text-[14px] text-foreground">
+                      {cf.label}
+                      {cf.required ? <span className="text-[var(--error)] ml-1">*</span> : <span className="text-muted-foreground ml-1.5 text-[12px]">(opcional)</span>}
+                    </span>
+                  </label>
+                )}
+              </div>
+            ))}
+          </section>
+        )
+      })()}
 
       {/* ── Condiciones ────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-muted/30 p-4">
