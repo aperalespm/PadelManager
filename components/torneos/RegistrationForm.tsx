@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { registerForTournament } from '@/lib/actions/registrations'
 import { cn } from '@/lib/utils'
 
-// ── Types (mirrors admin config) ─────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type FieldAppliesTo = 'all' | 'pair' | 'individual'
 type FieldType = 'text' | 'number' | 'select' | 'checkbox'
@@ -31,17 +31,30 @@ const DEFAULT_CONFIG: RegistrationConfig = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function FieldLabel({ children, required, optional }: { children: React.ReactNode; required: boolean; optional?: boolean }) {
+function FieldLabel({ children, required }: { children: React.ReactNode; required: boolean }) {
   return (
-    <label className="block text-[13px] font-medium text-foreground mb-1.5">
+    <label className="block text-[14px] font-medium text-foreground mb-2">
       {children}
-      {required ? <span className="text-[var(--error)] ml-0.5">*</span> : <span className="text-muted-foreground font-normal ml-1 text-[12px]">(opcional)</span>}
+      {required
+        ? <span className="text-[var(--error)] ml-1 text-[13px]">*</span>
+        : <span className="text-muted-foreground font-normal ml-1.5 text-[12px]">(opcional)</span>}
     </label>
   )
 }
 
-const inputCls = 'w-full px-3 py-2.5 border border-border rounded-[8px] text-[14px] bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors'
-const numberCls = 'w-24 px-3 py-2.5 border border-border rounded-[8px] text-[14px] bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors'
+function SectionBadge({ n, accent }: { n: number; accent?: boolean }) {
+  return (
+    <span className={cn(
+      'inline-flex items-center justify-center w-6 h-6 rounded-full text-[12px] font-bold shrink-0',
+      accent ? 'bg-accent/15 text-accent' : 'bg-accent text-white'
+    )}>
+      {n}
+    </span>
+  )
+}
+
+const inputCls = 'w-full px-3.5 py-3 border border-border rounded-xl text-[15px] bg-background text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors'
+const numberCls = 'w-28 px-3.5 py-3 border border-border rounded-xl text-[15px] bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors'
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -58,7 +71,6 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
     ? { ...DEFAULT_CONFIG, ...rawConfig, system_fields: { ...DEFAULT_CONFIG.system_fields, ...(rawConfig.system_fields ?? {}) } }
     : DEFAULT_CONFIG
 
-  // Build selectable category options from venue_details (same expansion as horario page)
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
   const rawCats = (vd.categories as Array<{ name: string; genders?: string[] }>) ?? []
   const categoryOptions: string[] = rawCats.flatMap(c => {
@@ -74,7 +86,6 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
   const [regType, setRegType] = useState<'pair' | 'individual'>(hasPair ? 'pair' : 'individual')
   const isPair = regType === 'pair'
 
-  // Field values
   const [fields, setFields]   = useState<Record<string, string>>({})
   const [checks, setChecks]   = useState<Record<string, boolean>>({})
   const [conditions, setConditions] = useState(false)
@@ -153,30 +164,42 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
 
   return (
     <div className="flex flex-col gap-5">
+
+      {/* Waitlist warning */}
       {isFull && (
-        <div className="bg-[var(--warning-surface,#fff7ed)] border border-[var(--warning)]/40 rounded-[8px] px-4 py-3 text-[13px] text-[var(--warning)]">
+        <div className="bg-[var(--warning-surface,#fff7ed)] border border-[var(--warning)]/40 rounded-xl px-4 py-3 text-[13px] text-[var(--warning)]">
           ⚠️ Este torneo está completo. Puedes apuntarte a la lista de espera.
         </div>
       )}
 
-      {/* Type selector */}
+      {/* ── Tipo de inscripción ──────────────────────────────────── */}
       {bothEnabled && (
         <div>
           <FieldLabel required>¿Cómo te inscribes?</FieldLabel>
-          <div className="flex rounded-[8px] overflow-hidden border border-border text-[13px] font-semibold">
+          <div className="flex gap-2">
             <button type="button" onClick={() => setRegType('pair')}
-              className={cn('flex-1 py-2.5 transition-colors', isPair ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}>
+              className={cn(
+                'flex-1 py-3 rounded-xl border text-[14px] font-semibold transition-all',
+                isPair
+                  ? 'bg-accent text-white border-accent shadow-sm'
+                  : 'border-border text-muted-foreground hover:border-accent/40 hover:bg-muted/50'
+              )}>
               En pareja
             </button>
             <button type="button" onClick={() => setRegType('individual')}
-              className={cn('flex-1 py-2.5 border-l border-border transition-colors', !isPair ? 'bg-accent text-white' : 'text-muted-foreground hover:text-foreground')}>
+              className={cn(
+                'flex-1 py-3 rounded-xl border text-[14px] font-semibold transition-all',
+                !isPair
+                  ? 'bg-accent text-white border-accent shadow-sm'
+                  : 'border-border text-muted-foreground hover:border-accent/40 hover:bg-muted/50'
+              )}>
               Individual
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Categoría ────────────────────────────────────────── */}
+      {/* ── Categoría ───────────────────────────────────────────── */}
       {categoryOptions.length > 0 && (
         <div>
           <FieldLabel required>Categoría</FieldLabel>
@@ -187,10 +210,10 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
                 type="button"
                 onClick={() => setField('category', cat)}
                 className={cn(
-                  'px-4 py-2 rounded-[8px] border text-[13px] font-medium transition-colors',
+                  'px-5 py-2 rounded-full border text-[14px] font-medium transition-all',
                   fields.category === cat
-                    ? 'bg-accent text-white border-accent'
-                    : 'border-border text-foreground hover:bg-muted'
+                    ? 'bg-accent text-white border-accent shadow-sm'
+                    : 'border-border text-foreground bg-background hover:border-accent/40 hover:bg-muted/50'
                 )}
               >
                 {cat}
@@ -200,81 +223,103 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
         </div>
       )}
 
-      {/* ── Jugador 1 ─────────────────────────────────────────── */}
-      <section>
-        <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-3">Jugador 1 — tus datos</p>
-        <div className="flex flex-col gap-4">
+      {/* ── Jugador 1 ────────────────────────────────────────────── */}
+      <section className="rounded-2xl border border-border bg-muted/20 p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-2.5">
+          <SectionBadge n={1} />
+          <span className="text-[15px] font-semibold text-foreground">Tus datos</span>
+        </div>
+
+        {sf.name && (
           <div>
             <FieldLabel required={sf.name}>Nombre completo</FieldLabel>
             <input className={inputCls} value={fields.name ?? ''} onChange={e => setField('name', e.target.value)} placeholder="Tu nombre y apellido" />
           </div>
+        )}
+        {sf.email && (
           <div>
             <FieldLabel required={sf.email}>Email</FieldLabel>
             <input type="email" className={inputCls} value={fields.email ?? ''} onChange={e => setField('email', e.target.value)} placeholder="tu@email.com" />
           </div>
+        )}
+        {sf.phone && (
           <div>
             <FieldLabel required={sf.phone}>Teléfono</FieldLabel>
             <input type="tel" className={inputCls} value={fields.phone ?? ''} onChange={e => setField('phone', e.target.value)} placeholder="+34 600 000 000" />
           </div>
+        )}
+        <div>
+          <FieldLabel required={sf.level}>Nivel</FieldLabel>
+          <input type="number" className={numberCls} value={fields.level ?? ''} onChange={e => setField('level', e.target.value)} placeholder="1-10" min="1" max="10" />
+        </div>
+        <div>
+          <FieldLabel required>Lado en pista</FieldLabel>
+          <div className="flex gap-2">
+            {(['Derecha', 'Reves'] as const).map(side => (
+              <button key={side} type="button"
+                onClick={() => setField('side', side)}
+                className={cn(
+                  'flex-1 py-2.5 rounded-xl border text-[14px] font-semibold transition-all',
+                  fields.side === side
+                    ? 'bg-accent text-white border-accent shadow-sm'
+                    : 'border-border text-muted-foreground hover:border-accent/40 hover:bg-muted/50'
+                )}
+              >{side}</button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Jugador 2 ────────────────────────────────────────────── */}
+      {isPair && (
+        <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-2.5">
+            <SectionBadge n={2} accent />
+            <span className="text-[15px] font-semibold text-accent">Datos de tu pareja</span>
+          </div>
+
+          {sf.partner_name && (
+            <div>
+              <FieldLabel required={sf.partner_name}>Nombre completo</FieldLabel>
+              <input className={inputCls} value={fields.partner_name ?? ''} onChange={e => setField('partner_name', e.target.value)} placeholder="Nombre y apellido de tu pareja" />
+            </div>
+          )}
+          {sf.partner_email && (
+            <div>
+              <FieldLabel required={sf.partner_email}>Email</FieldLabel>
+              <input type="email" className={inputCls} value={fields.partner_email ?? ''} onChange={e => setField('partner_email', e.target.value)} placeholder="email@pareja.com" />
+            </div>
+          )}
+          {sf.partner_phone && (
+            <div>
+              <FieldLabel required={sf.partner_phone}>Teléfono</FieldLabel>
+              <input type="tel" className={inputCls} value={fields.partner_phone ?? ''} onChange={e => setField('partner_phone', e.target.value)} placeholder="+34 600 000 000" />
+            </div>
+          )}
           <div>
-            <FieldLabel required={sf.level}>Nivel</FieldLabel>
-            <input type="number" className={numberCls} value={fields.level ?? ''} onChange={e => setField('level', e.target.value)} placeholder="1-10" min="1" max="10" />
+            <FieldLabel required={sf.partner_level}>Nivel</FieldLabel>
+            <input type="number" className={numberCls} value={fields.partner_level ?? ''} onChange={e => setField('partner_level', e.target.value)} placeholder="1-10" min="1" max="10" />
           </div>
           <div>
             <FieldLabel required>Lado en pista</FieldLabel>
-            <div className="flex rounded-[8px] border border-border overflow-hidden w-fit">
+            <div className="flex gap-2">
               {(['Derecha', 'Reves'] as const).map(side => (
                 <button key={side} type="button"
-                  onClick={() => setField('side', side)}
-                  className={cn('px-5 py-2.5 text-[13px] font-semibold transition-colors',
-                    fields.side === side ? 'bg-accent text-white' : 'bg-background text-muted-foreground hover:text-foreground'
+                  onClick={() => setField('partner_side', side)}
+                  className={cn(
+                    'flex-1 py-2.5 rounded-xl border text-[14px] font-semibold transition-all',
+                    fields.partner_side === side
+                      ? 'bg-accent text-white border-accent shadow-sm'
+                      : 'border-accent/20 text-muted-foreground hover:border-accent/40 hover:bg-accent/10'
                   )}
                 >{side}</button>
               ))}
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ── Jugador 2 ─────────────────────────────────────────── */}
-      {isPair && (
-        <section className="border-t border-border pt-5">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-accent mb-3">Jugador 2 — datos de tu pareja</p>
-          <div className="flex flex-col gap-4">
-            <div>
-              <FieldLabel required={sf.partner_name}>Nombre completo</FieldLabel>
-              <input className={cn(inputCls, 'border-accent/30 focus:border-accent')} value={fields.partner_name ?? ''} onChange={e => setField('partner_name', e.target.value)} placeholder="Nombre y apellido de tu pareja" />
-            </div>
-            <div>
-              <FieldLabel required={sf.partner_email}>Email</FieldLabel>
-              <input type="email" className={cn(inputCls, 'border-accent/30 focus:border-accent')} value={fields.partner_email ?? ''} onChange={e => setField('partner_email', e.target.value)} placeholder="email@pareja.com" />
-            </div>
-            <div>
-              <FieldLabel required={sf.partner_phone}>Teléfono</FieldLabel>
-              <input type="tel" className={cn(inputCls, 'border-accent/30 focus:border-accent')} value={fields.partner_phone ?? ''} onChange={e => setField('partner_phone', e.target.value)} placeholder="+34 600 000 000" />
-            </div>
-            <div>
-              <FieldLabel required={sf.partner_level}>Nivel</FieldLabel>
-              <input type="number" className={cn(numberCls, 'border-accent/30 focus:border-accent')} value={fields.partner_level ?? ''} onChange={e => setField('partner_level', e.target.value)} placeholder="1-10" min="1" max="10" />
-            </div>
-            <div>
-              <FieldLabel required>Lado en pista</FieldLabel>
-              <div className="flex rounded-[8px] border border-accent/30 overflow-hidden w-fit">
-                {(['Derecha', 'Reves'] as const).map(side => (
-                  <button key={side} type="button"
-                    onClick={() => setField('partner_side', side)}
-                    className={cn('px-5 py-2.5 text-[13px] font-semibold transition-colors',
-                      fields.partner_side === side ? 'bg-accent text-white' : 'bg-background text-muted-foreground hover:text-foreground'
-                    )}
-                  >{side}</button>
-                ))}
-              </div>
-            </div>
-          </div>
         </section>
       )}
 
-      {/* ── Custom fields ─────────────────────────────────────── */}
+      {/* ── Custom fields ─────────────────────────────────────────── */}
       {config.custom_fields.filter(cf =>
         cf.applies_to === 'all' || (isPair && cf.applies_to === 'pair') || (!isPair && cf.applies_to === 'individual')
       ).map(cf => (
@@ -293,39 +338,44 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
             </select>
           )}
           {cf.type === 'checkbox' && (
-            <label className="flex items-start gap-2.5 cursor-pointer">
+            <label className="flex items-start gap-3 cursor-pointer">
               <input type="checkbox" checked={checks[cf.id] ?? false} onChange={e => setChecks(c => ({ ...c, [cf.id]: e.target.checked }))}
-                className="mt-0.5 w-4 h-4 rounded border-border accent-accent shrink-0" />
-              <span className="text-[13px] text-foreground">
+                className="mt-0.5 w-5 h-5 rounded border-border accent-accent shrink-0" />
+              <span className="text-[14px] text-foreground">
                 {cf.label}
-                {cf.required ? <span className="text-[var(--error)] ml-0.5">*</span> : <span className="text-muted-foreground ml-1 text-[12px]">(opcional)</span>}
+                {cf.required ? <span className="text-[var(--error)] ml-1">*</span> : <span className="text-muted-foreground ml-1.5 text-[12px]">(opcional)</span>}
               </span>
             </label>
           )}
         </div>
       ))}
 
-      {/* ── Conditions ────────────────────────────────────────── */}
-      <div className="border-t border-border pt-4">
-        <p className="text-[12px] text-muted-foreground mb-3 leading-relaxed">
+      {/* ── Condiciones ────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+        <p className="text-[13px] text-muted-foreground mb-3 leading-relaxed">
           Al inscribirte confirmas que conoces las normas del torneo y aceptas las condiciones de participación establecidas por el organizador.
         </p>
-        <label className="flex items-start gap-2.5 cursor-pointer">
+        <label className="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" checked={conditions} onChange={e => setConditions(e.target.checked)}
-            className="mt-0.5 w-4 h-4 rounded border-border accent-accent shrink-0" />
-          <span className="text-[13px] text-foreground">
+            className="w-5 h-5 rounded border-border accent-accent shrink-0" />
+          <span className="text-[14px] font-medium text-foreground">
             Acepto los términos y condiciones
-            {sf.conditions ? <span className="text-[var(--error)] ml-0.5">*</span> : <span className="text-muted-foreground ml-1 text-[12px]">(opcional)</span>}
+            {sf.conditions ? <span className="text-[var(--error)] ml-1">*</span> : <span className="text-muted-foreground font-normal ml-1.5 text-[12px]">(opcional)</span>}
           </span>
         </label>
       </div>
 
-      {error && <p className="text-[13px] text-[var(--error)] bg-[var(--error)]/5 border border-[var(--error)]/20 rounded-[6px] px-3 py-2">{error}</p>}
+      {error && (
+        <p className="text-[13px] text-[var(--error)] bg-[var(--error)]/5 border border-[var(--error)]/20 rounded-xl px-4 py-3">
+          {error}
+        </p>
+      )}
 
       <button onClick={handleSubmit} disabled={loading}
-        className="w-full py-3 bg-accent text-white rounded-[8px] text-[14px] font-semibold hover:bg-accent/90 transition-colors disabled:opacity-60">
+        className="w-full py-4 bg-accent text-white rounded-xl text-[15px] font-semibold hover:bg-accent/90 transition-all shadow-sm disabled:opacity-60">
         {loading ? 'Enviando…' : isFull ? 'Apuntarse a lista de espera' : 'Confirmar inscripción'}
       </button>
+
     </div>
   )
 }
