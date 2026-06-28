@@ -601,16 +601,32 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
               </div>
 
               {/* Pareja */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Pareja <span className="font-normal normal-case">(opcional)</span>
-                </label>
-                <Input
-                  value={editP2}
-                  onChange={e => setEditP2(e.target.value)}
-                  placeholder="Nombre de la pareja"
-                />
-              </div>
+              {(() => {
+                const otherPlayers = initialRegs
+                  .filter(r => r.id !== editReg.id)
+                  .flatMap(r => [r.player1_name as string, r.player2_name as string | undefined])
+                  .filter((n): n is string => !!n)
+                  .filter((n, i, a) => a.indexOf(n) === i)
+                  .sort()
+                const listId = `pareja-list-${editReg.id}`
+                return (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Pareja <span className="font-normal normal-case">(opcional)</span>
+                    </label>
+                    <input
+                      list={listId}
+                      value={editP2}
+                      onChange={e => setEditP2(e.target.value)}
+                      placeholder="Buscar inscrito o escribir nombre…"
+                      className="border border-border rounded-[8px] text-[14px] bg-background px-3 py-2 w-full outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-colors"
+                    />
+                    <datalist id={listId}>
+                      {otherPlayers.map(name => <option key={name} value={name} />)}
+                    </datalist>
+                  </div>
+                )
+              })()}
 
               {/* Estado segmented control */}
               <div className="flex flex-col gap-1.5">
