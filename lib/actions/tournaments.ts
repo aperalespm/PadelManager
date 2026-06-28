@@ -4,10 +4,10 @@ import { sql } from '@/lib/db'
 import { z } from 'zod'
 import { createTournamentSchema, updateTournamentSchema } from '@/lib/validations'
 import { generateSchedule, type GeneratorConfig, type PhaseDurations } from '@/lib/schedule/generator'
-import { getSession } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 
 async function requireOrganizer(): Promise<string> {
-  const session = await getSession()
+  const { data: session } = await auth.getSession()
   if (!session?.user?.id) throw new Error('No autenticado')
   return session.user.id
 }

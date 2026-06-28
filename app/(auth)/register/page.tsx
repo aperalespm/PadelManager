@@ -1,6 +1,6 @@
 'use client'
 
-import { signUpAction } from '@/lib/actions/auth'
+import { authClient } from '@/lib/auth-client'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -35,9 +35,9 @@ export default function RegisterPage() {
     if (password !== confirm) { setError('Las contraseñas no coinciden'); return }
     setLoading(true)
     setError('')
-    const result = await signUpAction(name, email, password)
-    if (result.error) {
-      setError(result.error)
+    const { error: err } = await authClient.signUp.email({ email, password, name })
+    if (err) {
+      setError(err.message ?? 'Error al crear la cuenta')
       setLoading(false)
     } else {
       router.push('/torneos')
