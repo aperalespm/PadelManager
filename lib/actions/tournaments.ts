@@ -4,8 +4,13 @@ import { sql } from '@/lib/db'
 import { z } from 'zod'
 import { createTournamentSchema, updateTournamentSchema } from '@/lib/validations'
 import { generateSchedule, type GeneratorConfig, type PhaseDurations } from '@/lib/schedule/generator'
+import { getSession } from '@/lib/auth'
 
-const DEMO_ORGANIZER_ID = '00000000-0000-0000-0000-000000000000'
+async function requireOrganizer(): Promise<string> {
+  const session = await getSession()
+  if (!session?.user?.id) throw new Error('No autenticado')
+  return session.user.id
+}
 
 function generateSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Math.random().toString(36).slice(2, 7)
@@ -48,35 +53,40 @@ export async function getTournamentById(id: string) {
 }
 
 export async function getMyTournaments() {
+  const organizerId = await requireOrganizer()
   const rows = await sql`
     SELECT t.*,
       (SELECT count(*) FROM registrations r WHERE r.tournament_id = t.id)::int AS total_registrations,
       (SELECT count(*) FROM registrations r WHERE r.tournament_id = t.id AND r.status = 'confirmed')::int AS confirmed_count
     FROM tournaments t
+    WHERE t.organizer_id = ${organizerId}
     ORDER BY t.created_at DESC
   `
   return { data: rows }
 }
 
 export async function getAllTournamentsForSidebar() {
+  const organizerId = await requireOrganizer()
   const rows = await sql`
-    SELECT id, name, status FROM tournaments ORDER BY created_at ASC
+    SELECT id, name, status FROM tournaments WHERE organizer_id = ${organizerId} ORDER BY created_at ASC
   `
   return rows as { id: string; name: string; status: string }[]
 }
 
 export async function createDraftTournament() {
+  const organizerId = await requireOrganizer()
   const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   const slug = generateSlug('nuevo-torneo')
   const rows = await sql`
     INSERT INTO tournaments (organizer_id, name, venue_name, venue_address, venue_details, category, format, registration_type, max_players, start_date, share_slug, status)
-    VALUES (${DEMO_ORGANIZER_ID}, 'Nuevo torneo', 'Por confirmar', 'Por confirmar', '{}', 'Abierta', 'elimination', 'pair', 16, ${nextWeek.toISOString()}, ${slug}, 'draft')
+    VALUES (${organizerId}, 'Nuevo torneo', 'Por confirmar', 'Por confirmar', '{}', 'Abierta', 'elimination', 'pair', 16, ${nextWeek.toISOString()}, ${slug}, 'draft')
     RETURNING id
   `
   return { data: rows[0] as { id: string } }
 }
 
 export async function createTournament(input: unknown) {
+  const organizerId = await requireOrganizer()
   const parsed = createTournamentSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
@@ -85,7 +95,7 @@ export async function createTournament(input: unknown) {
 
   const rows = await sql`
     INSERT INTO tournaments (organizer_id, name, description, venue_name, venue_address, venue_details, category, format, registration_type, max_players, price_info, cancel_deadline, start_date, end_date, share_slug, status)
-    VALUES (${DEMO_ORGANIZER_ID}, ${d.name}, ${d.description ?? null}, ${d.venue_name}, ${d.venue_address}, ${JSON.stringify(d.venue_details ?? {})}, ${d.category}, ${d.format}, ${d.registration_type}, ${d.max_players}, ${d.price_info ?? null}, ${d.cancel_deadline ?? null}, ${d.start_date}, ${d.end_date ?? null}, ${slug}, 'draft')
+    VALUES (${organizerId}, ${d.name}, ${d.description ?? null}, ${d.venue_name}, ${d.venue_address}, ${JSON.stringify(d.venue_details ?? {})}, ${d.category}, ${d.format}, ${d.registration_type}, ${d.max_players}, ${d.price_info ?? null}, ${d.cancel_deadline ?? null}, ${d.start_date}, ${d.end_date ?? null}, ${slug}, 'draft')
     RETURNING *
   `
   return { data: rows[0] }
@@ -166,13 +176,14 @@ export async function deleteTournament(id: string) {
 }
 
 export async function duplicateTournament(id: string) {
+  const organizerId = await requireOrganizer()
   const src = await sql`SELECT * FROM tournaments WHERE id = ${id} LIMIT 1`
   if (!src[0]) return { error: 'Torneo no encontrado' }
   const s = src[0] as Record<string, unknown>
   const slug = generateSlug('copia')
   const rows = await sql`
     INSERT INTO tournaments (organizer_id, name, description, venue_name, venue_address, venue_details, category, format, registration_type, max_players, price_info, start_date, end_date, cancel_deadline, share_slug, status)
-    VALUES (${DEMO_ORGANIZER_ID}, ${'Copia de ' + (s.name as string)}, ${s.description ?? null}, ${s.venue_name}, ${s.venue_address}, ${s.venue_details ? JSON.stringify(s.venue_details) : '{}'}::jsonb, ${s.category}, ${s.format}, ${s.registration_type}, ${s.max_players}, ${s.price_info ?? null}, ${s.start_date}, ${s.end_date ?? null}, ${s.cancel_deadline ?? null}, ${slug}, 'draft')
+    VALUES (${organizerId}, ${'Copia de ' + (s.name as string)}, ${s.description ?? null}, ${s.venue_name}, ${s.venue_address}, ${s.venue_details ? JSON.stringify(s.venue_details) : '{}'}::jsonb, ${s.category}, ${s.format}, ${s.registration_type}, ${s.max_players}, ${s.price_info ?? null}, ${s.start_date}, ${s.end_date ?? null}, ${s.cancel_deadline ?? null}, ${slug}, 'draft')
     RETURNING id
   `
   const newId = (rows[0] as { id: string }).id
@@ -255,6 +266,7 @@ const wizardSchema = z.object({
 export async function createTournamentFromWizard(input: unknown): Promise<
   { data: { tournamentId: string } } | { error: string }
 > {
+  const organizerId = await requireOrganizer()
   const parsed = wizardSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
@@ -327,7 +339,7 @@ export async function createTournamentFromWizard(input: unknown): Promise<
       INSERT INTO tournaments
         (organizer_id, name, venue_name, venue_address, venue_details, category, format, registration_type, max_players, start_date, end_date, share_slug, status)
       VALUES (
-        ${DEMO_ORGANIZER_ID}, ${d.name}, 'Por confirmar', 'Por confirmar',
+        ${organizerId}, ${d.name}, 'Por confirmar', 'Por confirmar',
         ${JSON.stringify(venueDetails)}::jsonb,
         ${categoryLabel}, 'groups_elimination', 'pair',
         ${d.minGroups * d.minTeamsPerGroup * expandedCategories.length * 2},
@@ -359,7 +371,7 @@ export async function createTournamentFromWizard(input: unknown): Promise<
     }
     await sql`
       INSERT INTO tournament_schedules (user_id, tournament_id, schedule_data, version_history, version)
-      VALUES (${DEMO_ORGANIZER_ID}, ${tournamentId}, ${JSON.stringify(generatedSchedule)}, ${JSON.stringify([historyEntry])}, 1)
+      VALUES (${organizerId}, ${tournamentId}, ${JSON.stringify(generatedSchedule)}, ${JSON.stringify([historyEntry])}, 1)
     `
 
     return { data: { tournamentId } }
