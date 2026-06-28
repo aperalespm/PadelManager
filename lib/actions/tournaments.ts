@@ -155,8 +155,12 @@ export async function closeTournamentRegistrations(id: string) {
 }
 
 export async function deleteTournament(id: string) {
+  const regCount = await sql`SELECT count(*)::int AS n FROM registrations WHERE tournament_id = ${id}`
+  const n = (regCount[0]?.n as number) ?? 0
+  if (n > 0) {
+    return { error: `No se puede eliminar: hay ${n} inscripción${n === 1 ? '' : 'es'}. Elimínalas primero desde la pestaña Inscritos.` }
+  }
   await sql`DELETE FROM tournament_phases WHERE tournament_id = ${id}`
-  await sql`DELETE FROM registrations WHERE tournament_id = ${id}`
   await sql`DELETE FROM tournaments WHERE id = ${id}`
   return { data: true }
 }

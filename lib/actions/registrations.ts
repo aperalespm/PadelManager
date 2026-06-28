@@ -48,28 +48,26 @@ export async function getRegistrations(tournamentId: string) {
 const addParticipantSchema = z.object({
   tournament_id: z.string().uuid(),
   name: z.string().min(1),
-  email: z.string().email().optional(),
   partner_name: z.string().optional(),
-  partner_email: z.string().email().optional(),
   registration_type: z.enum(['pair', 'individual']).optional(),
   status: z.enum(['confirmed', 'pending']).optional(),
   category: z.string().optional(),
+  form_data: z.record(z.string(), z.string()).optional(),
 })
 
 export async function addParticipantByAdmin(input: unknown) {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
-
   const parsed = addParticipantSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
-  const { tournament_id, name, email, partner_name, partner_email, registration_type, status, category } = parsed.data
+  const { tournament_id, name, partner_name, registration_type, status, category, form_data } = parsed.data
 
-  const t = await sql`SELECT organizer_id, max_players, status FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
+  const t = await sql`SELECT max_players FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
-  if (t[0].organizer_id !== session.user.id) return { error: 'No autorizado' }
 
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS registration_type TEXT DEFAULT 'pair'`
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS form_data JSONB DEFAULT '{}'`
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS category TEXT`
 
   const desiredStatus = status ?? 'confirmed'
   let finalStatus: string = desiredStatus
@@ -85,31 +83,64 @@ export async function addParticipantByAdmin(input: unknown) {
     }
   }
 
+  // Merge explicit fields into form_data so all data is queryable from JSONB
+  const mergedFormData = { ...form_data, name, partner_name: partner_name ?? undefined, category: category ?? undefined }
+  const resolvedCategory = category ?? (form_data?.category ?? null)
+
   const rows = await sql`
-    INSERT INTO registrations (tournament_id, player1_id, player1_name, player2_name, registration_type, form_data, category, status, waitlist_position)
-    VALUES (${tournament_id}, null, ${name}, ${partner_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify({ name, email, partner_name, partner_email, category })}, ${category ?? null}, ${finalStatus}, ${waitlistPosition})
+    INSERT INTO registrations (tournament_id, player1_name, player2_name, registration_type, form_data, category, status, waitlist_position)
+    VALUES (${tournament_id}, ${name}, ${partner_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(mergedFormData)}, ${resolvedCategory}, ${finalStatus}, ${waitlistPosition})
     RETURNING *
   `
   return { data: rows[0] }
 }
 
 export async function registerForTournament(input: unknown) {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
-
   const parsed = registerSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const { tournament_id, player2_id, player2_name, registration_type, form_data } = parsed.data
+  const { tournament_id, player2_name, registration_type, form_data } = parsed.data
 
-  const t = await sql`SELECT max_players, registration_type, status FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
+  const t = await sql`SELECT max_players, status, registration_config FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
   if (t[0].status !== 'open') return { error: 'Las inscripciones están cerradas' }
 
+  // Server-side validation against registration_config
+  const regConfig = t[0].registration_config as { system_fields?: Record<string, boolean>; custom_fields?: Array<{ id: string; required: boolean; type: string; label: string }> } | null
+  if (regConfig) {
+    const fd = (form_data as Record<string, string>) ?? {}
+    const sf = regConfig.system_fields ?? {}
+    const isPair = registration_type === 'pair'
+    if (sf.name     && !fd.name?.trim())         return { error: 'El nombre es obligatorio' }
+    if (sf.email    && !fd.email?.trim())        return { error: 'El email es obligatorio' }
+    if (sf.phone    && !fd.phone?.trim())        return { error: 'El teléfono es obligatorio' }
+    if (sf.level    && !fd.level?.trim())        return { error: 'El nivel es obligatorio' }
+    if (!fd.side?.trim())                        return { error: 'Indica el lado en pista del jugador 1' }
+    if (isPair) {
+      if (sf.partner_name  && !fd.partner_name?.trim())  return { error: 'El nombre de tu pareja es obligatorio' }
+      if (sf.partner_email && !fd.partner_email?.trim()) return { error: 'El email de tu pareja es obligatorio' }
+      if (sf.partner_phone && !fd.partner_phone?.trim()) return { error: 'El teléfono de tu pareja es obligatorio' }
+      if (!fd.partner_side?.trim())                       return { error: 'Indica el lado en pista del jugador 2' }
+    }
+    for (const cf of regConfig.custom_fields ?? []) {
+      if (!cf.required) continue
+      if (cf.type === 'checkbox' && fd[cf.id] !== 'true') return { error: `"${cf.label}" es obligatorio` }
+      if (cf.type !== 'checkbox' && !fd[cf.id]?.trim())   return { error: `"${cf.label}" es obligatorio` }
+    }
+  }
+
+  // Duplicate check by email stored in form_data
+  const email = (form_data as Record<string, unknown>)?.email as string | undefined
+  if (email) {
+    const existing = await sql`
+      SELECT id FROM registrations
+      WHERE tournament_id = ${tournament_id} AND form_data->>'email' = ${email}
+      LIMIT 1
+    `
+    if (existing[0]) return { error: 'Ya estás inscrito en este torneo' }
+  }
+
   const confirmed = await sql`SELECT count(*)::int AS n FROM registrations WHERE tournament_id = ${tournament_id} AND status = 'confirmed'`
   const isFull = confirmed[0].n >= t[0].max_players
-
-  const existing = await sql`SELECT id FROM registrations WHERE tournament_id = ${tournament_id} AND (player1_id = ${session.user.id} OR player2_id = ${session.user.id}) LIMIT 1`
-  if (existing[0]) return { error: 'Ya estás inscrito en este torneo' }
 
   const status = isFull ? 'waitlist' : 'pending'
   let waitlistPosition = null
@@ -118,15 +149,17 @@ export async function registerForTournament(input: unknown) {
     waitlistPosition = (wl[0].n ?? 0) + 1
   }
 
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS registration_type TEXT DEFAULT 'pair'`
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS form_data JSONB DEFAULT '{}'`
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS category TEXT`
 
   const category = (form_data as Record<string, unknown>)?.category as string | null ?? null
+  const player1Name = (form_data as Record<string, unknown>)?.name as string | null ?? null
 
   const rows = await sql`
-    INSERT INTO registrations (tournament_id, player1_id, player2_id, player2_name, registration_type, form_data, category, status, waitlist_position)
-    VALUES (${tournament_id}, ${session.user.id}, ${player2_id ?? null}, ${player2_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(form_data ?? {})}, ${category}, ${status}, ${waitlistPosition})
+    INSERT INTO registrations (tournament_id, player1_name, player2_name, registration_type, form_data, category, status, waitlist_position)
+    VALUES (${tournament_id}, ${player1Name}, ${player2_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(form_data ?? {})}, ${category}, ${status}, ${waitlistPosition})
     RETURNING *
   `
   return { data: rows[0] }

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { registerForTournament } from '@/lib/actions/registrations'
 import { cn } from '@/lib/utils'
 
@@ -64,7 +63,6 @@ interface RegistrationFormProps {
 }
 
 export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
-  const router = useRouter()
 
   const rawConfig = t.registration_config as RegistrationConfig | null | undefined
   const config: RegistrationConfig = (rawConfig && Array.isArray(rawConfig.custom_fields))
@@ -144,7 +142,6 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
       })
       if ('error' in result) { setError(result.error as string); return }
       setSuccess(true)
-      router.push('/mi-torneo')
     } catch {
       setError('Error al procesar la inscripción')
     } finally {
