@@ -38,11 +38,12 @@ function pill(text: string, color = '#2563eb') {
 }
 
 async function send(to: string, subject: string, html: string) {
-  if (!resend) return
+  if (!resend) { console.error('[email] RESEND_API_KEY not set — skipping'); return }
   try {
-    await resend.emails.send({ from: FROM, to, subject, html })
-  } catch {
-    // Email errors are non-fatal — registration still succeeds
+    const result = await resend.emails.send({ from: FROM, to, subject, html })
+    if ('error' in result && result.error) console.error('[email] Resend error:', result.error)
+  } catch (e) {
+    console.error('[email] send failed:', e)
   }
 }
 
