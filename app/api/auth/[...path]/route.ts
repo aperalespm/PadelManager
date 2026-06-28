@@ -1,9 +1,3 @@
-import { NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
 
-export async function GET() {
-  return NextResponse.json({ error: 'Not used' }, { status: 404 })
-}
-
-export async function POST() {
-  return NextResponse.json({ error: 'Not used' }, { status: 404 })
-}
+export const { GET, POST, PUT, DELETE } = auth.handler()

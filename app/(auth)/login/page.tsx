@@ -1,6 +1,6 @@
 'use client'
 
-import { signInAction } from '@/lib/actions/auth'
+import { authClient } from '@/lib/auth-client'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -31,12 +31,12 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const result = await signInAction(email, password)
-    if (result.error) {
-      setError(result.error)
+    const { error: err } = await authClient.signIn.email({ email, password })
+    if (err) {
+      setError('Email o contraseña incorrectos')
       setLoading(false)
     } else {
-      router.push('/torneos')
+      router.push('/admin')
     }
   }
 
@@ -44,7 +44,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#0d1117]">
       <div className="w-full max-w-sm flex flex-col gap-8">
 
-        {/* Brand */}
         <div className="flex flex-col items-center gap-3">
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
             <circle cx="24" cy="24" r="20" fill="#3b82f620" stroke="#3b82f6" strokeWidth="1.5" />
@@ -56,7 +55,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-[14px] font-semibold text-white">Email</label>
@@ -86,11 +84,8 @@ export default function LoginPage() {
                 required
                 className="w-full px-4 py-3.5 pr-12 rounded-xl bg-[#161b22] border border-[#30363d] text-white placeholder:text-[#8b949e] text-[15px] outline-none focus:border-[#3b82f6] focus:ring-2 focus:ring-[#3b82f620] transition-all"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(v => !v)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8b949e] hover:text-white transition-colors"
-              >
+              <button type="button" onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8b949e] hover:text-white transition-colors">
                 <EyeIcon open={showPassword} />
               </button>
             </div>
@@ -100,11 +95,8 @@ export default function LoginPage() {
             <p className="text-[13px] text-[#f85149] bg-[#f8514910] border border-[#f8514930] rounded-lg px-3 py-2">{error}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3.5 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white font-semibold text-[15px] transition-colors disabled:opacity-60 mt-1"
-          >
+          <button type="submit" disabled={loading}
+            className="w-full py-3.5 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white font-semibold text-[15px] transition-colors disabled:opacity-60 mt-1">
             {loading ? 'Entrando...' : 'Iniciar sesión'}
           </button>
         </form>

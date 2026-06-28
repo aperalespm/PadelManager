@@ -1,12 +1,3 @@
-export const authClient = {
-  signIn: {
-    email: async (_opts: { email: string; password: string; callbackURL?: string }): Promise<void> => {
-      throw new Error('Login not available')
-    },
-  },
-  signUp: {
-    email: async (_opts: { email: string; password: string; name?: string }): Promise<void> => {
-      throw new Error('Register not available')
-    },
-  },
-}
+import { createAuthClient } from '@neondatabase/auth'
+
+export const authClient = createAuthClient(process.env.NEXT_PUBLIC_NEON_AUTH_BASE_URL!)
