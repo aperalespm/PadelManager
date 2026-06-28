@@ -221,7 +221,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
       )}
 
       {/* ── Jugador 1 ────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-border bg-muted/40 p-5 flex flex-col gap-4">
+      <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2.5">
           <SectionBadge n={1} />
           <span className="text-[15px] font-semibold text-foreground">Tus datos</span>
@@ -269,7 +269,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
 
       {/* ── Jugador 2 ────────────────────────────────────────────── */}
       {isPair && (
-        <section className="rounded-2xl border border-border bg-muted/40 p-5 flex flex-col gap-4">
+        <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
           <div className="flex items-center gap-2.5">
             <SectionBadge n={2} accent />
             <span className="text-[15px] font-semibold text-accent">Datos de tu pareja</span>
