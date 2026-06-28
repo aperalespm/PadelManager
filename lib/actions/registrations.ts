@@ -121,12 +121,12 @@ export async function registerForTournament(input: unknown) {
     if (sf.email    && !fd.email?.trim())        return { error: 'El email es obligatorio' }
     if (sf.phone    && !fd.phone?.trim())        return { error: 'El teléfono es obligatorio' }
     if (sf.level    && !fd.level?.trim())        return { error: 'El nivel es obligatorio' }
-    if (!fd.side?.trim())                        return { error: 'Indica el lado en pista del jugador 1' }
+    if (sf.side     && !fd.side?.trim())         return { error: 'Indica el lado en pista del jugador 1' }
     if (isPair) {
       if (sf.partner_name  && !fd.partner_name?.trim())  return { error: 'El nombre de tu pareja es obligatorio' }
       if (sf.partner_email && !fd.partner_email?.trim()) return { error: 'El email de tu pareja es obligatorio' }
       if (sf.partner_phone && !fd.partner_phone?.trim()) return { error: 'El teléfono de tu pareja es obligatorio' }
-      if (!fd.partner_side?.trim())                       return { error: 'Indica el lado en pista del jugador 2' }
+      if (sf.partner_side  && !fd.partner_side?.trim())  return { error: 'Indica el lado en pista del jugador 2' }
     }
     for (const cf of regConfig.custom_fields ?? []) {
       if (!cf.required) continue

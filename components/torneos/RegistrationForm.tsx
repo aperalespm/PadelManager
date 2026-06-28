@@ -10,8 +10,8 @@ type FieldAppliesTo = 'all' | 'pair' | 'individual'
 type FieldType = 'text' | 'number' | 'select' | 'checkbox'
 
 interface SystemFields {
-  name: boolean; email: boolean; phone: boolean; level: boolean; conditions: boolean
-  partner_name: boolean; partner_email: boolean; partner_phone: boolean; partner_level: boolean
+  name: boolean; email: boolean; phone: boolean; level: boolean; side: boolean; conditions: boolean
+  partner_name: boolean; partner_email: boolean; partner_phone: boolean; partner_level: boolean; partner_side: boolean
 }
 interface CustomField {
   id: string; type: FieldType; label: string; required: boolean; options: string[]; applies_to: FieldAppliesTo
@@ -24,7 +24,7 @@ interface RegistrationConfig {
 
 const DEFAULT_CONFIG: RegistrationConfig = {
   registration_types: ['pair'],
-  system_fields: { name: true, email: true, phone: true, level: false, conditions: true, partner_name: true, partner_email: true, partner_phone: false, partner_level: false },
+  system_fields: { name: true, email: true, phone: true, level: false, side: true, conditions: true, partner_name: true, partner_email: true, partner_phone: false, partner_level: false, partner_side: true },
   custom_fields: [],
 }
 
@@ -250,22 +250,24 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
           <FieldLabel required={sf.level}>Nivel</FieldLabel>
           <input type="number" className={numberCls} value={fields.level ?? ''} onChange={e => setField('level', e.target.value)} placeholder="1-10" min="1" max="10" />
         </div>
-        <div>
-          <FieldLabel required>Lado en pista</FieldLabel>
-          <div className="flex gap-2">
-            {(['Derecha', 'Reves'] as const).map(side => (
-              <button key={side} type="button"
-                onClick={() => setField('side', side)}
-                className={cn(
-                  'flex-1 py-2.5 rounded-xl border text-[14px] font-semibold transition-all',
-                  fields.side === side
-                    ? 'bg-accent text-white border-accent shadow-sm'
-                    : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
-                )}
-              >{side}</button>
-            ))}
+        {sf.side !== undefined && (
+          <div>
+            <FieldLabel required={sf.side}>Lado en pista</FieldLabel>
+            <div className="flex gap-2">
+              {(['Derecha', 'Reves'] as const).map(side => (
+                <button key={side} type="button"
+                  onClick={() => setField('side', side)}
+                  className={cn(
+                    'flex-1 py-2.5 rounded-xl border text-[14px] font-semibold transition-all',
+                    fields.side === side
+                      ? 'bg-accent text-white border-accent shadow-sm'
+                      : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
+                  )}
+                >{side}</button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       {/* ── Jugador 2 ────────────────────────────────────────────── */}
@@ -298,22 +300,24 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
             <FieldLabel required={sf.partner_level}>Nivel</FieldLabel>
             <input type="number" className={numberCls} value={fields.partner_level ?? ''} onChange={e => setField('partner_level', e.target.value)} placeholder="1-10" min="1" max="10" />
           </div>
-          <div>
-            <FieldLabel required>Lado en pista</FieldLabel>
-            <div className="flex gap-2">
-              {(['Derecha', 'Reves'] as const).map(side => (
-                <button key={side} type="button"
-                  onClick={() => setField('partner_side', side)}
-                  className={cn(
-                    'flex-1 py-2.5 rounded-xl border text-[14px] font-semibold transition-all',
-                    fields.partner_side === side
-                      ? 'bg-accent text-white border-accent shadow-sm'
-                      : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
-                  )}
-                >{side}</button>
-              ))}
+          {sf.partner_side !== undefined && (
+            <div>
+              <FieldLabel required={sf.partner_side}>Lado en pista</FieldLabel>
+              <div className="flex gap-2">
+                {(['Derecha', 'Reves'] as const).map(side => (
+                  <button key={side} type="button"
+                    onClick={() => setField('partner_side', side)}
+                    className={cn(
+                      'flex-1 py-2.5 rounded-xl border text-[14px] font-semibold transition-all',
+                      fields.partner_side === side
+                        ? 'bg-accent text-white border-accent shadow-sm'
+                        : 'bg-muted text-foreground border-transparent hover:bg-muted/80'
+                    )}
+                  >{side}</button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </section>
       )}
 

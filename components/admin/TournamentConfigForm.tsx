@@ -39,11 +39,13 @@ interface SystemFieldRequirements {
   email: boolean
   phone: boolean
   level: boolean
+  side: boolean
   conditions: boolean
   partner_name: boolean
   partner_email: boolean
   partner_phone: boolean
   partner_level: boolean
+  partner_side: boolean
 }
 
 interface RegistrationConfig {
@@ -53,8 +55,8 @@ interface RegistrationConfig {
 }
 
 const DEFAULT_SYSTEM_FIELDS: SystemFieldRequirements = {
-  name: true, email: true, phone: true, level: false, conditions: true,
-  partner_name: true, partner_email: true, partner_phone: false, partner_level: false,
+  name: true, email: true, phone: true, level: false, side: true, conditions: true,
+  partner_name: true, partner_email: true, partner_phone: false, partner_level: false, partner_side: true,
 }
 
 interface MatchConfig {
@@ -972,6 +974,21 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
             <div className={cn('h-8 border border-border rounded-[6px] bg-[var(--muted)]', kind === 'number' ? 'w-24' : 'w-full')} />
           </div>
         ))}
+        {config.system_fields.side !== undefined && (
+          <div>
+            <label className="block text-[11px] font-semibold text-foreground mb-1">
+              Lado en pista
+              {config.system_fields.side
+                ? <span className="text-[var(--error)] ml-0.5">*</span>
+                : <span className="text-muted-foreground font-normal ml-1">(opcional)</span>}
+            </label>
+            <div className="flex gap-1.5">
+              {['Derecha', 'Reves'].map(s => (
+                <div key={s} className="flex-1 h-8 border border-border rounded-[6px] bg-[var(--muted)] flex items-center justify-center text-[11px] text-muted-foreground">{s}</div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Jugador 2 — only in pair mode */}
         {activePair && (
           <div className="flex flex-col gap-3 pt-2 border-t border-border">
@@ -994,6 +1011,21 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
                 <div className={cn('h-8 border border-accent/30 rounded-[6px] bg-[var(--accent-surface)]', kind === 'number' ? 'w-24' : 'w-full')} />
               </div>
             ))}
+            {config.system_fields.partner_side !== undefined && (
+              <div>
+                <label className="block text-[11px] font-semibold text-foreground mb-1">
+                  Lado en pista
+                  {config.system_fields.partner_side
+                    ? <span className="text-[var(--error)] ml-0.5">*</span>
+                    : <span className="text-muted-foreground font-normal ml-1">(opcional)</span>}
+                </label>
+                <div className="flex gap-1.5">
+                  {['Derecha', 'Reves'].map(s => (
+                    <div key={s} className="flex-1 h-8 border border-accent/30 rounded-[6px] bg-[var(--accent-surface)] flex items-center justify-center text-[11px] text-accent/60">{s}</div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1007,10 +1039,10 @@ function RegistrationPreview({ config }: { config: RegistrationConfig }) {
             {field.type === 'text' && <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)]" />}
             {field.type === 'number' && <div className="w-24 h-8 border border-border rounded-[6px] bg-[var(--muted)]" />}
             {field.type === 'select' && (
-              <div className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)] flex items-center justify-between px-3">
-                <span className="text-[11px] text-muted-foreground/60">{field.options[0] ?? 'Selecciona…'}</span>
-                <span className="text-[10px] text-muted-foreground">▾</span>
-              </div>
+              <select className="w-full h-8 border border-border rounded-[6px] bg-[var(--muted)] text-[11px] text-foreground px-2 outline-none">
+                <option value="">Selecciona…</option>
+                {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
             )}
             {field.type === 'checkbox' && (
               <div className="flex items-center gap-2">
@@ -2195,6 +2227,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
                   { key: 'email',  label: 'Email',           type: 'email' },
                   { key: 'phone',  label: 'Teléfono',        type: 'texto' },
                   { key: 'level',  label: 'Nivel',           type: 'número' },
+                  { key: 'side',   label: 'Lado en pista',   type: 'opción' },
                 ] as { key: keyof SystemFieldRequirements; label: string; type: string }[]).map(f => (
                   <div key={f.key} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--muted)] border border-border rounded-[7px]">
                     <span className="text-[11px] text-light">🔒</span>
@@ -2218,6 +2251,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
                       { key: 'partner_email', label: 'Email',            type: 'email' },
                       { key: 'partner_phone', label: 'Teléfono',         type: 'texto' },
                       { key: 'partner_level', label: 'Nivel',            type: 'número' },
+                      { key: 'partner_side',  label: 'Lado en pista',    type: 'opción' },
                     ] as { key: keyof SystemFieldRequirements; label: string; type: string }[]).map(f => (
                       <div key={f.key} className="flex items-center gap-2 px-3 py-[9px] bg-[var(--accent-surface)] border border-accent/25 rounded-[7px]">
                         <span className="text-[11px] text-light">🔒</span>
