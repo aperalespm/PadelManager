@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
-const FROM = process.env.RESEND_FROM_EMAIL ?? 'PadelManager <onboarding@resend.dev>'
+const FROM = process.env.RESEND_FROM_EMAIL ?? 'JoyPadel <onboarding@resend.dev>'
 
 function layout(content: string): string {
   return `<!DOCTYPE html>
@@ -12,7 +12,7 @@ function layout(content: string): string {
     <tr><td align="center">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden">
         <tr><td style="background:#2563eb;padding:24px 32px">
-          <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px">🎾 PadelManager</span>
+          <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px">🎾 JoyPadel</span>
         </td></tr>
         <tr><td style="padding:32px">
           ${content}

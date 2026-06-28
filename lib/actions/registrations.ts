@@ -107,7 +107,7 @@ export async function registerForTournament(input: unknown) {
   if (!parsed.success) return { error: parsed.error.issues[0].message }
   const { tournament_id, player2_name, registration_type, form_data } = parsed.data
 
-  const t = await sql`SELECT max_players, status, registration_config FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
+  const t = await sql`SELECT max_players, status, registration_config, name FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
   if (t[0].status !== 'open') return { error: 'Las inscripciones están cerradas' }
 
