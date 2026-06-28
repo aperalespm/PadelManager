@@ -170,7 +170,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
       )}
 
       {/* ── Jugador 1 ────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
+      <section className="rounded-2xl border border-accent/30 bg-accent/[0.08] p-5 flex flex-col gap-4">
 
         {/* ── Tipo de inscripción ── */}
         {bothEnabled && (
@@ -270,7 +270,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
 
       {/* ── Jugador 2 ────────────────────────────────────────────── */}
       {isPair && (
-        <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
+        <section className="rounded-2xl border border-accent/30 bg-accent/[0.08] p-5 flex flex-col gap-4">
           <div className="flex items-center gap-2.5">
             <SectionBadge n={2} accent />
             <span className="text-[15px] font-semibold text-accent">Datos de tu pareja</span>
@@ -324,7 +324,7 @@ export function RegistrationForm({ tournament: t }: RegistrationFormProps) {
         )
         if (visibleCustom.length === 0) return null
         return (
-          <section className="rounded-2xl border border-accent/25 bg-accent/5 p-5 flex flex-col gap-4">
+          <section className="rounded-2xl border border-accent/30 bg-accent/[0.08] p-5 flex flex-col gap-4">
             {visibleCustom.map(cf => (
               <div key={cf.id}>
                 {cf.type !== 'checkbox' && <FieldLabel required={cf.required}>{cf.label}</FieldLabel>}
