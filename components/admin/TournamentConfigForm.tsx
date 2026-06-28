@@ -884,7 +884,15 @@ function CustomFieldEditor({ field, isFirst, isLast, bothTypesEnabled, onUpdate,
             )}
             {field.options.map((opt, i) => (
               <div key={i} className="flex items-center gap-1.5">
-                <span className="flex-1 text-[11px] text-foreground bg-[var(--muted)] px-2 py-[4px] rounded">{opt}</span>
+                <input
+                  className="flex-1 text-[11px] text-foreground bg-[var(--muted)] px-2 py-[4px] rounded border border-transparent focus:border-border focus:bg-white outline-none focus:ring-1 focus:ring-accent/40 transition-colors"
+                  value={opt}
+                  onChange={e => {
+                    const updated = [...field.options]
+                    updated[i] = e.target.value
+                    onUpdate({ options: updated })
+                  }}
+                />
                 <button type="button"
                   onClick={() => setPendingOptDel(i)}
                   className="text-[10px] text-[var(--error)] hover:opacity-80 font-bold leading-none">✕</button>
