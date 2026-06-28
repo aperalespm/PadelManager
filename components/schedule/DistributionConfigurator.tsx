@@ -17,19 +17,22 @@ interface Props {
   disabled?: boolean
 }
 
-// Ensure all categories are assigned; return canonical bin list
+// Ensure all categories are assigned; return canonical bin list with categories in ascending order
 function normalise(dist: ScheduleDistribution | null, cats: Category[]): DistributionBin[] {
-  const defaultBin: DistributionBin = { id: 'bin_default', categoryIds: cats.map(c => c.id) }
+  const order = new Map(cats.map((c, i) => [c.id, i]))
+  const sortIds = (ids: string[]) => [...ids].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0))
+
+  const defaultBin: DistributionBin = { id: 'bin_default', categoryIds: sortIds(cats.map(c => c.id)) }
   if (!dist || dist.bins.length === 0) return [defaultBin]
 
   const assigned = new Set(dist.bins.flatMap(b => b.categoryIds))
   const orphans  = cats.filter(c => !assigned.has(c.id)).map(c => c.id)
-  if (orphans.length === 0) return dist.bins
 
-  return [
-    { ...dist.bins[0], categoryIds: [...dist.bins[0].categoryIds, ...orphans] },
-    ...dist.bins.slice(1),
-  ]
+  const base = orphans.length === 0
+    ? dist.bins
+    : [{ ...dist.bins[0], categoryIds: [...dist.bins[0].categoryIds, ...orphans] }, ...dist.bins.slice(1)]
+
+  return base.map(b => ({ ...b, categoryIds: sortIds(b.categoryIds) }))
 }
 
 
@@ -51,24 +54,27 @@ export function DistributionConfigurator({ categories, numCourts, distribution, 
     emit([...bins, { id: `bin_${Date.now()}`, categoryIds: [] }])
   }
 
+  const catOrder = new Map(categories.map((c, i) => [c.id, i]))
+  const sortIds = (ids: string[]) => [...ids].sort((a, b) => (catOrder.get(a) ?? 0) - (catOrder.get(b) ?? 0))
+
   function removeBin(binId: string) {
     if (bins.length <= 1) return
-    // Move any cats from the removed bin to the first surviving bin
     const removed   = bins.find(b => b.id === binId)
     const remaining = bins.filter(b => b.id !== binId)
     if (removed && removed.categoryIds.length > 0) {
-      remaining[0] = { ...remaining[0], categoryIds: [...remaining[0].categoryIds, ...removed.categoryIds] }
+      remaining[0] = { ...remaining[0], categoryIds: sortIds([...remaining[0].categoryIds, ...removed.categoryIds]) }
     }
     emit(remaining)
   }
 
   function moveCat(catId: string, toBinId: string) {
-    // Remove from every bin, add to target — empty bins are allowed
     const newBins = bins.map(b => ({
       ...b,
-      categoryIds: b.id === toBinId
-        ? b.categoryIds.includes(catId) ? b.categoryIds : [...b.categoryIds, catId]
-        : b.categoryIds.filter(id => id !== catId),
+      categoryIds: sortIds(
+        b.id === toBinId
+          ? b.categoryIds.includes(catId) ? b.categoryIds : [...b.categoryIds, catId]
+          : b.categoryIds.filter(id => id !== catId)
+      ),
     }))
     emit(newBins)
   }

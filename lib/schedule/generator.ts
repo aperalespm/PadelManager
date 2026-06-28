@@ -917,29 +917,38 @@ export function generateSchedule(config: GeneratorConfig): GeneratorResult {
   const groupsParallel = config.distribution?.groupsScheduling === 'parallel'
 
   if (mode === 'complete') {
-    // Groups: interleaved LBC (default) or each cat on dedicated courts (parallel).
-    // KO: each cat on its dedicated courts (parallel). Extra courts → consolation.
     let cursor = startMins
     for (const bin of bins) {
-      for (const cs of courtStates) cs.cursor = cursor
       if (groupsParallel) {
+        // Parallel: each cat on its own courts for groups, then KO on same courts
+        for (const cs of courtStates) cs.cursor = cursor
         _schedGroupsParallel(bin.cats, bin.catFmts, bin.catCourts, courtStates, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
+        _barrierCat(courtStates)
+        const koCount = Math.max(1, Math.floor(numCourts / bin.cats.length))
+        const usedCount = koCount * bin.cats.length
+        const extraConsolCourts = usedCount < numCourts
+          ? Array.from({ length: numCourts - usedCount }, (_, i) => courtStates[usedCount + i])
+          : undefined
+        for (const cat of bin.cats) {
+          const koIdxs = bin.catCourts.get(cat.id) ?? []
+          const koCourts = koIdxs.length > 0 ? koIdxs.map(i => courtStates[i]) : courtStates
+          const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
+          schedKOForCat(cat, koCourts, catFmt, extraConsolCourts)
+        }
+        cursor = Math.max(...courtStates.map(c => c.cursor))
       } else {
-        _schedGroupsAll(bin.cats, bin.catFmts, courtStates, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
+        // Shared courts: complete each category fully (groups + KO) before the next
+        for (const cat of bin.cats) {
+          for (const cs of courtStates) cs.cursor = cursor
+          const singleFmt = new Map([[cat.id, bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }]])
+          _schedGroupsAll([cat], singleFmt, courtStates, registeredPairs, pd, trans, endMins, scheduledMatches, warnings)
+          _barrierCat(courtStates)
+          const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
+          schedKOForCat(cat, courtStates, catFmt)
+          _barrierCat(courtStates)
+          cursor = Math.max(...courtStates.map(c => c.cursor))
+        }
       }
-      _barrierCat(courtStates)
-      const koCount = Math.max(1, Math.floor(numCourts / bin.cats.length))
-      const usedCount = koCount * bin.cats.length
-      const extraConsolCourts = usedCount < numCourts
-        ? Array.from({ length: numCourts - usedCount }, (_, i) => courtStates[usedCount + i])
-        : undefined
-      for (const cat of bin.cats) {
-        const koIdxs = bin.catCourts.get(cat.id) ?? []
-        const koCourts = koIdxs.length > 0 ? koIdxs.map(i => courtStates[i]) : courtStates
-        const catFmt = bin.catFmts.get(cat.id) ?? { numGroups: format.minGroups, teamsPerGroup: format.minTeamsPerGroup }
-        schedKOForCat(cat, koCourts, catFmt, extraConsolCourts)
-      }
-      cursor = Math.max(...courtStates.map(c => c.cursor))
     }
   } else {
     // by_phase: groups interleaved for all bins, then KO per cat on dedicated courts
