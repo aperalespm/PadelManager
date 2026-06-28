@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { sql } from '@/lib/db'
 import { registerSchema } from '@/lib/validations'
 import { z } from 'zod'
+import { sendRegistrationReceived, sendRegistrationConfirmed, sendRegistrationAdded } from '@/lib/email'
 
 export async function getRegistrationCountsByCategory(tournamentId: string): Promise<
   Array<{ category: string; confirmed: number; pending: number; waitlist: number }>
@@ -61,7 +62,7 @@ export async function addParticipantByAdmin(input: unknown) {
 
   const { tournament_id, name, partner_name, registration_type, status, category, form_data } = parsed.data
 
-  const t = await sql`SELECT max_players FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
+  const t = await sql`SELECT max_players, name FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
 
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
@@ -92,6 +93,12 @@ export async function addParticipantByAdmin(input: unknown) {
     VALUES (${tournament_id}, ${name}, ${partner_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(mergedFormData)}, ${resolvedCategory}, ${finalStatus}, ${waitlistPosition})
     RETURNING *
   `
+
+  const emailAddr = (mergedFormData as Record<string, unknown>).email as string | undefined
+  if (emailAddr && name) {
+    await sendRegistrationAdded({ to: emailAddr, playerName: name, tournamentName: t[0].name as string })
+  }
+
   return { data: rows[0] }
 }
 
@@ -162,13 +169,29 @@ export async function registerForTournament(input: unknown) {
     VALUES (${tournament_id}, ${player1Name}, ${player2_name ?? null}, ${registration_type ?? 'pair'}, ${JSON.stringify(form_data ?? {})}, ${category}, ${status}, ${waitlistPosition})
     RETURNING *
   `
+
+  if (email && player1Name) {
+    await sendRegistrationReceived({ to: email, playerName: player1Name, tournamentName: t[0].name as string })
+  }
+
   return { data: rows[0] }
 }
 
 export async function confirmRegistration(registrationId: string) {
-  const rows = await sql`UPDATE registrations SET status = 'confirmed', updated_at = NOW() WHERE id = ${registrationId} RETURNING *`
+  const rows = await sql`
+    UPDATE registrations SET status = 'confirmed', updated_at = NOW()
+    WHERE id = ${registrationId}
+    RETURNING *, (SELECT name FROM tournaments WHERE id = registrations.tournament_id) AS tournament_name
+  `
   if (!rows[0]) return { error: 'Inscripción no encontrada' }
-  return { data: rows[0] }
+  const r = rows[0]
+  const fd = (r.form_data as Record<string, unknown>) ?? {}
+  const email = fd.email as string | undefined
+  const name = (r.player1_name as string) || (fd.name as string) || ''
+  if (email && name) {
+    await sendRegistrationConfirmed({ to: email, playerName: name, tournamentName: r.tournament_name as string })
+  }
+  return { data: r }
 }
 
 export async function promoteFromWaitlist(registrationId: string) {
