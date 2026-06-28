@@ -221,6 +221,50 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
       )
     : []
 
+  function handleExportCSV() {
+    const regConfig = t.registration_config as { custom_fields?: Array<{ id: string; label: string }> } | null
+    const customFields = regConfig?.custom_fields ?? []
+
+    type Col = { header: string; get: (r: Record<string, unknown>) => string }
+    const fd = (r: Record<string, unknown>) => (r.form_data as Record<string, unknown>) ?? {}
+
+    const systemCols: Col[] = [
+      { header: 'ID',              get: r => (r.id as string) || '' },
+      { header: 'Nombre',          get: r => (r.player1_name as string) || '' },
+      { header: 'Pareja',          get: r => (r.player2_name as string) || '' },
+      { header: 'Email',           get: r => (fd(r).email as string) || '' },
+      { header: 'Teléfono',        get: r => (fd(r).phone as string) || '' },
+      { header: 'Nivel',           get: r => (fd(r).level as string) || '' },
+      { header: 'Lado',            get: r => (fd(r).side as string) || '' },
+      { header: 'Email pareja',    get: r => (fd(r).partner_email as string) || '' },
+      { header: 'Teléfono pareja', get: r => (fd(r).partner_phone as string) || '' },
+      { header: 'Nivel pareja',    get: r => (fd(r).partner_level as string) || '' },
+      { header: 'Lado pareja',     get: r => (fd(r).partner_side as string) || '' },
+      { header: 'Categoría',       get: r => (r.category as string) || (fd(r).category as string) || '' },
+      { header: 'Tipo',            get: r => (r.registration_type as string) || '' },
+      { header: 'Estado',          get: r => (r.status as string) || '' },
+      { header: 'Fecha',           get: r => r.created_at ? new Date(r.created_at as string).toLocaleDateString('es-ES') : '' },
+    ]
+    const customCols: Col[] = customFields.map(cf => ({
+      header: cf.label,
+      get: r => (fd(r)[cf.id] as string) || '',
+    }))
+    const cols = [...systemCols, ...customCols]
+
+    function esc(v: string) {
+      return v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v
+    }
+
+    const csv = [cols.map(c => esc(c.header)), ...initialRegs.map(r => cols.map(c => esc(c.get(r))))].map(row => row.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `inscritos-${tournamentId}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
@@ -230,7 +274,7 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
           <p className="text-[13px] text-muted-foreground mt-0.5">Gestión de inscripciones — {t.name as string}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCSV}>
             <Download className="w-4 h-4" /> Exportar CSV
           </Button>
           <Button
@@ -771,6 +815,7 @@ export function RegistrationTable({ tournamentId, tournament: t, registrations: 
           tournamentId={tournamentId}
           registrationTypes={registrationTypes}
           categories={categoryOptions}
+          registrationConfig={t.registration_config as any}
           onSuccess={() => {
             setShowAddModal(false)
             router.refresh()

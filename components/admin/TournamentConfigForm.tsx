@@ -1312,7 +1312,12 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
   // ── Delete / Duplicate / Publish ─────────────────────────────
   function handleDelete() {
     startDelete(async () => {
-      await deleteTournament(t.id as string)
+      const result = await deleteTournament(t.id as string)
+      if ('error' in result && result.error) {
+        setError(result.error as string)
+        setConfirmDelete(false)
+        return
+      }
       const next = otherTournaments[0]
       router.push(next ? `/admin/${next.id}` : '/admin')
     })
