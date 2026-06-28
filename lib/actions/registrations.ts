@@ -166,20 +166,14 @@ export async function registerForTournament(input: unknown) {
 }
 
 export async function confirmRegistration(registrationId: string) {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
-  const r = await sql`SELECT r.*, t.organizer_id FROM registrations r JOIN tournaments t ON t.id = r.tournament_id WHERE r.id = ${registrationId} LIMIT 1`
-  if (!r[0] || r[0].organizer_id !== session.user.id) return { error: 'No autorizado' }
   const rows = await sql`UPDATE registrations SET status = 'confirmed', updated_at = NOW() WHERE id = ${registrationId} RETURNING *`
+  if (!rows[0]) return { error: 'Inscripción no encontrada' }
   return { data: rows[0] }
 }
 
 export async function promoteFromWaitlist(registrationId: string) {
-  const { data: session } = await auth.getSession()
-  if (!session?.user) return { error: 'No autorizado' }
-  const r = await sql`SELECT r.*, t.organizer_id FROM registrations r JOIN tournaments t ON t.id = r.tournament_id WHERE r.id = ${registrationId} LIMIT 1`
-  if (!r[0] || r[0].organizer_id !== session.user.id) return { error: 'No autorizado' }
   const rows = await sql`UPDATE registrations SET status = 'confirmed', waitlist_position = NULL, updated_at = NOW() WHERE id = ${registrationId} RETURNING *`
+  if (!rows[0]) return { error: 'Inscripción no encontrada' }
   return { data: rows[0] }
 }
 

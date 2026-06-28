@@ -148,9 +148,9 @@ export async function generateGroupBracketFromSchedule(tournamentId: string) {
     SELECT
       r.id, r.form_data,
       CASE
-        WHEN p1.display_name IS NOT NULL
-        THEN p1.display_name || ' / ' || COALESCE(p2.display_name, r.player2_name, '?')
-        ELSE COALESCE(r.player1_name, '?') || ' / ' || COALESCE(r.player2_name, '?')
+        WHEN r.player2_name IS NOT NULL OR p2.display_name IS NOT NULL
+        THEN COALESCE(p1.display_name, r.player1_name, '?') || ' / ' || COALESCE(p2.display_name, r.player2_name)
+        ELSE COALESCE(p1.display_name, r.player1_name, '?')
       END AS pair_name
     FROM registrations r
     LEFT JOIN user_profiles p1 ON p1.user_id = r.player1_id
@@ -425,9 +425,9 @@ export async function getGroupBracketDraftData(tournamentId: string) {
       r.id, r.form_data, r.player1_id, r.player2_id,
       r.player1_name, r.player2_name,
       CASE
-        WHEN p1.display_name IS NOT NULL
-        THEN p1.display_name || ' / ' || COALESCE(p2.display_name, r.player2_name, '?')
-        ELSE COALESCE(r.player1_name, '?') || ' / ' || COALESCE(r.player2_name, '?')
+        WHEN r.player2_name IS NOT NULL OR p2.display_name IS NOT NULL
+        THEN COALESCE(p1.display_name, r.player1_name, '?') || ' / ' || COALESCE(p2.display_name, r.player2_name)
+        ELSE COALESCE(p1.display_name, r.player1_name, '?')
       END AS pair_name
     FROM registrations r
     LEFT JOIN user_profiles p1 ON p1.user_id = r.player1_id
