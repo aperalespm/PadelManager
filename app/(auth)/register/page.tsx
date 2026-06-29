@@ -35,12 +35,17 @@ export default function RegisterPage() {
     if (password !== confirm) { setError('Las contraseñas no coinciden'); return }
     setLoading(true)
     setError('')
-    const { error: err } = await authClient.signUp.email({ email, password, name })
-    if (err) {
-      setError(err.message ?? 'Error al crear la cuenta')
+    try {
+      const { error: err } = await authClient.signUp.email({ email, password, name })
+      if (err) {
+        setError(err.message ?? 'Error al crear la cuenta')
+      } else {
+        router.push('/admin')
+      }
+    } catch {
+      setError('Error de conexión. Inténtalo de nuevo.')
+    } finally {
       setLoading(false)
-    } else {
-      router.push('/admin')
     }
   }
 
