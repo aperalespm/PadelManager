@@ -38,8 +38,9 @@ export default function LoginPage() {
       } else {
         router.push('/admin')
       }
-    } catch {
-      setError('Error de conexión. Inténtalo de nuevo.')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Error de conexión. Inténtalo de nuevo.')
     } finally {
       setLoading(false)
     }
