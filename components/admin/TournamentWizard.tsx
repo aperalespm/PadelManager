@@ -169,6 +169,8 @@ export function TournamentWizard() {
       const result = await createTournamentFromWizard(data)
       if ('error' in result) { setError(result.error); return }
       router.push(`/admin/${result.data.tournamentId}/horario`)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setIsCreating(false)
     }

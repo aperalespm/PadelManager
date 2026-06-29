@@ -266,7 +266,9 @@ const wizardSchema = z.object({
 export async function createTournamentFromWizard(input: unknown): Promise<
   { data: { tournamentId: string } } | { error: string }
 > {
-  const organizerId = await requireOrganizer()
+  let organizerId: string
+  try { organizerId = await requireOrganizer() }
+  catch (e) { return { error: `No autenticado: ${e instanceof Error ? e.message : String(e)}` } }
   const parsed = wizardSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
