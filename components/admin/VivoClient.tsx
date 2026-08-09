@@ -25,6 +25,7 @@ export interface ClientMatch {
 
 interface Props {
   matches: ClientMatch[]
+  tournamentId: string
   tournamentName: string
   scoringSystem: string
   tiebreakCriteria: string[]
@@ -142,7 +143,7 @@ function computeStandings(
   return result
 }
 
-export function VivoClient({ matches, tournamentName, scoringSystem, tiebreakCriteria, teamsAdvancingPerGroup }: Props) {
+export function VivoClient({ matches, tournamentId, tournamentName, scoringSystem, tiebreakCriteria, teamsAdvancingPerGroup }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('matches')
   const [search, setSearch] = useState('')
@@ -151,6 +152,27 @@ export function VivoClient({ matches, tournamentName, scoringSystem, tiebreakCri
   const [groupFilter, setGroupFilter] = useState('')
   const [activeSheet, setActiveSheet] = useState<ClientMatch | null>(null)
   const [koBanner, setKoBanner] = useState(false)
+  const [seeding, setSeeding] = useState(false)
+  const [seedMsg, setSeedMsg] = useState<string | null>(null)
+
+  async function handleSeed() {
+    setSeeding(true)
+    setSeedMsg(null)
+    try {
+      const res = await fetch(`/api/seed-test?id=${tournamentId}`)
+      const json = await res.json()
+      if (!res.ok) {
+        setSeedMsg(`Error: ${json.error}`)
+      } else {
+        setSeedMsg(`✓ ${json.pairsInserted} parejas insertadas, ${json.matchesGenerated} partidos generados`)
+        router.refresh()
+      }
+    } catch {
+      setSeedMsg('Error al conectar con el servidor')
+    } finally {
+      setSeeding(false)
+    }
+  }
 
   useEffect(() => {
     if (koBanner) {
@@ -297,7 +319,23 @@ export function VivoClient({ matches, tournamentName, scoringSystem, tiebreakCri
 
             {/* Match list */}
             <div className="flex flex-col gap-2">
-              {filtered.length === 0 && (
+              {filtered.length === 0 && matches.length === 0 && (
+                <div className="flex flex-col items-center gap-3 py-10">
+                  <p className="text-[14px] text-muted-foreground text-center">No hay partidos generados todavía.</p>
+                  <button
+                    type="button"
+                    onClick={handleSeed}
+                    disabled={seeding}
+                    className="px-5 py-3 rounded-xl bg-accent text-accent-foreground text-[14px] font-semibold disabled:opacity-50"
+                  >
+                    {seeding ? 'Generando datos…' : '🎾 Poblar con datos de prueba'}
+                  </button>
+                  {seedMsg && (
+                    <p className={cn('text-[13px] text-center', seedMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600')}>{seedMsg}</p>
+                  )}
+                </div>
+              )}
+              {filtered.length === 0 && matches.length > 0 && (
                 <p className="text-[14px] text-muted-foreground text-center py-8">No hay partidos que coincidan</p>
               )}
               {filtered.map(m => {

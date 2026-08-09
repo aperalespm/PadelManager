@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server'
 import { sql } from '@/lib/db'
 import { generateGroupBracket } from '@/lib/actions/bracket'
 
-const TOURNAMENT_ID = '8a8fd6ea-4683-41a8-b626-6c3b5d68acb5'
-
 // Spanish padel player names
 const FIRST_NAMES = [
   'Alejandro', 'Carlos', 'David', 'Miguel', 'Javier', 'Pablo', 'Luis', 'Roberto',
@@ -26,10 +24,14 @@ function randomName(seed: number, offset = 0): string {
   return `${FIRST_NAMES[fi]} ${LAST_NAMES[li]}`
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const tournamentId = searchParams.get('id')
+  if (!tournamentId) return NextResponse.json({ error: 'Missing ?id= parameter' }, { status: 400 })
+
   try {
     // 1. Read tournament venue_details to get categories
-    const tRows = await sql`SELECT * FROM tournaments WHERE id = ${TOURNAMENT_ID} LIMIT 1`
+    const tRows = await sql`SELECT * FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
     if (!tRows[0]) return NextResponse.json({ error: 'Tournament not found' }, { status: 404 })
 
     const vd = (tRows[0].venue_details as Record<string, unknown>) ?? {}
@@ -54,8 +56,8 @@ export async function GET() {
     }
 
     // 2. Delete existing test registrations + all matches for this tournament
-    await sql`DELETE FROM matches WHERE tournament_id = ${TOURNAMENT_ID}`
-    await sql`DELETE FROM registrations WHERE tournament_id = ${TOURNAMENT_ID} AND form_data->>'seeded' = 'true'`
+    await sql`DELETE FROM matches WHERE tournament_id = ${tournamentId}`
+    await sql`DELETE FROM registrations WHERE tournament_id = ${tournamentId} AND form_data->>'seeded' = 'true'`
 
     // 3. Insert 12 pairs per category (48 players across 4 categories = 12 pairs × 4)
     const PAIRS_PER_CATEGORY = 12
@@ -77,7 +79,7 @@ export async function GET() {
             created_at,
             updated_at
           ) VALUES (
-            ${TOURNAMENT_ID},
+            ${tournamentId},
             ${p1Name},
             ${p2Name},
             'confirmed',
@@ -92,13 +94,13 @@ export async function GET() {
     }
 
     // 4. Generate group bracket
-    const result = await generateGroupBracket(TOURNAMENT_ID)
+    const result = await generateGroupBracket(tournamentId)
     if ('error' in result) {
       return NextResponse.json({ error: result.error, insertedRegs }, { status: 500 })
     }
 
     // 5. Count generated matches
-    const matchCount = await sql`SELECT count(*)::int AS n FROM matches WHERE tournament_id = ${TOURNAMENT_ID}`
+    const matchCount = await sql`SELECT count(*)::int AS n FROM matches WHERE tournament_id = ${tournamentId}`
 
     return NextResponse.json({
       ok: true,
