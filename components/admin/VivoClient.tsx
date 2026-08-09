@@ -148,6 +148,7 @@ export function VivoClient({ matches, tournamentName, scoringSystem, tiebreakCri
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('')
+  const [groupFilter, setGroupFilter] = useState('')
   const [activeSheet, setActiveSheet] = useState<ClientMatch | null>(null)
   const [koBanner, setKoBanner] = useState(false)
 
@@ -165,19 +166,26 @@ export function VivoClient({ matches, tournamentName, scoringSystem, tiebreakCri
     return [...cats].sort()
   }, [visibleMatches])
 
+  const allGroups = useMemo(() => {
+    const src = categoryFilter ? visibleMatches.filter(m => m.categoryLabel === categoryFilter) : visibleMatches
+    const grps = new Set(src.map(m => m.groupLabel).filter(Boolean) as string[])
+    return [...grps].sort()
+  }, [visibleMatches, categoryFilter])
+
   const hasGroups = useMemo(() => visibleMatches.some(m => m.groupLabel), [visibleMatches])
 
   const filtered = useMemo(() => {
     return visibleMatches.filter(m => {
       if (statusFilter !== 'all' && m.status !== statusFilter) return false
       if (categoryFilter && m.categoryLabel !== categoryFilter) return false
+      if (groupFilter && m.groupLabel !== groupFilter) return false
       if (search.trim()) {
         const q = search.toLowerCase()
         if (!m.t1Name.toLowerCase().includes(q) && !m.t2Name.toLowerCase().includes(q)) return false
       }
       return true
     })
-  }, [visibleMatches, statusFilter, categoryFilter, search])
+  }, [visibleMatches, statusFilter, categoryFilter, groupFilter, search])
 
   const standings = useMemo(
     () => computeStandings(matches, scoringSystem, tiebreakCriteria),
@@ -255,44 +263,40 @@ export function VivoClient({ matches, tournamentName, scoringSystem, tiebreakCri
               className="w-full border border-border rounded-xl px-4 py-2.5 text-[14px] bg-background outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
             />
 
-            {/* Status filter */}
-            <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
-              {(['all', 'active', 'pending', 'finished'] as StatusFilter[]).map(s => (
-                <button key={s} type="button"
-                  onClick={() => setStatusFilter(s)}
-                  className={cn(
-                    'shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors',
-                    statusFilter === s
-                      ? 'bg-accent text-accent-foreground border-accent'
-                      : 'bg-background text-muted-foreground border-border'
-                  )}>
-                  {s === 'all' ? 'Todos' : s === 'active' ? 'Activos' : s === 'pending' ? 'Pendientes' : 'Terminados'}
-                </button>
-              ))}
+            {/* Filters row */}
+            <div className={cn('grid gap-2', allCategories.length > 0 ? 'grid-cols-2' : 'grid-cols-1')}>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value as StatusFilter)}
+                className="border border-border rounded-xl px-3 py-2.5 text-[14px] bg-background text-foreground outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+              >
+                <option value="all">Todos los estados</option>
+                <option value="active">Activos</option>
+                <option value="pending">Pendientes</option>
+                <option value="finished">Terminados</option>
+              </select>
+
+              {allCategories.length > 0 && (
+                <select
+                  value={categoryFilter}
+                  onChange={e => { setCategoryFilter(e.target.value); setGroupFilter('') }}
+                  className="border border-border rounded-xl px-3 py-2.5 text-[14px] bg-background text-foreground outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+                >
+                  <option value="">Todas las categorías</option>
+                  {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              )}
             </div>
 
-            {/* Category filter */}
-            {allCategories.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
-                <button type="button"
-                  onClick={() => setCategoryFilter('')}
-                  className={cn(
-                    'shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors',
-                    !categoryFilter ? 'bg-foreground text-background border-foreground' : 'bg-background text-muted-foreground border-border'
-                  )}>
-                  Todas
-                </button>
-                {allCategories.map(cat => (
-                  <button key={cat} type="button"
-                    onClick={() => setCategoryFilter(cat === categoryFilter ? '' : cat)}
-                    className={cn(
-                      'shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors',
-                      categoryFilter === cat ? 'bg-foreground text-background border-foreground' : 'bg-background text-muted-foreground border-border'
-                    )}>
-                    {cat}
-                  </button>
-                ))}
-              </div>
+            {allGroups.length > 1 && (
+              <select
+                value={groupFilter}
+                onChange={e => setGroupFilter(e.target.value)}
+                className="w-full border border-border rounded-xl px-3 py-2.5 text-[14px] bg-background text-foreground outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+              >
+                <option value="">Todos los grupos</option>
+                {allGroups.map(grp => <option key={grp} value={grp}>{grp}</option>)}
+              </select>
             )}
 
             {/* Match list */}
