@@ -39,7 +39,7 @@ function normalise(dist: ScheduleDistribution | null, cats: Category[]): Distrib
 export function DistributionConfigurator({ categories, numCourts, distribution, onChange, disabled }: Props) {
   const bins           = normalise(distribution, categories)
   const mode           = distribution?.mode ?? 'complete'
-  const groupsSched    = distribution?.groupsScheduling ?? 'shared'
+  const groupsSched    = distribution?.groupsScheduling ?? 'parallel'
   const multi          = bins.length > 1
   const showGroupsMode = numCourts > 0 && numCourts === categories.length
 
