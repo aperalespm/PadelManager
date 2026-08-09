@@ -102,6 +102,167 @@ export async function generateBracket(tournamentId: string) {
   return { data: true }
 }
 
+// ── Auto-generate KO bracket from group standings ────────────────────────────
+// Preserves group match results (only deletes KO matches where group_label IS NULL)
+
+export async function generateEliminationFromGroups(tournamentId: string) {
+  const tRows = await sql`SELECT * FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!tRows[0]) return { error: 'Torneo no encontrado' }
+
+  const phases = await sql`SELECT * FROM tournament_phases WHERE tournament_id = ${tournamentId} ORDER BY phase_order ASC`
+  if (!phases.length) return { error: 'No hay fases configuradas' }
+  const koPhase = phases[phases.length - 1]
+
+  const vd = (tRows[0].venue_details as Record<string, unknown>) ?? {}
+  const scoringSystem = (vd.scoring_system as string) ?? 'WIN_LOSS'
+  const tiebreakCriteria = (vd.tiebreak_criteria as string[]) ?? ['SET_DIFFERENCE', 'GAME_DIFFERENCE', 'RANDOM']
+  const teamsAdvancing = (vd.teams_advancing_per_group as number) ?? 2
+  const courts = (vd.courts as string[]) ?? ['Pista 1', 'Pista 2', 'Pista 3', 'Pista 4']
+
+  // Get all finished group matches
+  const groupMatches = await sql`
+    SELECT m.team1_reg_id, m.team2_reg_id, m.winner_reg_id, m.final_score,
+           m.group_label, m.category_label, m.scheduled_at
+    FROM matches m
+    WHERE m.tournament_id = ${tournamentId}
+      AND m.group_label IS NOT NULL
+      AND m.status = 'finished'
+  `
+
+  type TeamStats = {
+    regId: string; groupLabel: string; categoryLabel: string
+    played: number; won: number; lost: number
+    setsWon: number; setsLost: number; gamesWon: number; gamesLost: number; points: number
+  }
+
+  const teamStats = new Map<string, TeamStats>()
+
+  const ensure = (regId: string, grp: string, cat: string) => {
+    if (!teamStats.has(regId)) {
+      teamStats.set(regId, { regId, groupLabel: grp, categoryLabel: cat, played: 0, won: 0, lost: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, points: 0 })
+    }
+    return teamStats.get(regId)!
+  }
+
+  let latestMatchTime: Date | null = null
+
+  for (const row of groupMatches) {
+    const m = row as Record<string, unknown>
+    const t1 = m.team1_reg_id as string; const t2 = m.team2_reg_id as string
+    const grp = m.group_label as string; const cat = m.category_label as string
+    if (!t1 || !t2) continue
+    const s1 = ensure(t1, grp, cat); const s2 = ensure(t2, grp, cat)
+    s1.played++; s2.played++
+    const t1Won = (m.winner_reg_id as string) === t1
+    if (t1Won) { s1.won++; s2.lost++ } else { s2.won++; s1.lost++ }
+    if (scoringSystem === 'WIN_LOSS') { if (t1Won) s1.points += 2; else s2.points += 2 }
+    const fs = m.final_score as Array<{ vosotros: number; rival: number }> | null
+    if (fs) {
+      for (const set of fs) {
+        s1.gamesWon += set.vosotros; s1.gamesLost += set.rival
+        s2.gamesWon += set.rival; s2.gamesLost += set.vosotros
+        if (set.vosotros > set.rival) { s1.setsWon++; s2.setsLost++ }
+        else if (set.rival > set.vosotros) { s2.setsWon++; s1.setsLost++ }
+      }
+      if (scoringSystem === 'GAMES_WON') { s1.points = s1.gamesWon; s2.points = s2.gamesWon }
+      else if (scoringSystem === 'SETS_WON') { s1.points = s1.setsWon; s2.points = s2.setsWon }
+    }
+    if (m.scheduled_at) {
+      const d = new Date(m.scheduled_at as string)
+      if (!latestMatchTime || d > latestMatchTime) latestMatchTime = d
+    }
+  }
+
+  function sortGroup(teams: TeamStats[]) {
+    return [...teams].sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      for (const criterion of tiebreakCriteria) {
+        let diff = 0
+        if (criterion === 'SET_DIFFERENCE') diff = (b.setsWon - b.setsLost) - (a.setsWon - a.setsLost)
+        else if (criterion === 'GAME_DIFFERENCE') diff = (b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost)
+        else if (criterion === 'GAMES_WON') diff = b.gamesWon - a.gamesWon
+        else if (criterion === 'RANDOM') diff = a.regId < b.regId ? -1 : 1
+        if (diff !== 0) return diff
+      }
+      return 0
+    })
+  }
+
+  // Group teams by (category, group), sort within group, collect advancers
+  const catGroupMap = new Map<string, Map<string, TeamStats[]>>()
+  for (const [, stats] of teamStats) {
+    if (!catGroupMap.has(stats.categoryLabel)) catGroupMap.set(stats.categoryLabel, new Map())
+    const cg = catGroupMap.get(stats.categoryLabel)!
+    if (!cg.has(stats.groupLabel)) cg.set(stats.groupLabel, [])
+    cg.get(stats.groupLabel)!.push(stats)
+  }
+
+  // Collect seeds per category: for CRUZADO, interleave by rank then group
+  const seedsByCategory = new Map<string, string[]>()
+  for (const [cat, groupMap] of catGroupMap) {
+    const groups = [...groupMap.entries()].sort(([a], [b]) => a.localeCompare(b))
+    const seeds: string[] = []
+    for (let rank = 0; rank < teamsAdvancing; rank++) {
+      for (const [, teams] of groups) {
+        const sorted = sortGroup(teams)
+        if (sorted[rank]) seeds.push(sorted[rank].regId)
+      }
+    }
+    seedsByCategory.set(cat, seeds)
+  }
+
+  // Delete only KO matches (preserve group results)
+  await sql`DELETE FROM matches WHERE tournament_id = ${tournamentId} AND group_label IS NULL`
+
+  // KO start time: 60 min after latest group match (or start_date + 4h as fallback)
+  const baseKOTime = latestMatchTime
+    ? new Date(latestMatchTime.getTime() + 60 * 60 * 1000)
+    : new Date(new Date(tRows[0].start_date as string).getTime() + 4 * 60 * 60 * 1000)
+
+  let courtIdx = 0; let timeOffset = 0; let matchNum = 1
+
+  for (const [, seeds] of seedsByCategory) {
+    if (seeds.length < 2) continue
+    const size = nextPowerOf2(seeds.length)
+    const padded: (string | null)[] = [...seeds, ...Array(size - seeds.length).fill(null)]
+    const matchIds: (string | null)[][] = []
+    const numRounds = Math.log2(size)
+
+    for (let round = numRounds; round >= 1; round--) {
+      const numMatches = Math.pow(2, round - 1)
+      matchIds[round] = []
+      for (let mi = 0; mi < numMatches; mi++) {
+        const scheduledAt = new Date(baseKOTime.getTime() + timeOffset * 60000)
+        const court = courts[courtIdx % courts.length]
+        courtIdx++
+        if (mi % courts.length === courts.length - 1) timeOffset += 90
+
+        const nextMatchId = round < numRounds ? matchIds[round + 1][Math.floor(mi / 2)] : null
+        const t1 = round === numRounds ? padded[mi * 2] : null
+        const t2 = round === numRounds ? padded[mi * 2 + 1] : null
+
+        if (t1 === null && t2 === null && round === numRounds) { matchIds[round][mi] = null; continue }
+
+        const auto_advance = t1 === null || t2 === null
+        const winner = t1 ?? t2
+
+        const inserted = await sql`
+          INSERT INTO matches (tournament_id, phase_id, round, match_number, team1_reg_id, team2_reg_id, court_name, scheduled_at, next_match_id, status)
+          VALUES (${tournamentId}, ${koPhase.id}, ${numRounds - round + 1}, ${matchNum++}, ${t1}, ${t2}, ${court}, ${scheduledAt.toISOString()}, ${nextMatchId}, ${auto_advance ? 'bye' : 'pending'})
+          RETURNING id
+        `
+        matchIds[round][mi] = inserted[0].id
+        if (auto_advance && winner && nextMatchId) {
+          await sql`UPDATE matches SET team1_reg_id = ${winner}, updated_at = NOW() WHERE id = ${nextMatchId}`
+        }
+      }
+    }
+  }
+
+  await sql`UPDATE tournaments SET status = 'active', updated_at = NOW() WHERE id = ${tournamentId}`
+  return { data: true }
+}
+
 // ── Generate bracket using AI schedule group assignments ─────────────────────
 
 export async function generateGroupBracketFromSchedule(tournamentId: string) {

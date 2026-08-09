@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { sql } from '@/lib/db'
 import { submitScoreSchema } from '@/lib/validations'
 import { validateMatchScore, MatchConfig } from '@/lib/scoring'
+import { generateEliminationFromGroups } from '@/lib/actions/bracket'
 
 export async function submitScore(input: unknown) {
   const { data: session } = await auth.getSession()
@@ -139,13 +140,19 @@ async function advanceWinner(matchId: string, winnerRegId: string) {
 }
 
 export async function getMatchesForTournament(tournamentId: string) {
+  await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS group_label TEXT`
+  await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS category_label TEXT`
+
   const rows = await sql`
     SELECT m.*,
       ph.name AS phase_name, ph.phase_order, ph.score_config,
-      r1.player1_id AS t1p1, r1.player2_id AS t1p2, r1.player2_name AS t1p2_name,
-      r2.player1_id AS t2p1, r2.player2_id AS t2p2, r2.player2_name AS t2p2_name,
-      p1a.display_name AS t1p1_name, p1b.display_name AS t1p2_name_display,
-      p2a.display_name AS t2p1_name, p2b.display_name AS t2p2_name_display
+      r1.player1_id AS t1p1, r1.player2_id AS t1p2,
+      r2.player1_id AS t2p1, r2.player2_id AS t2p2,
+      COALESCE(p1a.display_name, r1.player1_name, r1.form_data->>'name') AS t1p1_name,
+      COALESCE(p1b.display_name, r1.player2_name, r1.form_data->>'partner_name') AS t1p2_name_display,
+      COALESCE(p2a.display_name, r2.player1_name, r2.form_data->>'name') AS t2p1_name,
+      COALESCE(p2b.display_name, r2.player2_name, r2.form_data->>'partner_name') AS t2p2_name_display,
+      COALESCE(r1.category, r1.form_data->>'category') AS t1_category
     FROM matches m
     JOIN tournament_phases ph ON ph.id = m.phase_id
     LEFT JOIN registrations r1 ON r1.id = m.team1_reg_id
@@ -155,9 +162,69 @@ export async function getMatchesForTournament(tournamentId: string) {
     LEFT JOIN user_profiles p2a ON p2a.user_id = r2.player1_id
     LEFT JOIN user_profiles p2b ON p2b.user_id = r2.player2_id
     WHERE m.tournament_id = ${tournamentId}
-    ORDER BY ph.phase_order ASC, m.round ASC, m.match_number ASC
+    ORDER BY ph.phase_order ASC, m.scheduled_at ASC NULLS LAST, m.round ASC, m.match_number ASC
   `
   return rows
+}
+
+export async function submitMatchResult(
+  matchId: string,
+  scores: Array<{ t1: number; t2: number }>
+): Promise<{ data: { allGroupsDone: boolean } } | { error: string }> {
+  const { data: session } = await auth.getSession()
+  if (!session?.user) return { error: 'No autorizado' }
+
+  if (!scores || scores.length === 0) return { error: 'Introduce al menos un set' }
+
+  const rows = await sql`
+    SELECT m.*, t.organizer_id, t.id AS tid, t.venue_details
+    FROM matches m
+    JOIN tournaments t ON t.id = m.tournament_id
+    WHERE m.id = ${matchId} LIMIT 1
+  `
+  if (!rows[0]) return { error: 'Partido no encontrado' }
+  const m = rows[0] as Record<string, unknown>
+  if (m.organizer_id !== session.user.id) return { error: 'No autorizado' }
+  if (!m.team1_reg_id || !m.team2_reg_id) return { error: 'El partido aún no tiene los dos equipos asignados' }
+
+  let t1Sets = 0, t2Sets = 0
+  for (const s of scores) {
+    if (s.t1 > s.t2) t1Sets++
+    else if (s.t2 > s.t1) t2Sets++
+  }
+  if (t1Sets === t2Sets) return { error: 'El resultado no tiene ganador claro (sets empatados)' }
+
+  const winnerId = t1Sets > t2Sets ? (m.team1_reg_id as string) : (m.team2_reg_id as string)
+  const finalScore = scores.map(s => ({ vosotros: s.t1, rival: s.t2 }))
+
+  await sql`
+    UPDATE matches SET
+      final_score = ${JSON.stringify(finalScore)}::jsonb,
+      winner_reg_id = ${winnerId},
+      status = 'finished',
+      updated_at = NOW()
+    WHERE id = ${matchId}
+  `
+
+  const isGroupMatch = !!(m.group_label as string | null)
+
+  if (isGroupMatch) {
+    const pending = await sql`
+      SELECT count(*)::int AS n FROM matches
+      WHERE tournament_id = ${m.tid as string}
+        AND group_label IS NOT NULL
+        AND status != 'finished'
+        AND id != ${matchId}
+    `
+    const allDone = ((pending[0]?.n as number) ?? 1) === 0
+    if (allDone) {
+      await generateEliminationFromGroups(m.tid as string)
+    }
+    return { data: { allGroupsDone: allDone } }
+  } else {
+    await advanceWinner(matchId, winnerId)
+    return { data: { allGroupsDone: false } }
+  }
 }
 
 export async function getMatchCountForTournament(tournamentId: string): Promise<number> {
