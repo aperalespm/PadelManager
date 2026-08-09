@@ -357,20 +357,24 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
                       isFinished && 'opacity-80'
                     )}
                   >
-                    <div className="px-4 pt-3 pb-2">
-                      {/* Meta row */}
-                      <div className="flex items-center justify-between mb-2 gap-2">
-                        <p className="text-[11px] font-semibold text-muted-foreground truncate">
-                          {m.courtName}{m.scheduledAt ? ` · ${fmt(m.scheduledAt)}` : ''}
-                          {m.groupLabel ? ` · ${m.groupLabel}` : ''}
-                          {m.categoryLabel ? ` · ${m.categoryLabel}` : ''}
+                    <div className="px-4 pt-3 pb-3">
+                      {/* Row 1: group/category + status */}
+                      <div className="flex items-center justify-between mb-1.5 gap-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground/70 truncate">
+                          {[m.categoryLabel, m.groupLabel].filter(Boolean).join(' · ')}
                         </p>
                         <span className={cn('text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0', STATUS_COLOR[m.status])}>
                           {STATUS_LABEL[m.status] ?? m.status}
                         </span>
                       </div>
 
-                      {/* Teams + score */}
+                      {/* Row 2: court + time — prominent */}
+                      <p className="text-[12px] font-semibold text-foreground mb-2">
+                        {m.courtName}
+                        {m.scheduledAt && <span className="text-muted-foreground font-medium"> · {fmt(m.scheduledAt)}</span>}
+                      </p>
+
+                      {/* Row 3: teams + score */}
                       <div className="grid grid-cols-[1fr_auto] items-center gap-3">
                         <div className="min-w-0">
                           <p className={cn('text-[14px] font-semibold truncate', isFinished && winnerIs1 ? 'text-foreground' : 'text-foreground/80')}>
@@ -463,6 +467,8 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
             scheduledAt: activeSheet.scheduledAt,
             status: activeSheet.status,
             finalScore: activeSheet.finalScore,
+            groupLabel: activeSheet.groupLabel,
+            categoryLabel: activeSheet.categoryLabel,
           }}
           onClose={() => setActiveSheet(null)}
           onSuccess={handleSuccess}

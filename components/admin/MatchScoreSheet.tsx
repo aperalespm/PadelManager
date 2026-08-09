@@ -13,6 +13,8 @@ interface Props {
     scheduledAt: string | null
     status: string
     finalScore: Array<{ vosotros: number; rival: number }> | null
+    groupLabel?: string | null
+    categoryLabel?: string | null
   }
   onClose: () => void
   onSuccess: (allGroupsDone: boolean) => void
@@ -71,10 +73,21 @@ export function MatchScoreSheet({ match, onClose, onSuccess }: Props) {
 
         {/* Match header */}
         <div className="px-5 pb-3 border-b border-border shrink-0">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            {match.courtName}{match.scheduledAt ? ` · ${formatTime(match.scheduledAt)}` : ''}
+          {/* Category + group */}
+          {(match.categoryLabel || match.groupLabel) && (
+            <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1">
+              {[match.categoryLabel, match.groupLabel].filter(Boolean).join(' · ')}
+            </p>
+          )}
+          {/* Court + time — prominent */}
+          <p className="text-[13px] font-bold text-foreground mb-2">
+            {match.courtName}
+            {match.scheduledAt && (
+              <span className="text-muted-foreground font-medium"> · {formatTime(match.scheduledAt)}</span>
+            )}
           </p>
-          <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          {/* Teams */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <p className="text-[14px] font-bold text-foreground leading-tight">{match.t1Name}</p>
             <p className="text-[11px] font-medium text-muted-foreground">vs</p>
             <p className="text-[14px] font-bold text-foreground leading-tight text-right">{match.t2Name}</p>
