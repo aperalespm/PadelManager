@@ -46,6 +46,7 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
   return (
     <VivoClient
       matches={matches}
+      tournamentId={id}
       tournamentName={t.name as string}
       scoringSystem={(vd.scoring_system as string) ?? 'WIN_LOSS'}
       tiebreakCriteria={(vd.tiebreak_criteria as string[]) ?? ['SET_DIFFERENCE', 'GAME_DIFFERENCE', 'RANDOM']}
