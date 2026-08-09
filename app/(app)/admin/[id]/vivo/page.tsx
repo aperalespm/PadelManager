@@ -1,9 +1,7 @@
 import { getTournamentById } from '@/lib/actions/tournaments'
 import { getMatchesForTournament } from '@/lib/actions/matches'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { notFound } from 'next/navigation'
-import { cn } from '@/lib/utils'
+import { VivoClient, ClientMatch } from '@/components/admin/VivoClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,150 +11,45 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
   if (!tournament) notFound()
 
   const t = tournament as Record<string, unknown>
-  const matches = await getMatchesForTournament(id) as Record<string, unknown>[]
+  const vd = (t.venue_details as Record<string, unknown>) ?? {}
 
-  const active = matches.filter(m => m.status === 'active')
-  const pending = matches.filter(m => m.status === 'pending')
-  const finished = matches.filter(m => m.status === 'finished')
-  const disputed = matches.filter(m => m.status === 'disputed')
+  const rawMatches = await getMatchesForTournament(id) as Record<string, unknown>[]
 
-  function teamName(m: Record<string, unknown>, slot: 1 | 2) {
-    if (slot === 1) return `${m.t1p1_name ?? 'Equipo 1'}${m.t1p2_name_display ? ` / ${m.t1p2_name_display}` : ''}`
-    return `${m.t2p1_name ?? 'Equipo 2'}${m.t2p2_name_display ? ` / ${m.t2p2_name_display}` : ''}`
-  }
+  const matches: ClientMatch[] = rawMatches.map(m => {
+    const t1p1 = (m.t1p1_name as string | null) ?? null
+    const t1p2 = (m.t1p2_name_display as string | null) ?? null
+    const t2p1 = (m.t2p1_name as string | null) ?? null
+    const t2p2 = (m.t2p2_name_display as string | null) ?? null
 
-  function scoreStr(m: Record<string, unknown>) {
-    const score = m.final_score as Array<{ vosotros: number; rival: number }> | null
-    if (!score) return '—'
-    return score.map(s => `${s.vosotros}–${s.rival}`).join(', ')
-  }
+    const t1Name = t1p1 ? (t1p2 ? `${t1p1} / ${t1p2}` : t1p1) : 'Equipo 1'
+    const t2Name = t2p1 ? (t2p2 ? `${t2p1} / ${t2p2}` : t2p1) : 'Equipo 2'
 
-  function matchTime(m: Record<string, unknown>) {
-    if (!m.scheduled_at) return null
-    return new Date(m.scheduled_at as string).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-  }
+    return {
+      id: m.id as string,
+      team1RegId: (m.team1_reg_id as string | null) ?? null,
+      team2RegId: (m.team2_reg_id as string | null) ?? null,
+      winnerRegId: (m.winner_reg_id as string | null) ?? null,
+      t1Name,
+      t2Name,
+      courtName: (m.court_name as string) ?? 'Pista',
+      scheduledAt: m.scheduled_at ? new Date(m.scheduled_at as string).toISOString() : null,
+      phaseName: (m.phase_name as string) ?? '',
+      round: (m.round as number) ?? 1,
+      matchNumber: (m.match_number as number) ?? 1,
+      groupLabel: (m.group_label as string | null) ?? null,
+      categoryLabel: (m.category_label as string | null) ?? null,
+      status: (m.status as string) ?? 'pending',
+      finalScore: (m.final_score as Array<{ vosotros: number; rival: number }> | null) ?? null,
+    }
+  })
 
   return (
-    <div className="h-full overflow-y-auto px-9 py-8 flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-[22px] font-extrabold text-foreground tracking-[-0.5px]">En vivo</h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">{t.name as string} · Fase de octavos</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge className="bg-[var(--warning)] text-[var(--warning-foreground)]">● En curso</Badge>
-          <Button variant="outline" size="sm">Filtrar fase</Button>
-          <Button variant="outline" size="sm">Filtrar categoría</Button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
-          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-[var(--warning)]">{active.length + disputed.length}</p>
-          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Partidos activos</p>
-        </div>
-        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
-          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-accent">{pending.length}</p>
-          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Pendientes</p>
-        </div>
-        <div className="bg-card border border-border rounded-[10px] py-[18px] px-5">
-          <p className="text-[28px] font-extrabold leading-none tracking-[-1px] text-[var(--success)]">{finished.length}</p>
-          <p className="text-xs text-muted-foreground mt-1.5 font-medium">Finalizados</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Active matches */}
-        <div className="flex flex-col gap-3">
-          <h2 className="text-[10px] font-bold uppercase tracking-[0.9px] text-light">PARTIDOS ACTIVOS</h2>
-          {active.length === 0 && disputed.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay partidos activos</p>
-          ) : (
-            [...active, ...disputed].map(m => (
-              <div key={m.id as string} className="bg-card border border-border rounded-xl overflow-hidden border-l-4 border-l-[var(--warning)]">
-                <div className="px-4 py-3">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-[var(--warning)] uppercase tracking-wide">
-                        {m.court_name as string ?? 'Pista'} · {m.phase_name as string ?? 'Fase'}
-                      </p>
-                      <p className="font-semibold text-foreground mt-1 truncate">{teamName(m, 1)}</p>
-                      <p className="text-sm text-muted-foreground truncate">{teamName(m, 2)}</p>
-                    </div>
-                    <div className="text-right ml-3 shrink-0">
-                      <p className="font-bold text-lg text-foreground leading-none">{scoreStr(m)}</p>
-                      {matchTime(m) && (
-                        <p className="text-xs text-muted-foreground mt-1">⊙ {matchTime(m)}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-2 flex justify-end">
-                    <Button variant="outline" size="sm">Intervenir</Button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Recent results + upcoming */}
-        <div className="flex flex-col gap-4">
-          <div>
-            <h2 className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-3">ÚLTIMOS RESULTADOS</h2>
-            <div className="flex flex-col gap-2">
-              {[...finished.slice(-5).reverse(), ...disputed.slice(-3)].map(m => {
-                const isDisputed = m.status === 'disputed'
-                const winnerSlot = m.winner_reg_id === m.team1_reg_id ? 1 : 2
-                const loserSlot = winnerSlot === 1 ? 2 : 1
-                const resultText = isDisputed
-                  ? `${teamName(m, 1)} — resultado en disputa`
-                  : `${teamName(m, winnerSlot)} def. ${teamName(m, loserSlot)}`
-
-                return (
-                  <div key={m.id as string} className="bg-card border border-border rounded-xl px-4 py-3 border-l-4 border-l-accent">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{resultText}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {m.player1_category as string ?? 'Cat. —'} · {scoreStr(m)}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        {isDisputed ? (
-                          <>
-                            <Badge className="bg-[var(--error)] text-[var(--error-foreground)] text-xs">Disputa</Badge>
-                            <Button variant="outline" size="sm" className="text-xs h-7 px-2 text-[var(--warning)] border-[var(--warning)]">
-                              Resolver disputa
-                            </Button>
-                          </>
-                        ) : (
-                          <Badge className="bg-[var(--success-surface)] text-[var(--success)] text-xs">Validado</Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-[10px] font-bold uppercase tracking-[0.9px] text-light mb-3">PRÓXIMOS PARTIDOS</h2>
-            <div className="flex flex-col gap-1">
-              {pending.slice(0, 5).map(m => (
-                <div key={m.id as string} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0 gap-2">
-                  <span className="text-muted-foreground shrink-0">{m.court_name as string ?? 'Pista —'}</span>
-                  {matchTime(m) && <span className="text-muted-foreground shrink-0">{matchTime(m)}</span>}
-                  <span className="text-foreground truncate flex-1 px-2">{teamName(m, 1)} vs {teamName(m, 2)}</span>
-                  <Badge variant="outline" className="text-xs text-accent border-accent/40 shrink-0">{m.phase_name as string ?? '—'}</Badge>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <VivoClient
+      matches={matches}
+      tournamentName={t.name as string}
+      scoringSystem={(vd.scoring_system as string) ?? 'WIN_LOSS'}
+      tiebreakCriteria={(vd.tiebreak_criteria as string[]) ?? ['SET_DIFFERENCE', 'GAME_DIFFERENCE', 'RANDOM']}
+      teamsAdvancingPerGroup={(vd.teams_advancing_per_group as number) ?? 2}
+    />
   )
 }
