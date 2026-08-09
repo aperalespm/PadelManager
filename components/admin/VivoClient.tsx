@@ -264,7 +264,7 @@ export function VivoClient({ matches, tournamentName, scoringSystem, tiebreakCri
             />
 
             {/* Filters row */}
-            <div className={cn('grid gap-2', allCategories.length > 0 ? 'grid-cols-2' : 'grid-cols-1')}>
+            <div className="flex flex-wrap gap-2">
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value as StatusFilter)}
@@ -276,28 +276,24 @@ export function VivoClient({ matches, tournamentName, scoringSystem, tiebreakCri
                 <option value="finished">Terminados</option>
               </select>
 
-              {allCategories.length > 0 && (
-                <select
-                  value={categoryFilter}
-                  onChange={e => { setCategoryFilter(e.target.value); setGroupFilter('') }}
-                  className="border border-border rounded-xl px-3 py-2.5 text-[14px] bg-background text-foreground outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
-                >
-                  <option value="">Todas las categorías</option>
-                  {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              )}
-            </div>
+              <select
+                value={categoryFilter}
+                onChange={e => { setCategoryFilter(e.target.value); setGroupFilter('') }}
+                className="border border-border rounded-xl px-3 py-2.5 text-[14px] bg-background text-foreground outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+              >
+                <option value="">Todas las categorías</option>
+                {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
 
-            {allGroups.length > 1 && (
               <select
                 value={groupFilter}
                 onChange={e => setGroupFilter(e.target.value)}
-                className="w-full border border-border rounded-xl px-3 py-2.5 text-[14px] bg-background text-foreground outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+                className="border border-border rounded-xl px-3 py-2.5 text-[14px] bg-background text-foreground outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
               >
                 <option value="">Todos los grupos</option>
                 {allGroups.map(grp => <option key={grp} value={grp}>{grp}</option>)}
               </select>
-            )}
+            </div>
 
             {/* Match list */}
             <div className="flex flex-col gap-2">
