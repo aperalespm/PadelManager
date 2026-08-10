@@ -96,7 +96,7 @@ export async function addParticipantByAdmin(input: unknown) {
 
   const emailAddr = (mergedFormData as Record<string, unknown>).email as string | undefined
   if (emailAddr && name) {
-    await sendRegistrationAdded({ to: emailAddr, playerName: name, tournamentName: t[0].name as string })
+    await sendRegistrationAdded({ to: emailAddr, playerName: name, tournamentName: t[0].name as string, tournamentId: tournament_id })
   }
 
   return { data: rows[0] }
@@ -176,6 +176,7 @@ export async function registerForTournament(input: unknown) {
       to: email,
       playerName: player1Name,
       tournamentName: t[0].name as string,
+      tournamentId: tournament_id,
       customSubject: regCfg?.email_template?.subject,
       customBody: regCfg?.email_template?.body,
     })
@@ -196,7 +197,7 @@ export async function confirmRegistration(registrationId: string) {
   const email = fd.email as string | undefined
   const name = (r.player1_name as string) || (fd.name as string) || ''
   if (email && name) {
-    await sendRegistrationConfirmed({ to: email, playerName: name, tournamentName: r.tournament_name as string })
+    await sendRegistrationConfirmed({ to: email, playerName: name, tournamentName: r.tournament_name as string, tournamentId: r.tournament_id as string })
   }
   return { data: r }
 }
