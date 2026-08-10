@@ -172,26 +172,49 @@ export async function sendRegistrationAdded(opts: {
 }
 
 export async function sendCustomEmail(opts: {
-  to: string | string[]
+  recipients: Array<{ email: string; name?: string | null }>
   subject: string
   body: string
   tournamentName: string
   tournamentId?: string | null
 }) {
-  const bodyHtml = opts.body
-    .split('\n\n')
-    .map(block => p(block.replace(/\n/g, '<br>')))
-    .join('')
+  const hasVariables = opts.body.includes('{nombre}') || opts.body.includes('{torneo}') ||
+    opts.subject.includes('{nombre}') || opts.subject.includes('{torneo}')
 
-  const html = layout(`
-    ${bodyHtml}
-    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-    <p style="margin:0;font-size:12px;color:#94a3b8">Enviado por el organizador de <strong>${opts.tournamentName}</strong></p>
-  `)
+  function renderBody(name: string) {
+    const rendered = opts.body
+      .replace(/\{nombre\}/g, name)
+      .replace(/\{torneo\}/g, opts.tournamentName)
+    return rendered.split('\n\n').map(block => p(block.replace(/\n/g, '<br>'))).join('')
+  }
 
-  const recipients = Array.isArray(opts.to) ? opts.to : [opts.to]
-  for (let i = 0; i < recipients.length; i += 50) {
-    await send(recipients.slice(i, i + 50), opts.subject, html)
+  function renderSubject(name: string) {
+    return opts.subject
+      .replace(/\{nombre\}/g, name)
+      .replace(/\{torneo\}/g, opts.tournamentName)
+  }
+
+  function buildHtml(bodyHtml: string) {
+    return layout(`
+      ${bodyHtml}
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+      <p style="margin:0;font-size:12px;color:#94a3b8">Enviado por el organizador de <strong>${opts.tournamentName}</strong></p>
+    `)
+  }
+
+  if (hasVariables) {
+    // Send individually so {nombre} is personalized per recipient
+    for (const r of opts.recipients) {
+      const name = r.name ?? 'jugador/a'
+      await send(r.email, renderSubject(name), buildHtml(renderBody(name)))
+    }
+  } else {
+    // Bulk send in batches of 50
+    const emails = opts.recipients.map(r => r.email)
+    const html = buildHtml(renderBody(''))
+    for (let i = 0; i < emails.length; i += 50) {
+      await send(emails.slice(i, i + 50), opts.subject, html)
+    }
   }
 
   await logEmail({
@@ -200,6 +223,6 @@ export async function sendCustomEmail(opts: {
     toEmail: null,
     toName: null,
     subject: opts.subject,
-    recipientCount: recipients.length,
+    recipientCount: opts.recipients.length,
   })
 }
