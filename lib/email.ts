@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { sql } from '@/lib/db'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const FROM = process.env.RESEND_FROM_EMAIL ?? 'JoyPadel <noreply@joypadel.es>'
@@ -47,10 +48,57 @@ async function send(to: string | string[], subject: string, html: string) {
   }
 }
 
+// ── Email log ─────────────────────────────────────────────────────────────────
+
+let tableReady = false
+
+async function logEmail(opts: {
+  tournamentId?: string | null
+  type: string
+  toEmail?: string | null
+  toName?: string | null
+  subject: string
+  recipientCount?: number
+}) {
+  try {
+    if (!tableReady) {
+      await sql`
+        CREATE TABLE IF NOT EXISTS email_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          tournament_id UUID,
+          type TEXT NOT NULL,
+          to_email TEXT,
+          to_name TEXT,
+          subject TEXT NOT NULL,
+          recipient_count INT NOT NULL DEFAULT 1,
+          sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `
+      tableReady = true
+    }
+    await sql`
+      INSERT INTO email_logs (tournament_id, type, to_email, to_name, subject, recipient_count)
+      VALUES (
+        ${opts.tournamentId ?? null},
+        ${opts.type},
+        ${opts.toEmail ?? null},
+        ${opts.toName ?? null},
+        ${opts.subject},
+        ${opts.recipientCount ?? 1}
+      )
+    `
+  } catch (e) {
+    console.error('[email] log failed:', e)
+  }
+}
+
+// ── Send functions ─────────────────────────────────────────────────────────────
+
 export async function sendRegistrationReceived(opts: {
   to: string
   playerName: string
   tournamentName: string
+  tournamentId?: string | null
   customSubject?: string
   customBody?: string
 }) {
@@ -80,13 +128,16 @@ export async function sendRegistrationReceived(opts: {
   }
 
   await send(opts.to, subject, layout(bodyHtml))
+  await logEmail({ tournamentId: opts.tournamentId, type: 'registration_received', toEmail: opts.to, toName: opts.playerName, subject })
 }
 
 export async function sendRegistrationConfirmed(opts: {
   to: string
   playerName: string
   tournamentName: string
+  tournamentId?: string | null
 }) {
+  const subject = `Plaza confirmada — ${opts.tournamentName}`
   const html = layout(`
     ${h1('¡Plaza confirmada! ✅')}
     ${p(`Hola <strong>${opts.playerName}</strong>, tu inscripción al torneo <strong>${opts.tournamentName}</strong> ha sido <strong>confirmada</strong>.`)}
@@ -96,14 +147,17 @@ export async function sendRegistrationConfirmed(opts: {
     </div>
     ${p('Guarda este email como comprobante. Nos vemos en la pista. 🎾')}
   `)
-  await send(opts.to, `Plaza confirmada — ${opts.tournamentName}`, html)
+  await send(opts.to, subject, html)
+  await logEmail({ tournamentId: opts.tournamentId, type: 'registration_confirmed', toEmail: opts.to, toName: opts.playerName, subject })
 }
 
 export async function sendRegistrationAdded(opts: {
   to: string
   playerName: string
   tournamentName: string
+  tournamentId?: string | null
 }) {
+  const subject = `Inscripción en ${opts.tournamentName}`
   const html = layout(`
     ${h1('Has sido inscrito en un torneo')}
     ${p(`Hola <strong>${opts.playerName}</strong>, el organizador te ha inscrito en el torneo <strong>${opts.tournamentName}</strong>.`)}
@@ -113,7 +167,8 @@ export async function sendRegistrationAdded(opts: {
     </div>
     ${p('Si tienes alguna duda, contacta directamente con el organizador del torneo.')}
   `)
-  await send(opts.to, `Inscripción en ${opts.tournamentName}`, html)
+  await send(opts.to, subject, html)
+  await logEmail({ tournamentId: opts.tournamentId, type: 'registration_added', toEmail: opts.to, toName: opts.playerName, subject })
 }
 
 export async function sendCustomEmail(opts: {
@@ -121,6 +176,7 @@ export async function sendCustomEmail(opts: {
   subject: string
   body: string
   tournamentName: string
+  tournamentId?: string | null
 }) {
   const bodyHtml = opts.body
     .split('\n\n')
@@ -134,9 +190,16 @@ export async function sendCustomEmail(opts: {
   `)
 
   const recipients = Array.isArray(opts.to) ? opts.to : [opts.to]
-  // Resend allows up to 50 recipients per call in batch
   for (let i = 0; i < recipients.length; i += 50) {
-    const batch = recipients.slice(i, i + 50)
-    await send(batch, opts.subject, html)
+    await send(recipients.slice(i, i + 50), opts.subject, html)
   }
+
+  await logEmail({
+    tournamentId: opts.tournamentId,
+    type: 'broadcast',
+    toEmail: null,
+    toName: null,
+    subject: opts.subject,
+    recipientCount: recipients.length,
+  })
 }

@@ -51,9 +51,55 @@ export async function sendEmailToPlayers(input: unknown): Promise<
     subject,
     body,
     tournamentName: t[0].name as string,
+    tournamentId,
   })
 
   return { data: { sent: emails.length } }
+}
+
+export type EmailLog = {
+  id: string
+  type: string
+  toEmail: string | null
+  toName: string | null
+  subject: string
+  recipientCount: number
+  sentAt: string
+}
+
+export async function getEmailLogs(tournamentId: string): Promise<EmailLog[]> {
+  try {
+    const rows = await sql`
+      CREATE TABLE IF NOT EXISTS email_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tournament_id UUID,
+        type TEXT NOT NULL,
+        to_email TEXT,
+        to_name TEXT,
+        subject TEXT NOT NULL,
+        recipient_count INT NOT NULL DEFAULT 1,
+        sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `
+    void rows
+  } catch { /* table already exists */ }
+
+  const rows = await sql`
+    SELECT id, type, to_email, to_name, subject, recipient_count, sent_at
+    FROM email_logs
+    WHERE tournament_id = ${tournamentId}
+    ORDER BY sent_at DESC
+    LIMIT 100
+  `
+  return rows.map(r => ({
+    id: r.id as string,
+    type: r.type as string,
+    toEmail: r.to_email as string | null,
+    toName: r.to_name as string | null,
+    subject: r.subject as string,
+    recipientCount: r.recipient_count as number,
+    sentAt: (r.sent_at as Date).toISOString(),
+  }))
 }
 
 export async function getEmailRecipientCount(
