@@ -65,8 +65,8 @@ function computeStandings(
   matches: ClientMatch[],
   scoringSystem: string,
   tiebreakCriteria: string[],
-): Array<{ category: string; group: string; teams: (StandingRow & { rank: number; advances: boolean })[] }> {
-  const finished = matches.filter(m => m.status === 'finished' && m.groupLabel && m.team1RegId && m.team2RegId)
+  teamsAdvancingPerGroup: number,
+): Array<{ category: string; group: string; teams: (StandingRow & { rank: number; advances: boolean; pending: boolean })[] }> {
   const catGroupStats = new Map<string, Map<string, Map<string, StandingRow>>>()
 
   const getStats = (cat: string, grp: string, regId: string, name: string): StandingRow => {
@@ -78,7 +78,17 @@ function computeStandings(
     return gm.get(regId)!
   }
 
-  for (const m of finished) {
+  // Pre-populate ALL teams from ALL group matches (including pending) so every
+  // team appears in the table from the start, with zero stats until they play.
+  for (const m of matches) {
+    if (!m.groupLabel) continue
+    const cat = m.categoryLabel ?? ''; const grp = m.groupLabel
+    if (m.team1RegId) getStats(cat, grp, m.team1RegId, m.t1Name)
+    if (m.team2RegId) getStats(cat, grp, m.team2RegId, m.t2Name)
+  }
+
+  // Accumulate stats only from finished matches
+  for (const m of matches.filter(mm => mm.status === 'finished' && mm.groupLabel && mm.team1RegId && mm.team2RegId)) {
     const cat = m.categoryLabel!; const grp = m.groupLabel!
     const s1 = getStats(cat, grp, m.team1RegId!, m.t1Name)
     const s2 = getStats(cat, grp, m.team2RegId!, m.t2Name)
@@ -113,28 +123,17 @@ function computeStandings(
     })
   }
 
-  // Count teams per group (from all group matches, not just finished)
-  const allGroupTeams = new Map<string, Set<string>>()
-  for (const m of matches.filter(mm => mm.groupLabel)) {
-    const key = `${m.categoryLabel}::${m.groupLabel}`
-    if (!allGroupTeams.has(key)) allGroupTeams.set(key, new Set())
-    if (m.team1RegId) allGroupTeams.get(key)!.add(m.team1RegId)
-    if (m.team2RegId) allGroupTeams.get(key)!.add(m.team2RegId)
-  }
-
-  const result: Array<{ category: string; group: string; teams: (StandingRow & { rank: number; advances: boolean })[] }> = []
+  const result: Array<{ category: string; group: string; teams: (StandingRow & { rank: number; advances: boolean; pending: boolean })[] }> = []
 
   for (const [cat, cgMap] of catGroupStats) {
     for (const [grp, gMap] of cgMap) {
-      const key = `${cat}::${grp}`
-      const totalTeams = allGroupTeams.get(key)?.size ?? gMap.size
       const sorted = sortTeams([...gMap.values()])
-      // Advancing: top 2 or top half, min 1
-      const advancing = Math.min(2, Math.max(1, Math.floor(totalTeams / 2)))
+      const advancing = Math.min(teamsAdvancingPerGroup, Math.max(1, Math.floor(sorted.length / 2)))
+      const anyPlayed = sorted.some(t => t.played > 0)
       result.push({
         category: cat,
         group: grp,
-        teams: sorted.map((t, i) => ({ ...t, rank: i + 1, advances: i < advancing })),
+        teams: sorted.map((t, i) => ({ ...t, rank: i + 1, advances: anyPlayed && i < advancing, pending: !anyPlayed })),
       })
     }
   }
@@ -210,8 +209,8 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
   }, [visibleMatches, statusFilter, categoryFilter, groupFilter, search])
 
   const standings = useMemo(
-    () => computeStandings(matches, scoringSystem, tiebreakCriteria),
-    [matches, scoringSystem, tiebreakCriteria]
+    () => computeStandings(matches, scoringSystem, tiebreakCriteria, teamsAdvancingPerGroup),
+    [matches, scoringSystem, tiebreakCriteria, teamsAdvancingPerGroup]
   )
 
   const active = visibleMatches.filter(m => m.status === 'active' || m.status === 'disputed').length
@@ -412,46 +411,63 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
           <div className="flex flex-col gap-6">
             {standings.length === 0 && (
               <p className="text-[14px] text-muted-foreground text-center py-8">
-                Las clasificaciones aparecerán cuando se introduzcan resultados de grupo.
+                No hay partidos de grupo en este torneo.
               </p>
             )}
-            {standings.map(({ category, group, teams }) => (
-              <div key={`${category}::${group}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{category}</p>
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-foreground">· {group}</p>
-                </div>
-                <div className="rounded-xl border border-border overflow-hidden">
-                  {/* Table header */}
-                  <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2 bg-muted/50 border-b border-border">
-                    {['#', 'Equipo', 'J', 'G', 'P', 'Pts'].map(h => (
-                      <p key={h} className="text-[10px] font-bold text-muted-foreground uppercase text-center last:text-right first:text-left">{h}</p>
-                    ))}
+            {standings.map(({ category, group, teams }) => {
+              const anyPlayed = teams.some(t => t.played > 0)
+              return (
+                <div key={`${category}::${group}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{category}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-foreground">· {group}</p>
+                    {!anyPlayed && (
+                      <span className="text-[10px] font-semibold text-muted-foreground/60 ml-auto">Sin resultados</span>
+                    )}
                   </div>
-                  {teams.map(t => (
-                    <div key={t.regId}
-                      className={cn(
-                        'grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2.5 border-b border-border last:border-0 items-center',
-                        t.advances ? 'bg-accent/5' : ''
-                      )}>
-                      <p className={cn('text-[12px] font-bold w-4', t.rank <= 2 && t.advances ? 'text-accent' : 'text-muted-foreground')}>
-                        {t.rank}
-                      </p>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-foreground truncate">{t.name}</p>
-                        {t.advances && (
-                          <p className="text-[10px] font-bold text-accent">Pasa de fase ✓</p>
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    {/* Table header */}
+                    <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2 bg-muted/50 border-b border-border">
+                      {['#', 'Equipo', 'J', 'G', 'P', 'Pts'].map(h => (
+                        <p key={h} className="text-[10px] font-bold text-muted-foreground uppercase text-center last:text-right first:text-left">{h}</p>
+                      ))}
+                    </div>
+                    {teams.map((t, i) => (
+                      <div key={t.regId}
+                        className={cn(
+                          'grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-2 px-3 py-2.5 border-b border-border last:border-0 items-center',
+                          t.advances ? 'bg-accent/5' : ''
+                        )}>
+                        <p className={cn('text-[12px] font-bold w-4', t.advances ? 'text-accent' : 'text-muted-foreground')}>
+                          {i + 1}
+                        </p>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-foreground truncate">{t.name}</p>
+                          {t.advances && (
+                            <p className="text-[10px] font-bold text-accent">Pasa de fase ✓</p>
+                          )}
+                        </div>
+                        {anyPlayed ? (
+                          <>
+                            <p className="text-[12px] tabular-nums text-center text-muted-foreground">{t.played}</p>
+                            <p className="text-[12px] tabular-nums text-center text-emerald-600 dark:text-emerald-400 font-semibold">{t.won}</p>
+                            <p className="text-[12px] tabular-nums text-center text-red-500 font-semibold">{t.lost}</p>
+                            <p className="text-[12px] tabular-nums text-right font-bold text-foreground">{t.points}</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[12px] tabular-nums text-center text-muted-foreground/40">–</p>
+                            <p className="text-[12px] tabular-nums text-center text-muted-foreground/40">–</p>
+                            <p className="text-[12px] tabular-nums text-center text-muted-foreground/40">–</p>
+                            <p className="text-[12px] tabular-nums text-right text-muted-foreground/40">–</p>
+                          </>
                         )}
                       </div>
-                      <p className="text-[12px] tabular-nums text-center text-muted-foreground">{t.played}</p>
-                      <p className="text-[12px] tabular-nums text-center text-emerald-600 dark:text-emerald-400 font-semibold">{t.won}</p>
-                      <p className="text-[12px] tabular-nums text-center text-red-500 font-semibold">{t.lost}</p>
-                      <p className="text-[12px] tabular-nums text-right font-bold text-foreground">{t.points}</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
