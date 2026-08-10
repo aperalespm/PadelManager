@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
-const FROM = process.env.RESEND_FROM_EMAIL ?? 'JoyPadel <onboarding@resend.dev>'
+const FROM = process.env.RESEND_FROM_EMAIL ?? 'JoyPadel <noreply@joypadel.es>'
 
 function layout(content: string): string {
   return `<!DOCTYPE html>
@@ -37,7 +37,7 @@ function pill(text: string, color = '#2563eb') {
   return `<span style="display:inline-block;background:${color}18;color:${color};font-size:13px;font-weight:600;padding:4px 12px;border-radius:99px;border:1px solid ${color}30">${text}</span>`
 }
 
-async function send(to: string, subject: string, html: string) {
+async function send(to: string | string[], subject: string, html: string) {
   if (!resend) { console.error('[email] RESEND_API_KEY not set — skipping'); return }
   try {
     const result = await resend.emails.send({ from: FROM, to, subject, html })
@@ -96,4 +96,29 @@ export async function sendRegistrationAdded(opts: {
     ${p('Si tienes alguna duda, contacta directamente con el organizador del torneo.')}
   `)
   await send(opts.to, `Inscripción en ${opts.tournamentName}`, html)
+}
+
+export async function sendCustomEmail(opts: {
+  to: string | string[]
+  subject: string
+  body: string
+  tournamentName: string
+}) {
+  const bodyHtml = opts.body
+    .split('\n\n')
+    .map(block => p(block.replace(/\n/g, '<br>')))
+    .join('')
+
+  const html = layout(`
+    ${bodyHtml}
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+    <p style="margin:0;font-size:12px;color:#94a3b8">Enviado por el organizador de <strong>${opts.tournamentName}</strong></p>
+  `)
+
+  const recipients = Array.isArray(opts.to) ? opts.to : [opts.to]
+  // Resend allows up to 50 recipients per call in batch
+  for (let i = 0; i < recipients.length; i += 50) {
+    const batch = recipients.slice(i, i + 50)
+    await send(batch, opts.subject, html)
+  }
 }
