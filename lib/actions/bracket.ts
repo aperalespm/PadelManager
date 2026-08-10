@@ -394,6 +394,9 @@ export async function generateGroupBracket(tournamentId: string) {
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
   const catFormats = computeOptimalFormats(vd)
   const fallbackNumGroups = Math.max(1, parseInt(String(vd.num_groups ?? '2')) || 2)
+  const courts = (vd.courts as string[]) ?? ['Pista 1', 'Pista 2', 'Pista 3', 'Pista 4']
+  const startDate = new Date(t.start_date as string)
+  const teamsAdvancingPerGroup = (vd.teams_advancing_per_group as number) ?? 2
 
   // Group registrations by category from form_data
   const catMap: Record<string, typeof regs> = {}
@@ -407,11 +410,15 @@ export async function generateGroupBracket(tournamentId: string) {
   const groupsPhase = phases[0]
   let matchNum = 1
   const groupLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  let globalCourtIdx = 0
+  let globalTimeSlot = 0
+  const catActualGroups: Record<string, number> = {}
 
   for (const [catLabel, catRegs] of Object.entries(catMap)) {
     const numGroups = catFormats[catLabel]?.numGroups ?? fallbackNumGroups
     const shuffled = shuffle([...catRegs])
     const actualGroups = Math.max(1, Math.min(numGroups, Math.floor(shuffled.length / 2)))
+    catActualGroups[catLabel] = actualGroups
 
     const groups: (typeof regs)[] = Array.from({ length: actualGroups }, () => [])
     shuffled.forEach((reg, i) => { groups[i % actualGroups].push(reg) })
@@ -421,18 +428,65 @@ export async function generateGroupBracket(tournamentId: string) {
       const groupLabel = `Grupo ${groupLetters[g]}`
       for (let i = 0; i < group.length; i++) {
         for (let j = i + 1; j < group.length; j++) {
+          const court = courts[globalCourtIdx % courts.length]
+          const scheduledAt = new Date(startDate.getTime() + globalTimeSlot * 90 * 60 * 1000)
+          globalCourtIdx++
+          if (globalCourtIdx % courts.length === 0) globalTimeSlot++
           await sql`
             INSERT INTO matches (
               tournament_id, phase_id, round, match_number,
               team1_reg_id, team2_reg_id,
-              group_label, category_label, status
+              group_label, category_label, court_name, scheduled_at, status
             ) VALUES (
               ${tournamentId}, ${groupsPhase.id}, ${g + 1}, ${matchNum},
               ${group[i].id}, ${group[j].id},
-              ${groupLabel}, ${catLabel || null}, 'pending'
+              ${groupLabel}, ${catLabel || null}, ${court}, ${scheduledAt.toISOString()}, 'pending'
             )
           `
           matchNum++
+        }
+      }
+    }
+  }
+
+  // Pre-generate KO placeholder slots (NULL teams) so the full bracket is visible from day 1.
+  // generateEliminationFromGroups deletes these and recreates with real teams when groups finish.
+  if (phases.length > 1) {
+    const koPhase = phases[phases.length - 1]
+    const baseKOTime = new Date(startDate.getTime() + (globalTimeSlot + 2) * 90 * 60 * 1000)
+    let koCourtIdx = 0; let koTimeOffset = 0
+
+    for (const [catLabel, actualGroups] of Object.entries(catActualGroups)) {
+      const totalSeeds = actualGroups * teamsAdvancingPerGroup
+      if (totalSeeds < 2) continue
+      const size = nextPowerOf2(totalSeeds)
+      const matchIds: (string | null)[][] = []
+      const numRounds = Math.log2(size)
+
+      for (let round = numRounds; round >= 1; round--) {
+        const numMatches = Math.pow(2, round - 1)
+        matchIds[round] = []
+        for (let mi = 0; mi < numMatches; mi++) {
+          const scheduledAt = new Date(baseKOTime.getTime() + koTimeOffset * 60000)
+          const court = courts[koCourtIdx % courts.length]
+          koCourtIdx++
+          if (koCourtIdx % courts.length === 0) koTimeOffset += 90
+          const nextMatchId = round < numRounds ? matchIds[round + 1][Math.floor(mi / 2)] : null
+          const inserted = await sql`
+            INSERT INTO matches (
+              tournament_id, phase_id, round, match_number,
+              team1_reg_id, team2_reg_id,
+              court_name, scheduled_at, next_match_id,
+              category_label, status
+            ) VALUES (
+              ${tournamentId}, ${koPhase.id}, ${numRounds - round + 1}, ${matchNum++},
+              NULL, NULL,
+              ${court}, ${scheduledAt.toISOString()}, ${nextMatchId},
+              ${catLabel || null}, 'pending'
+            )
+            RETURNING id
+          `
+          matchIds[round][mi] = inserted[0].id
         }
       }
     }

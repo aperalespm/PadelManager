@@ -21,8 +21,10 @@ export default async function EnVivoPage({ params }: { params: Promise<{ id: str
     const t2p1 = (m.t2p1_name as string | null) ?? null
     const t2p2 = (m.t2p2_name_display as string | null) ?? null
 
-    const t1Name = t1p1 ? (t1p2 ? `${t1p1} / ${t1p2}` : t1p1) : 'Equipo 1'
-    const t2Name = t2p1 ? (t2p2 ? `${t2p1} / ${t2p2}` : t2p1) : 'Equipo 2'
+    const team1RegId = (m.team1_reg_id as string | null) ?? null
+    const team2RegId = (m.team2_reg_id as string | null) ?? null
+    const t1Name = team1RegId ? (t1p1 ? (t1p2 ? `${t1p1} / ${t1p2}` : t1p1) : 'Equipo 1') : 'Por determinar'
+    const t2Name = team2RegId ? (t2p1 ? (t2p2 ? `${t2p1} / ${t2p2}` : t2p1) : 'Equipo 2') : 'Por determinar'
 
     return {
       id: m.id as string,

@@ -142,6 +142,15 @@ function computeStandings(
   return result
 }
 
+function koRoundLabel(round: number, maxRoundForCat: number): string {
+  const fromFinal = maxRoundForCat - round
+  if (fromFinal === 0) return 'Final'
+  if (fromFinal === 1) return 'Semifinal'
+  if (fromFinal === 2) return 'Cuartos de final'
+  if (fromFinal === 3) return 'Octavos de final'
+  return `Ronda ${round}`
+}
+
 export function VivoClient({ matches, tournamentId, tournamentName, scoringSystem, tiebreakCriteria, teamsAdvancingPerGroup }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('matches')
@@ -194,6 +203,17 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
   }, [visibleMatches, categoryFilter])
 
   const hasGroups = useMemo(() => visibleMatches.some(m => m.groupLabel), [visibleMatches])
+
+  // Max KO round per category → needed to compute "Final", "Semi", etc.
+  const koMaxRoundByCat = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const m of visibleMatches) {
+      if (m.groupLabel) continue
+      const cat = m.categoryLabel ?? ''
+      map.set(cat, Math.max(map.get(cat) ?? 0, m.round))
+    }
+    return map
+  }, [visibleMatches])
 
   const filtered = useMemo(() => {
     return visibleMatches.filter(m => {
@@ -357,10 +377,13 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
                     )}
                   >
                     <div className="px-4 pt-3 pb-3">
-                      {/* Row 1: group/category + status */}
+                      {/* Row 1: phase label + status */}
                       <div className="flex items-center justify-between mb-1.5 gap-2">
                         <p className="text-[10px] font-semibold text-muted-foreground/70 truncate">
-                          {[m.categoryLabel, m.groupLabel].filter(Boolean).join(' · ')}
+                          {m.groupLabel
+                            ? [m.categoryLabel, m.groupLabel].filter(Boolean).join(' · ')
+                            : [m.categoryLabel, koRoundLabel(m.round, koMaxRoundByCat.get(m.categoryLabel ?? '') ?? m.round)].filter(Boolean).join(' · ')
+                          }
                         </p>
                         <span className={cn('text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0', STATUS_COLOR[m.status])}>
                           {STATUS_LABEL[m.status] ?? m.status}
@@ -376,11 +399,19 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
                       {/* Row 3: teams + score */}
                       <div className="grid grid-cols-[1fr_auto] items-center gap-3">
                         <div className="min-w-0">
-                          <p className={cn('text-[14px] font-semibold truncate', isFinished && winnerIs1 ? 'text-foreground' : 'text-foreground/80')}>
+                          <p className={cn(
+                            'text-[14px] font-semibold truncate',
+                            m.t1Name === 'Por determinar' ? 'text-muted-foreground/50 italic' :
+                            isFinished && winnerIs1 ? 'text-foreground' : 'text-foreground/80'
+                          )}>
                             {isFinished && winnerIs1 && <span className="text-accent mr-1">▶</span>}
                             {m.t1Name}
                           </p>
-                          <p className={cn('text-[14px] font-semibold truncate mt-0.5', isFinished && !winnerIs1 ? 'text-foreground' : 'text-foreground/80')}>
+                          <p className={cn(
+                            'text-[14px] font-semibold truncate mt-0.5',
+                            m.t2Name === 'Por determinar' ? 'text-muted-foreground/50 italic' :
+                            isFinished && !winnerIs1 ? 'text-foreground' : 'text-foreground/80'
+                          )}>
                             {isFinished && !winnerIs1 && <span className="text-accent mr-1">▶</span>}
                             {m.t2Name}
                           </p>
