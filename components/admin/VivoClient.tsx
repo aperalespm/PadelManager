@@ -257,10 +257,24 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-6 overflow-y-auto flex-1">
         {/* Header */}
-        <div>
-          <h1 className="text-[20px] font-extrabold text-foreground tracking-[-0.5px]">En vivo</h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">{tournamentName}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-[20px] font-extrabold text-foreground tracking-[-0.5px]">En vivo</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">{tournamentName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSeed}
+            disabled={seeding}
+            title="Regenerar datos de prueba"
+            className="shrink-0 mt-1 px-3 py-1.5 rounded-lg border border-border text-[11px] font-semibold text-muted-foreground bg-background hover:bg-muted active:bg-muted/80 disabled:opacity-40 transition-colors"
+          >
+            {seeding ? '⏳ Generando…' : '🔄 Regenerar datos'}
+          </button>
         </div>
+        {seedMsg && (
+          <p className={cn('text-[12px] text-center -mt-2', seedMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600')}>{seedMsg}</p>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-2">
@@ -339,20 +353,9 @@ export function VivoClient({ matches, tournamentId, tournamentName, scoringSyste
             {/* Match list */}
             <div className="flex flex-col gap-2">
               {filtered.length === 0 && matches.length === 0 && (
-                <div className="flex flex-col items-center gap-3 py-10">
-                  <p className="text-[14px] text-muted-foreground text-center">No hay partidos generados todavía.</p>
-                  <button
-                    type="button"
-                    onClick={handleSeed}
-                    disabled={seeding}
-                    className="px-5 py-3 rounded-xl bg-accent text-accent-foreground text-[14px] font-semibold disabled:opacity-50"
-                  >
-                    {seeding ? 'Generando datos…' : '🎾 Poblar con datos de prueba'}
-                  </button>
-                  {seedMsg && (
-                    <p className={cn('text-[13px] text-center', seedMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600')}>{seedMsg}</p>
-                  )}
-                </div>
+                <p className="text-[14px] text-muted-foreground text-center py-8">
+                  No hay partidos generados. Usa el botón "Regenerar datos" arriba.
+                </p>
               )}
               {filtered.length === 0 && matches.length > 0 && (
                 <p className="text-[14px] text-muted-foreground text-center py-8">No hay partidos que coincidan</p>
