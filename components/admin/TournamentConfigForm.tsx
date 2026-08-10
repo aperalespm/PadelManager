@@ -48,10 +48,16 @@ interface SystemFieldRequirements {
   partner_side: boolean
 }
 
+interface EmailTemplate {
+  subject: string
+  body: string
+}
+
 interface RegistrationConfig {
   registration_types: string[]
   system_fields: SystemFieldRequirements
   custom_fields: CustomField[]
+  email_template?: EmailTemplate
 }
 
 const DEFAULT_SYSTEM_FIELDS: SystemFieldRequirements = {
@@ -1303,6 +1309,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
         registration_types: Array.isArray(savedRegConfig.registration_types) ? savedRegConfig.registration_types : fallbackTypes,
         system_fields: { ...DEFAULT_SYSTEM_FIELDS, ...(savedRegConfig.system_fields ?? {}) },
         custom_fields: savedRegConfig.custom_fields.map(f => ({ ...f, applies_to: (f.applies_to ?? 'all') as FieldAppliesTo })),
+        email_template: savedRegConfig.email_template,
       }
     }
     return { registration_types: fallbackTypes, system_fields: { ...DEFAULT_SYSTEM_FIELDS }, custom_fields: [] }
@@ -2316,6 +2323,45 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
                     onMove={dir => moveCustomField(field.id, dir)}
                   />
                 ))}
+              </div>
+            </div>
+
+            <Divider />
+
+            {/* Email de confirmación */}
+            <div className="mt-5 mb-5">
+              <p className="text-[12px] font-semibold text-foreground mb-0.5">Email de confirmación</p>
+              <p className="text-[11px] text-muted-foreground mb-3">
+                Mensaje que recibirán los jugadores al inscribirse. Usa <code className="bg-muted px-1 rounded text-[10px]">{'{nombre}'}</code> y <code className="bg-muted px-1 rounded text-[10px]">{'{torneo}'}</code> como variables.
+              </p>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-medium text-muted-foreground">Asunto</label>
+                  <input
+                    type="text"
+                    value={registrationConfig.email_template?.subject ?? ''}
+                    onChange={e => setRegistrationConfig(rc => ({
+                      ...rc,
+                      email_template: { subject: e.target.value, body: rc.email_template?.body ?? '' },
+                    }))}
+                    placeholder={`Inscripción recibida — ${name || 'Nombre del torneo'}`}
+                    className="px-3 py-2 rounded-[7px] border border-border bg-background text-[13px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/30"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-medium text-muted-foreground">Cuerpo del mensaje</label>
+                  <textarea
+                    value={registrationConfig.email_template?.body ?? ''}
+                    onChange={e => setRegistrationConfig(rc => ({
+                      ...rc,
+                      email_template: { subject: rc.email_template?.subject ?? '', body: e.target.value },
+                    }))}
+                    placeholder={`Hola {nombre},\n\nTu inscripción en {torneo} ha sido recibida correctamente y está pendiente de confirmación por parte del organizador.\n\nTe avisaremos cuando sea confirmada.`}
+                    rows={5}
+                    className="px-3 py-2 rounded-[7px] border border-border bg-background text-[13px] text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-accent/30 resize-y"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60">Si lo dejas vacío se usará el texto por defecto.</p>
+                </div>
               </div>
             </div>
 

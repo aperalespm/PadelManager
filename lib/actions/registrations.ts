@@ -171,7 +171,14 @@ export async function registerForTournament(input: unknown) {
   `
 
   if (email && player1Name) {
-    await sendRegistrationReceived({ to: email, playerName: player1Name, tournamentName: t[0].name as string })
+    const regCfg = t[0].registration_config as { email_template?: { subject?: string; body?: string } } | null
+    await sendRegistrationReceived({
+      to: email,
+      playerName: player1Name,
+      tournamentName: t[0].name as string,
+      customSubject: regCfg?.email_template?.subject,
+      customBody: regCfg?.email_template?.body,
+    })
   }
 
   return { data: rows[0] }

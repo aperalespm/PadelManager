@@ -51,17 +51,35 @@ export async function sendRegistrationReceived(opts: {
   to: string
   playerName: string
   tournamentName: string
+  customSubject?: string
+  customBody?: string
 }) {
-  const html = layout(`
-    ${h1('¡Inscripción recibida!')}
-    ${p(`Hola <strong>${opts.playerName}</strong>, tu solicitud de inscripción al torneo <strong>${opts.tournamentName}</strong> ha sido recibida correctamente.`)}
-    <div style="background:#f8fafc;border-radius:8px;padding:16px 20px;margin:0 0 20px">
-      <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Estado</p>
-      ${pill('Pendiente de confirmación', '#f59e0b')}
-    </div>
-    ${p('El organizador revisará tu inscripción y recibirás otro email cuando sea confirmada.')}
-  `)
-  await send(opts.to, `Inscripción recibida — ${opts.tournamentName}`, html)
+  const subject = opts.customSubject?.trim()
+    ? opts.customSubject
+    : `Inscripción recibida — ${opts.tournamentName}`
+
+  let bodyHtml: string
+  if (opts.customBody?.trim()) {
+    const rendered = opts.customBody
+      .replace(/\{nombre\}/g, opts.playerName)
+      .replace(/\{torneo\}/g, opts.tournamentName)
+    bodyHtml = rendered
+      .split('\n\n')
+      .map(block => p(block.replace(/\n/g, '<br>')))
+      .join('')
+  } else {
+    bodyHtml = `
+      ${h1('¡Inscripción recibida!')}
+      ${p(`Hola <strong>${opts.playerName}</strong>, tu solicitud de inscripción al torneo <strong>${opts.tournamentName}</strong> ha sido recibida correctamente.`)}
+      <div style="background:#f8fafc;border-radius:8px;padding:16px 20px;margin:0 0 20px">
+        <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">Estado</p>
+        ${pill('Pendiente de confirmación', '#f59e0b')}
+      </div>
+      ${p('El organizador revisará tu inscripción y recibirás otro email cuando sea confirmada.')}
+    `
+  }
+
+  await send(opts.to, subject, layout(bodyHtml))
 }
 
 export async function sendRegistrationConfirmed(opts: {
