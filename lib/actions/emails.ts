@@ -44,17 +44,20 @@ export async function sendEmailToPlayers(input: unknown): Promise<
 
   if (rows.length === 0) return { error: 'No hay destinatarios con email para los filtros seleccionados' }
 
-  const emails = rows.map(r => r.email as string)
+  const recipients = rows.map(r => ({
+    email: r.email as string,
+    name: r.name as string | null,
+  }))
 
   await sendCustomEmail({
-    to: emails,
+    recipients,
     subject,
     body,
     tournamentName: t[0].name as string,
     tournamentId,
   })
 
-  return { data: { sent: emails.length } }
+  return { data: { sent: recipients.length } }
 }
 
 export type EmailLog = {

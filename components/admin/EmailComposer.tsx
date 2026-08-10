@@ -134,7 +134,14 @@ export function EmailComposer({ tournamentId, tournamentName, categoryOptions, r
             rows={8}
             className="px-3 py-2.5 rounded-lg border border-border bg-background text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-accent/40 resize-y min-h-[140px]"
           />
-          <p className="text-[11px] text-muted-foreground/60">Separa párrafos con una línea en blanco. El email se enviará con el diseño de JoyPadel.</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
+            <p className="text-[11px] text-muted-foreground/60">Separa párrafos con una línea en blanco.</p>
+            <p className="text-[11px] text-muted-foreground/60">
+              Variables:{' '}
+              <code className="bg-muted px-1 rounded text-[10px] text-foreground/70">{'{nombre}'}</code>{' '}
+              <code className="bg-muted px-1 rounded text-[10px] text-foreground/70">{'{torneo}'}</code>
+            </p>
+          </div>
         </div>
       </div>
 
