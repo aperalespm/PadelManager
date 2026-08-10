@@ -70,6 +70,7 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
     { href: `/admin/${tournamentId}/horario`, label: 'Horario', icon: '📅' },
     { href: `/admin/${tournamentId}/cuadro`, label: 'Cuadro', icon: '🏆' },
     { href: `/admin/${tournamentId}/inscritos`, label: 'Inscritos', icon: '⊞' },
+    { href: `/admin/${tournamentId}/emails`, label: 'Emails', icon: '✉' },
     { href: `/admin/${tournamentId}/vivo`, label: 'En vivo', icon: '▶', badge: activeMatchCount > 0 },
   ]
 
