@@ -1135,6 +1135,50 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
   const [startDate, setStart]  = useState(t.start_date ? new Date(t.start_date as string).toISOString().split('T')[0] : '')
   const [endDate, setEnd]      = useState(t.end_date   ? new Date(t.end_date   as string).toISOString().split('T')[0] : '')
   const [cancelDl, setCancel]  = useState(t.cancel_deadline ? new Date(t.cancel_deadline as string).toISOString().split('T')[0] : '')
+  const [coverUrl, setCoverUrl] = useState(t.cover_url as string ?? '')
+  const [imageUploading, setImageUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleImageClick() {
+    fileInputRef.current?.click()
+  }
+
+  async function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) return
+
+    setImageUploading(true)
+    try {
+      const dataUrl = await compressImage(file, 1200, 0.82)
+      setCoverUrl(dataUrl)
+    } finally {
+      setImageUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  function compressImage(file: File, maxPx: number, quality: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        let { width, height } = img
+        if (width > maxPx || height > maxPx) {
+          if (width >= height) { height = Math.round(height * maxPx / width); width = maxPx }
+          else { width = Math.round(width * maxPx / height); height = maxPx }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.onerror = reject
+      img.src = url
+    })
+  }
 
   // ── Instalación ───────────────────────────────────────────────
   const vd = (t.venue_details as Record<string, unknown>) ?? {}
@@ -1477,6 +1521,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
       start_date:      startDate ? new Date(startDate).toISOString() : undefined,
       end_date:        endDate   ? new Date(endDate).toISOString()   : undefined,
       cancel_deadline: cancelDl  ? new Date(cancelDl).toISOString()  : undefined,
+      cover_url:       coverUrl  || undefined,
     })
     if ('error' in result) { setError(result.error as string); setIsSaving(false); return }
     await saveTournamentPhases(t.id as string, phases.map(p => ({
@@ -1775,11 +1820,48 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
               className="w-full px-3 py-[9px] border border-border rounded-[7px] text-[13px] bg-white text-foreground resize-y focus:outline-none focus:ring-1 focus:ring-accent" />
           </FieldRow>
           <FieldRow label="Logo / Imagen de portada">
-            <div className="border-2 border-dashed border-border rounded-lg p-7 text-center bg-[var(--muted)] cursor-pointer">
-              <div className="text-[26px] mb-2">🖼</div>
-              <p className="text-[13px] text-muted-foreground">Arrastra aquí o <span className="text-accent font-semibold">selecciona un archivo</span></p>
-              <p className="text-[11px] text-light mt-1">PNG, JPG, SVG · máx. 8 MB</p>
-            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageFile}
+            />
+            {coverUrl ? (
+              <div className="relative rounded-lg overflow-hidden border border-border">
+                <img src={coverUrl} alt="Portada" className="w-full h-40 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setCoverUrl('')}
+                  className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors text-xs"
+                  title="Eliminar imagen"
+                >✕</button>
+                <button
+                  type="button"
+                  onClick={handleImageClick}
+                  className="absolute bottom-2 right-2 px-2.5 py-1 rounded-md bg-black/60 text-white text-xs font-medium hover:bg-black/80 transition-colors"
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleImageClick}
+                disabled={imageUploading}
+                className="w-full border-2 border-dashed border-border rounded-lg p-7 text-center bg-[var(--muted)] hover:border-accent/50 hover:bg-accent/5 transition-colors cursor-pointer disabled:opacity-60"
+              >
+                {imageUploading ? (
+                  <p className="text-[13px] text-muted-foreground">Procesando imagen...</p>
+                ) : (
+                  <>
+                    <div className="text-[26px] mb-2">🖼</div>
+                    <p className="text-[13px] text-muted-foreground">Arrastra aquí o <span className="text-accent font-semibold">selecciona un archivo</span></p>
+                    <p className="text-[11px] text-muted-foreground mt-1">PNG, JPG · se comprime automáticamente</p>
+                  </>
+                )}
+              </button>
+            )}
           </FieldRow>
           <FieldRow label="Precio por persona" note="El precio se muestra por persona; la facturación se calcula por pareja (×2)"><SI value={priceInfo} onChange={setPrice} placeholder="15 €" /></FieldRow>
           <FieldRow label="Fecha límite de cancelación" note="Después de esta fecha solo el organizador puede cancelar">
