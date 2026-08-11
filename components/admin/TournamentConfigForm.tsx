@@ -1755,7 +1755,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
       </div>
 
       {/* ── Capacity & Revenue sticky bar ────────────────────────── */}
-      <div className="sticky top-0 z-20 flex flex-col bg-card border-b border-border -mx-9 overflow-hidden">
+      <div className="sticky top-0 z-20 flex flex-col bg-white border border-border rounded-[10px] overflow-hidden">
         <div className="flex items-center">
           <div className="flex-1 px-5 py-3 border-r border-border">
             <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Capacidad estimada</p>
