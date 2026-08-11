@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useTransition, useState, useRef, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Menu, X, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { authClient } from '@/lib/auth-client'
 
 interface Tournament {
   id: string
@@ -85,6 +86,11 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
   function handleCreate() {
     router.push('/admin/nuevo')
     setDrawerOpen(false)
+  }
+
+  async function handleLogout() {
+    await authClient.signOut()
+    router.push('/login')
   }
 
   const currentNav = navItems.find(item => item.exact ? pathname === item.href : pathname.startsWith(item.href))
@@ -187,16 +193,23 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
         </nav>
 
         {/* Footer */}
-        <div className={cn('border-t border-white/7 flex items-center', collapsed ? 'justify-center px-0 py-[14px]' : 'px-4 py-[14px] gap-2.5')}>
+        <div className={cn('border-t border-white/7 flex items-center', collapsed ? 'flex-col justify-center px-0 py-[14px] gap-2' : 'px-4 py-[14px] gap-2.5')}>
           <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-[13px] font-bold shrink-0" title={collapsed ? organizerName : undefined}>
             {initials}
           </div>
           {!collapsed && (
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[13px] font-semibold text-white truncate leading-tight whitespace-nowrap">{organizerName}</p>
               <p className="text-[11px] text-[#4b6a99] leading-tight mt-0.5 whitespace-nowrap">Organizador</p>
             </div>
           )}
+          <button
+            onClick={handleLogout}
+            title="Cerrar sesión"
+            className="flex items-center justify-center w-7 h-7 rounded-[6px] text-[#4b6a99] hover:text-white hover:bg-white/10 transition-colors shrink-0"
+          >
+            <LogOut className="w-[14px] h-[14px]" />
+          </button>
         </div>
       </aside>
 
@@ -306,10 +319,17 @@ export function AdminSidebar({ tournamentId, tournamentName, tournamentStatus, o
                 <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center text-white text-[13px] font-bold shrink-0">
                   {initials}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-[14px] font-semibold text-white truncate">{organizerName}</p>
                   <p className="text-[11px] text-[#4b6a99]">Organizador</p>
                 </div>
+                <button
+                  onClick={handleLogout}
+                  title="Cerrar sesión"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg text-[#4b6a99] hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
