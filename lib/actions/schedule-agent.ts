@@ -3,10 +3,17 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { sql } from '@/lib/db'
 import { z } from 'zod'
+import { auth } from '@/lib/auth'
 import type { TournamentSchedule, ChatMessage, ScheduleDistribution } from '@/lib/types/schedule'
 import { generateSchedule, type GeneratorConfig, type OptimalFormat, type PhaseDurations } from '@/lib/schedule/generator'
 
-const DEMO_ORGANIZER_ID = '00000000-0000-0000-0000-000000000000'
+async function requireOrganizerOwnsSchedule(tournamentId: string): Promise<string> {
+  const { data: session } = await auth.getSession()
+  if (!session?.user?.id) throw new Error('No autenticado')
+  const t = await sql`SELECT organizer_id FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!t[0] || t[0].organizer_id !== session.user.id) throw new Error('Sin permiso')
+  return session.user.id
+}
 
 const SCHEDULE_AGENT_PROMPT_FALLBACK = `Eres un agente especializado en organizar calendarios de torneos de pádel.
 
@@ -208,6 +215,14 @@ export async function chatWithScheduleAgent(input: unknown): Promise<
   if (!parsed.success) return { error: 'Datos inválidos' }
 
   const { userMessage, conversationHistory, tournamentConfig, currentSchedule, resetSchedule } = parsed.data
+
+  const tournamentId = tournamentConfig?.id as string | undefined
+  if (tournamentId) {
+    try { await requireOrganizerOwnsSchedule(tournamentId) } catch (e) { return { error: String(e) } }
+  } else {
+    const { data: session } = await auth.getSession()
+    if (!session?.user?.id) return { error: 'No autenticado' }
+  }
   const scheduleForContext = resetSchedule ? undefined : currentSchedule
 
   try {
@@ -340,6 +355,8 @@ export async function saveSchedule(input: unknown): Promise<{ data: { success: t
   if (!parsed.success) return { error: 'Datos inválidos' }
 
   const { tournamentId, scheduleData, messages, versionLabel } = parsed.data
+  let organizerId: string
+  try { organizerId = await requireOrganizerOwnsSchedule(tournamentId) } catch (e) { return { error: String(e) } }
 
   try {
     // Fetch current version_history and version counter
@@ -362,7 +379,7 @@ export async function saveSchedule(input: unknown): Promise<{ data: { success: t
 
     await sql`
       INSERT INTO tournament_schedules (user_id, tournament_id, schedule_data, version_history)
-      VALUES (${DEMO_ORGANIZER_ID}, ${tournamentId}, ${JSON.stringify(scheduleData)}, ${JSON.stringify(updatedHistory)})
+      VALUES (${organizerId}, ${tournamentId}, ${JSON.stringify(scheduleData)}, ${JSON.stringify(updatedHistory)})
       ON CONFLICT (tournament_id)
       DO UPDATE SET
         schedule_data    = ${JSON.stringify(scheduleData)},
@@ -372,7 +389,7 @@ export async function saveSchedule(input: unknown): Promise<{ data: { success: t
     `
     await sql`
       INSERT INTO tournament_schedule_chats (user_id, tournament_id, messages)
-      VALUES (${DEMO_ORGANIZER_ID}, ${tournamentId}, ${JSON.stringify(messages)})
+      VALUES (${organizerId}, ${tournamentId}, ${JSON.stringify(messages)})
       ON CONFLICT (tournament_id)
       DO UPDATE SET
         messages = ${JSON.stringify(messages)},
@@ -404,6 +421,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
     lastRegistrationAt: string | null
   }
 } | { error: string }> {
+  try { await requireOrganizerOwnsSchedule(tournamentId) } catch (e) { return { error: String(e) } }
   try {
     await ensureTables()
 
@@ -484,6 +502,7 @@ export async function loadScheduleChat(tournamentId: string): Promise<{
 // ── Publish schedule ──────────────────────────────────────────────────────────
 
 export async function publishSchedule(tournamentId: string): Promise<{ data: { success: true } } | { error: string }> {
+  try { await requireOrganizerOwnsSchedule(tournamentId) } catch (e) { return { error: String(e) } }
   try {
     await sql`
       UPDATE tournament_schedules
@@ -504,6 +523,7 @@ export async function pollTournamentChanges(tournamentId: string): Promise<{
   lastRegistrationAt: string | null
   tournamentUpdatedAt: string | null
 }> {
+  try { await requireOrganizerOwnsSchedule(tournamentId) } catch { return { lastRegistrationAt: null, tournamentUpdatedAt: null } }
   const [regRows, tRows] = await Promise.all([
     sql`SELECT MAX(updated_at) AS last_at FROM registrations WHERE tournament_id = ${tournamentId} AND status = 'confirmed'`,
     sql`SELECT updated_at FROM tournaments WHERE id = ${tournamentId} LIMIT 1`,
@@ -521,6 +541,7 @@ export async function pollTournamentChanges(tournamentId: string): Promise<{
 export async function generateDeterministicSchedule(tournamentId: string): Promise<
   { data: { schedule: TournamentSchedule; format: OptimalFormat; warnings: string[] } } | { error: string }
 > {
+  try { await requireOrganizerOwnsSchedule(tournamentId) } catch (e) { return { error: String(e) } }
   try {
     const [tRows, regRows] = await Promise.all([
       sql`SELECT venue_details, status FROM tournaments WHERE id = ${tournamentId} LIMIT 1`,
@@ -612,6 +633,7 @@ export async function saveDistribution(
   tournamentId: string,
   distribution: ScheduleDistribution
 ): Promise<{ data: { success: true } } | { error: string }> {
+  try { await requireOrganizerOwnsSchedule(tournamentId) } catch (e) { return { error: String(e) } }
   try {
     await sql`
       UPDATE tournaments

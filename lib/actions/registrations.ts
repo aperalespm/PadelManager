@@ -23,7 +23,27 @@ export async function getRegistrationCountsByCategory(tournamentId: string): Pro
   return rows as Array<{ category: string; confirmed: number; pending: number; waitlist: number }>
 }
 
+async function requireOrganizerOwns(tournamentId: string): Promise<string> {
+  const { data: session } = await auth.getSession()
+  if (!session?.user?.id) throw new Error('No autenticado')
+  const t = await sql`SELECT organizer_id FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!t[0] || t[0].organizer_id !== session.user.id) throw new Error('Sin permiso')
+  return session.user.id
+}
+
+async function requireOrganizerOwnsRegistration(registrationId: string): Promise<string> {
+  const { data: session } = await auth.getSession()
+  if (!session?.user?.id) throw new Error('No autenticado')
+  const t = await sql`
+    SELECT t.organizer_id FROM registrations r
+    JOIN tournaments t ON t.id = r.tournament_id
+    WHERE r.id = ${registrationId} LIMIT 1`
+  if (!t[0] || t[0].organizer_id !== session.user.id) throw new Error('Sin permiso')
+  return session.user.id
+}
+
 export async function getRegistrations(tournamentId: string) {
+  try { await requireOrganizerOwns(tournamentId) } catch (e) { return { data: [] } }
   // Ensure all columns added by later actions exist before querying
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player1_name TEXT`
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS player2_name TEXT`
@@ -61,6 +81,7 @@ export async function addParticipantByAdmin(input: unknown) {
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
   const { tournament_id, name, partner_name, registration_type, status, category, form_data } = parsed.data
+  try { await requireOrganizerOwns(tournament_id) } catch (e) { return { error: String(e) } }
 
   const t = await sql`SELECT max_players, name FROM tournaments WHERE id = ${tournament_id} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
@@ -186,6 +207,7 @@ export async function registerForTournament(input: unknown) {
 }
 
 export async function confirmRegistration(registrationId: string) {
+  try { await requireOrganizerOwnsRegistration(registrationId) } catch (e) { return { error: String(e) } }
   const rows = await sql`
     UPDATE registrations SET status = 'confirmed', updated_at = NOW()
     WHERE id = ${registrationId}
@@ -203,6 +225,7 @@ export async function confirmRegistration(registrationId: string) {
 }
 
 export async function promoteFromWaitlist(registrationId: string) {
+  try { await requireOrganizerOwnsRegistration(registrationId) } catch (e) { return { error: String(e) } }
   const rows = await sql`UPDATE registrations SET status = 'confirmed', waitlist_position = NULL, updated_at = NOW() WHERE id = ${registrationId} RETURNING *`
   if (!rows[0]) return { error: 'Inscripción no encontrada' }
   return { data: rows[0] }
@@ -278,6 +301,7 @@ export async function getMyActiveMatch() {
 }
 
 export async function deleteRegistration(registrationId: string) {
+  try { await requireOrganizerOwnsRegistration(registrationId) } catch (e) { return { error: String(e) } }
   try {
     // Nullify references in matches before deleting
     await sql`UPDATE matches SET team1_reg_id = NULL WHERE team1_reg_id = ${registrationId}`
@@ -290,6 +314,7 @@ export async function deleteRegistration(registrationId: string) {
 }
 
 export async function removePlayerFromPair(registrationId: string, playerIndex: 1 | 2) {
+  try { await requireOrganizerOwnsRegistration(registrationId) } catch (e) { return { error: String(e) } }
   try {
     if (playerIndex === 2) {
       await sql`
@@ -330,6 +355,7 @@ export async function updateRegistration(input: unknown) {
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
   const { registrationId, player1_name, player2_name, status, form_data } = parsed.data
+  try { await requireOrganizerOwnsRegistration(registrationId) } catch (e) { return { error: String(e) } }
   const registration_type = player2_name ? 'pair' : 'individual'
   const category = (form_data.category as string) || null
 

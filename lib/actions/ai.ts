@@ -13,8 +13,8 @@ const callAISchema = z.object({
 })
 
 export async function callAI(input: unknown) {
-  const session = await auth.getSession()
-  if (!session) return { error: 'No autorizado' }
+  const { data: session } = await auth.getSession()
+  if (!session?.user?.id) return { error: 'No autorizado' }
 
   const parsed = callAISchema.safeParse(input)
   if (!parsed.success) {

@@ -12,6 +12,14 @@ async function requireOrganizer(): Promise<string> {
   return session.user.id
 }
 
+async function requireOwns(tournamentId: string): Promise<string> {
+  const { data: session } = await auth.getSession()
+  if (!session?.user?.id) throw new Error('No autenticado')
+  const t = await sql`SELECT organizer_id FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!t[0] || t[0].organizer_id !== session.user.id) throw new Error('Sin permiso')
+  return session.user.id
+}
+
 function generateSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Math.random().toString(36).slice(2, 7)
 }
@@ -102,6 +110,7 @@ export async function createTournament(input: unknown) {
 }
 
 export async function updateTournament(id: string, input: unknown) {
+  try { await requireOwns(id) } catch (e) { return { error: String(e) } }
   const parsed = updateTournamentSchema.safeParse(input)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
 
@@ -135,6 +144,7 @@ export async function updateTournament(id: string, input: unknown) {
 }
 
 export async function publishTournament(id: string) {
+  try { await requireOwns(id) } catch (e) { return { error: String(e) } }
   const rows = await sql`
     UPDATE tournaments SET status = 'open', updated_at = NOW()
     WHERE id = ${id} AND status = 'draft'
@@ -145,6 +155,7 @@ export async function publishTournament(id: string) {
 }
 
 export async function setTournamentStatus(id: string, status: 'draft' | 'open' | 'active' | 'finished') {
+  try { await requireOwns(id) } catch (e) { return { error: String(e) } }
   const rows = await sql`
     UPDATE tournaments SET status = ${status}, updated_at = NOW()
     WHERE id = ${id}
@@ -155,6 +166,7 @@ export async function setTournamentStatus(id: string, status: 'draft' | 'open' |
 }
 
 export async function closeTournamentRegistrations(id: string) {
+  try { await requireOwns(id) } catch (e) { return { error: String(e) } }
   const rows = await sql`
     UPDATE tournaments SET status = 'active', updated_at = NOW()
     WHERE id = ${id} AND status = 'open'
@@ -165,6 +177,7 @@ export async function closeTournamentRegistrations(id: string) {
 }
 
 export async function deleteTournament(id: string) {
+  try { await requireOwns(id) } catch (e) { return { error: String(e) } }
   const regCount = await sql`SELECT count(*)::int AS n FROM registrations WHERE tournament_id = ${id}`
   const n = (regCount[0]?.n as number) ?? 0
   if (n > 0) {
@@ -198,6 +211,7 @@ export async function duplicateTournament(id: string) {
 }
 
 export async function saveTournamentPhases(tournamentId: string, phases: Array<{ name: string; format: string; score_config: Record<string, unknown> }>) {
+  try { await requireOwns(tournamentId) } catch (e) { return { error: String(e) } }
   // Read existing phases to preserve their IDs — matches.phase_id references them and
   // a full DELETE would cascade-delete all matches via the FK constraint.
   const existing = await sql`
@@ -385,6 +399,7 @@ export async function createTournamentFromWizard(input: unknown): Promise<
 }
 
 export async function updateRegistrationConfig(id: string, config: unknown) {
+  try { await requireOwns(id) } catch (e) { return { error: String(e) } }
   await sql`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS registration_config JSONB DEFAULT '{}'`
   const rows = await sql`
     UPDATE tournaments
