@@ -12,7 +12,8 @@ const tabs = [
     isActive: (pathname: string) =>
       pathname.startsWith('/torneos') ||
       pathname.startsWith('/t/') ||
-      pathname.startsWith('/inscripcion'),
+      pathname.startsWith('/inscripcion') ||
+      pathname.endsWith('/inscripcion'),
   },
   {
     href: '/mi-torneo',

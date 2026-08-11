@@ -24,7 +24,7 @@ export function TournamentCard({ tournament: t }: TournamentCardProps) {
   const startDate = t.start_date ? new Date(t.start_date as string).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 
   return (
-    <Link href={`/t/${slug}`}>
+    <Link href={`/${slug}`}>
       <div className="bg-card rounded-xl border border-border overflow-hidden hover:border-accent/40 transition-colors">
         {t.cover_url != null && (
           <div className="h-32 bg-muted overflow-hidden">
