@@ -7,7 +7,7 @@ export function RegistrationCloseButton({ slug }: { slug: string }) {
 
   function handleClose() {
     if (window.confirm('¿Seguro que quieres abandonar la inscripción?')) {
-      router.push(`/t/${slug}`)
+      router.push(`/${slug}`)
     }
   }
 

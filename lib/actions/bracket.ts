@@ -1,7 +1,16 @@
 'use server'
 
 import { sql } from '@/lib/db'
+import { auth } from '@/lib/auth'
 import { computeOptimalFormats } from '@/lib/schedule/generator'
+
+async function requireOwns(tournamentId: string): Promise<string> {
+  const { data: session } = await auth.getSession()
+  if (!session?.user?.id) throw new Error('No autenticado')
+  const t = await sql`SELECT organizer_id FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!t[0] || t[0].organizer_id !== session.user.id) throw new Error('Sin permiso')
+  return session.user.id
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -19,6 +28,7 @@ function nextPowerOf2(n: number): number {
 }
 
 export async function generateBracket(tournamentId: string) {
+  try { await requireOwns(tournamentId) } catch (e) { return { error: String(e) } }
   const t = await sql`SELECT * FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
   if (!t[0]) return { error: 'Torneo no encontrado' }
 
@@ -106,6 +116,7 @@ export async function generateBracket(tournamentId: string) {
 // Preserves group match results (only deletes KO matches where group_label IS NULL)
 
 export async function generateEliminationFromGroups(tournamentId: string) {
+  try { await requireOwns(tournamentId) } catch (e) { return { error: String(e) } }
   const tRows = await sql`SELECT * FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
   if (!tRows[0]) return { error: 'Torneo no encontrado' }
 
@@ -266,6 +277,7 @@ export async function generateEliminationFromGroups(tournamentId: string) {
 // ── Generate bracket using AI schedule group assignments ─────────────────────
 
 export async function generateGroupBracketFromSchedule(tournamentId: string) {
+  try { await requireOwns(tournamentId) } catch (e) { return { error: String(e) } }
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS group_label TEXT`
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS category_label TEXT`
 
@@ -376,6 +388,7 @@ export async function generateGroupBracketFromSchedule(tournamentId: string) {
 }
 
 export async function generateGroupBracket(tournamentId: string) {
+  try { await requireOwns(tournamentId) } catch (e) { return { error: String(e) } }
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS group_label TEXT`
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS category_label TEXT`
 
@@ -499,6 +512,7 @@ export async function generateGroupBracket(tournamentId: string) {
 // ── Update: add new confirmed registrations to existing groups ────────────────
 
 export async function updateGroupBracket(tournamentId: string) {
+  try { await requireOwns(tournamentId) } catch (e) { return { error: String(e) } }
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS group_label TEXT`
   await sql`ALTER TABLE matches ADD COLUMN IF NOT EXISTS category_label TEXT`
 

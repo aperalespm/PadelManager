@@ -2375,12 +2375,12 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
               )}
               <CopyLinkRow
                 label="Formulario de inscripción directo"
-                path={`/inscripcion/${t.id as string}`}
+                path={`/${t.share_slug as string}/inscripcion`}
                 disabled={t.status === 'draft'}
               />
               <CopyLinkRow
                 label="Página pública del torneo"
-                path={`/t/${t.share_slug as string}`}
+                path={`/${t.share_slug as string}`}
                 disabled={t.status === 'draft'}
               />
               <p className="text-[11px] text-muted-foreground mt-0.5">

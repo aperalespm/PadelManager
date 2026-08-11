@@ -71,6 +71,11 @@ export type EmailLog = {
 }
 
 export async function getEmailLogs(tournamentId: string): Promise<EmailLog[]> {
+  const { data: session } = await auth.getSession()
+  if (!session?.user?.id) return []
+  const ownership = await sql`SELECT organizer_id FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!ownership[0] || ownership[0].organizer_id !== session.user.id) return []
+
   try {
     const rows = await sql`
       CREATE TABLE IF NOT EXISTS email_logs (
@@ -110,6 +115,11 @@ export async function getEmailRecipientCount(
   filter: string,
   categoryFilter?: string
 ): Promise<number> {
+  const { data: session } = await auth.getSession()
+  if (!session?.user?.id) return 0
+  const ownership = await sql`SELECT organizer_id FROM tournaments WHERE id = ${tournamentId} LIMIT 1`
+  if (!ownership[0] || ownership[0].organizer_id !== session.user.id) return 0
+
   const rows = await sql`
     SELECT count(*)::int AS n
     FROM registrations
