@@ -1636,8 +1636,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
   const estimatedRevenue = capacityEstimate * pricePerPerson * 2
 
   return (
-    <div className="flex flex-col gap-5">
-
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="shrink-0 flex flex-col gap-5 px-9 pt-8 pb-4">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -1755,7 +1755,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
       </div>
 
       {/* ── Capacity & Revenue sticky bar ────────────────────────── */}
-      <div className="sticky top-0 z-20 flex flex-col bg-white border border-border rounded-[10px] overflow-hidden">
+      <div className="flex flex-col bg-white border border-border rounded-[10px] overflow-hidden">
         <div className="flex items-center">
           <div className="flex-1 px-5 py-3 border-r border-border">
             <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-0.5">Capacidad estimada</p>
@@ -1803,7 +1803,8 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
           </Link>
         </div>
       </div>
-
+      </div>{/* end shrink-0 header */}
+      <div className="flex-1 overflow-y-auto px-9 pt-4 pb-8 flex flex-col gap-5">
       {/* ── Tab: Datos básicos + Localización ────────────────── */}
       {tab === 'datos' && (
         <div className="bg-white border border-border rounded-[10px] p-[26px]">
@@ -2478,6 +2479,7 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
         </div>
       )}
 
+      </div>{/* end flex-1 content */}
       {pendingDelete && (
         <ConfirmModal
           message={`Se eliminará "${pendingDelete.label}" de forma permanente.`}
