@@ -1754,21 +1754,6 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
         ))}
       </div>
 
-      {/* ── Cuadro out-of-sync warning ───────────────────────────── */}
-      {saveStatus === 'saved' && hasExistingMatches && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[var(--warning-surface)] border border-[var(--warning)]/30 rounded-[10px]">
-          <p className="text-[13px] text-[var(--warning)] font-medium">
-            ⚠️ El cuadro actual puede no reflejar estos cambios de configuración.
-          </p>
-          <Link
-            href={`/admin/${t.id as string}/cuadro`}
-            className="shrink-0 text-[12px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-3 py-1.5 rounded-[7px] hover:bg-[var(--warning)]/10 transition-colors"
-          >
-            Ir al cuadro →
-          </Link>
-        </div>
-      )}
-
       {/* ── Capacity & Revenue sticky bar ────────────────────────── */}
       <div className="sticky top-4 z-20 flex flex-col bg-white border border-border rounded-[10px] overflow-hidden shadow-sm">
         <div className="flex items-center">
@@ -1800,6 +1785,23 @@ export function TournamentConfigForm({ tournament: t, otherTournaments, hasExist
             </p>
           </div>
         )}
+        <div
+          className={cn(
+            'border-t border-[var(--warning)]/30 bg-[var(--warning-surface)] px-5 py-2 flex items-center justify-between gap-3 transition-opacity duration-200',
+            (saveStatus === 'saved' && hasExistingMatches) ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          )}
+          aria-hidden={!(saveStatus === 'saved' && hasExistingMatches)}
+        >
+          <p className="text-[12px] text-[var(--warning)] font-medium">
+            ⚠️ El cuadro actual puede no reflejar estos cambios de configuración.
+          </p>
+          <Link
+            href={`/admin/${t.id as string}/cuadro`}
+            className="shrink-0 text-[12px] font-semibold text-[var(--warning)] border border-[var(--warning)]/40 px-3 py-1.5 rounded-[7px] hover:bg-[var(--warning)]/10 transition-colors"
+          >
+            Ir al cuadro →
+          </Link>
+        </div>
       </div>
 
       {/* ── Tab: Datos básicos + Localización ────────────────── */}
