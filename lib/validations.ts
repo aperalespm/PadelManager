@@ -14,6 +14,7 @@ export const createTournamentSchema = z.object({
   cancel_deadline: z.string().datetime().optional(),
   start_date: z.string().datetime(),
   end_date: z.string().datetime().optional(),
+  cover_url: z.string().optional(),
 })
 
 export const updateTournamentSchema = createTournamentSchema.partial()

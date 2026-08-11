@@ -136,6 +136,7 @@ export async function updateTournament(id: string, input: unknown) {
       start_date = COALESCE(${d.start_date ?? null}, start_date),
       end_date = COALESCE(${d.end_date ?? null}, end_date),
       cancel_deadline = COALESCE(${d.cancel_deadline ?? null}, cancel_deadline),
+      cover_url = COALESCE(${d.cover_url ?? null}, cover_url),
       updated_at = NOW()
     WHERE id = ${id}
     RETURNING *
