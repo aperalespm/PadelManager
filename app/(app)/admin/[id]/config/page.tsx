@@ -17,7 +17,7 @@ export default async function ConfigPage({ params }: { params: Promise<{ id: str
   const otherTournaments = allTournaments.filter(t => t.id !== id)
 
   return (
-    <div className="h-full overflow-y-auto px-9 py-8">
+    <div className="h-full">
       <TournamentConfigForm
         tournament={tournament as Record<string, unknown>}
         otherTournaments={otherTournaments}
